@@ -91,7 +91,7 @@ def check() -> None:
         # HEADER_COLORS. Pure black is unlit negative space, not a theme hue.
         # Enforce this on the actual source literals, including defs and CSS,
         # so a later yellow/amber/gold gradient cannot silently sneak in.
-        chromatic = set(re.findall(r"#[0-9a-fA-F]{3,8}\\b", source))
+        chromatic = set(re.findall(r"#[0-9a-fA-F]{3,8}\b", source))
         require(chromatic == set(canonical),
                 f"Chronohedron {surface}: non-profile paint introduced or one "
                 f"of the four canonical colors missing: "
@@ -102,7 +102,7 @@ def check() -> None:
                 paint = node.get(attr)
                 if paint is not None:
                     require(paint in allowed_paints or
-                            re.fullmatch(r"url\\(#[a-zA-Z0-9_-]+\\)", paint),
+                            re.fullmatch(r"url\(#[a-zA-Z0-9_-]+\)", paint),
                             f"off-profile color in {surface} <{node.tag}> {attr}: {paint}")
         require('M641 79 Q661 108 648 132 T635 176' not in source,
                 "rejected central yellow fading swirl returned")
