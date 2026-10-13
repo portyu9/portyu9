@@ -22,3 +22,7 @@ The isolated study uses transported multiscale stochastic turbulence, a nonlinea
 4. **Coverage:** when the first render is genuinely approved, build six separately directed scenes (Orbital Relay, Prism Vault, Neural Weave, Spectral Tides, Circuit Basilica, Singularity Mesh) and distinct desktop/mobile/footer compositions.
 
 Current study is **not accepted artwork**. Keep this PR available for code iteration and review, but do not merge or deploy unfinished imagery.
+
+## Initial visual evaluation (not acceptance)
+
+Locally rendered study sample: 960 × 194, 32 frames, 112 ms per frame (~3.58 seconds), animated WebP approximately 273 KB. It introduces evolving gas texture rather than simply animating geometrical line drawings, but its central aperture and magenta cloud field are **still too schematic to qualify as the final cinematic design**. The model is artistically provisional. No actual GitHub animation playback, browser frame-time, memory, or mobile/compact/footer verification has been performed. The next iteration must materially improve material realism, dimensional atmosphere, and scene composition before product integration.
