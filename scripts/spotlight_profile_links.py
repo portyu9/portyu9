@@ -11,7 +11,7 @@ switch atomically when the reviewed README change lands on main.
 from __future__ import annotations
 
 import argparse
-from datetime import date
+from datetime import date, datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -23,6 +23,8 @@ from typing import Any
 VERSION = "spotlight-profile-links-v1"
 BANNER_HELPER_GIT_BLOB = "03a7876b3daacc26583719bb560db26a493e3e8f"
 BANNER_CATALOG_GIT_BLOB = "bda417d339852145a42712375b6b5bc01b2b87a4"
+APPROVED_BANNER_HELPER_BLOB = "7410a88c9e4c84e05ab541d4d1cb912f18fe8fe1"
+APPROVED_BANNER_CATALOG_BLOB = "5df573cca22de30c89bdcdb6dd82ae142d890814"
 
 
 def reviewed_banner_helper():
@@ -43,6 +45,27 @@ def reviewed_banner_helper():
                 f"Spotlight banner delegate changed without protected renderer authorization: {relative}")
     import banner_rotation
     return banner_rotation
+
+def reviewed_approved_banner_helper():
+    """Approve only the content-addressed v3 selector and manifest."""
+    reviewed_banner_helper()  # Protect historical source and original triplet.
+    source_dir = Path(__file__).resolve(strict=True).parent
+    for relative, expected in (
+        ("approved_banner_rotation.py", APPROVED_BANNER_HELPER_BLOB),
+        ("approved-banner-rotation-v3.json", APPROVED_BANNER_CATALOG_BLOB),
+    ):
+        path = source_dir / relative
+        require(path.is_file() and not path.is_symlink() and
+                path.absolute() == path.resolve(strict=True),
+                f"approved banner delegate is missing or aliased: {relative}")
+        data = path.read_bytes()
+        actual = hashlib.sha1(f"blob {len(data)}\\0".encode("ascii") + data,
+                              usedforsecurity=False).hexdigest()
+        require(actual == expected,
+                f"unreviewed approved-banner delegate mutation: {relative}")
+    import approved_banner_rotation
+    return approved_banner_rotation
+
 
 PUBLICATION_EPOCH_VERSION = "generated-publication-epoch-v1"
 OWNER = "portyu9"
@@ -215,17 +238,20 @@ def render_plan(
                     "same generated publication epoch must preserve exact commit and tree identity")
     block, targets = render_block(manifest, generated_sha, publication_sequence, generated_tree_sha)
     proposed = replace_block(readme, block)
-    # Original-only production hold: preserve the reviewed legacy gallery, but
-    # never publish one of the seven pending cinematic replacements. The banner
-    # triplet is fixed until an explicit, separately reviewed reactivation PR.
-    banner_cycle = reviewed_banner_helper()
-    banner_scenes = banner_cycle.load_catalog()
-    banner_cycle.validate_readme_state(readme, banner_scenes)
-    require(banner_cycle.referenced(readme) == banner_cycle.ORIGINAL,
-            "banner publication is paused: README must use the original Quantum Apex/Evidence Horizon triplet")
-    banner_cycle.validate_readme_state(proposed, banner_scenes)
-    require(banner_cycle.referenced(proposed) == banner_cycle.ORIGINAL,
-            "Spotlight proposal attempted to replace the frozen original banner triplet")
+    # Authorized eight-slot UTC cycle: only original and Fractal Iris are
+    # approved. Slots three through eight fall back to untouched original art.
+    # A Spotlight change must reconcile the banner triplet atomically and may
+    # never publish one of the seven archived experimental daily themes.
+    banner_cycle = reviewed_approved_banner_helper()
+    banner_slots = banner_cycle.load_catalog()
+    banner_cycle.validate_readme_state(readme, banner_slots)
+    today = datetime.now(timezone.utc).date()
+    selection = banner_cycle.chosen(today, banner_slots)
+    proposed = banner_cycle.propose(proposed, selection, banner_slots)
+    banner_cycle.validate_readme_state(proposed, banner_slots)
+    require(banner_cycle.referenced(proposed, banner_slots) ==
+            {surface: selection[surface] for surface in banner_cycle.SURFACES},
+            "Spotlight proposed an unapproved or mismatched banner triplet")
     plan = {
         "version": VERSION,
         "publication_epoch_version": PUBLICATION_EPOCH_VERSION,
@@ -311,20 +337,22 @@ def self_test() -> None:
         fixture_manifest(), proposed, "a" * 40, "b" * 40, 7, "c" * 40
     )
     require(again == proposed and second_plan["changed"] is False, "direct-link rendering is not idempotent")
-    # A Spotlight publication must never change the original three banner assets.
-    banner_cycle = reviewed_banner_helper()
-    require(banner_cycle.referenced(proposed) == banner_cycle.ORIGINAL,
-            "Spotlight self-test activated unfinished banner artwork")
-    corrupted = proposed.replace(banner_cycle.ORIGINAL["top"],
+    banner_cycle = reviewed_approved_banner_helper()
+    slots = banner_cycle.load_catalog()
+    today_selection = banner_cycle.chosen(datetime.now(timezone.utc).date(), slots)
+    require(banner_cycle.referenced(proposed, slots) ==
+            {surface: today_selection[surface] for surface in banner_cycle.SURFACES},
+            "Spotlight self-test failed to advance approved eight-slot artwork")
+    corrupted = proposed.replace(today_selection["top"],
                                  "assets/profile-banners/daily/01-orbital-relay-top.svg", 1)
-    require(corrupted != proposed, "banner suspension fixture did not mutate the header")
+    require(corrupted != proposed, "approved-only fixture did not mutate banner")
     try:
         render_plan(fixture_manifest(), corrupted, "a" * 40, "b" * 40, 7, "c" * 40)
     except ValueError as exc:
-        require("unmarked README" in str(exc) or "original" in str(exc),
+        require("unapproved" in str(exc) or "banner" in str(exc),
                 f"unapproved banner did not fail closed: {exc}")
     else:
-        raise ValueError("Spotlight self-test allowed an unapproved banner to publish")
+        raise ValueError("Spotlight self-test allowed archived, unapproved artwork to publish")
     try:
         render_plan(fixture_manifest(), proposed, "d" * 40, "b" * 40, 6, "e" * 40)
     except ValueError as exc:
