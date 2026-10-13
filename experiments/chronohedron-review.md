@@ -45,7 +45,7 @@ This revision has **38 closed transform loops** (14 pilot + 24 new moving groups
 
 ### What was verified, and what was not
 
-A direct source audit of the **actual committed** desktop/mobile/footer SVGs passed: 37 unique internal identifiers, resolved paint references, correct nested SVG tags, closed 38 spline transforms, normalized 14 periodic light circuits and 14 co-timed glass contact reactions, identical normalized scene content across three crops, and motion/still group counts. The Python checker `python3 experiments/validate_chronohedron_svg.py` has been expanded to assert all these structural contracts, including phase coupling and no malformed or unapproved payloads. Independent browser-level 30/60 FPS measurements and your visual acceptance have **not** been performed or claimed.
+A direct source audit of the **actual committed** desktop/mobile/footer SVGs passed: 39 unique internal identifiers, 363 resolved paint references, correct nested SVG tags, closed 38 spline transforms, normalized 14 periodic light circuits and 14 co-timed glass contact reactions, identical normalized scene content across three crops, and motion/still group counts. The Python checker `python3 experiments/validate_chronohedron_svg.py` has been expanded to assert all these structural contracts, including phase coupling and no malformed or unapproved payloads. Independent browser-level 30/60 FPS measurements and your visual acceptance have **not** been performed or claimed.
 
 ## Assurance and isolation
 
