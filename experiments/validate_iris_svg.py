@@ -144,8 +144,7 @@ def check() -> None:
     core = source[core_start:core_end]
     assert geometry_fingerprint([core]) == "f95760d1", (
         "approved iris assembly, optics or original glint changed")
-    assert source.index('id="iris-directional-occlusion"') < core_start < core_end, (
-        "occlusion must be behind core; highlights must overlay the rim")
+    assert core_start < core_end, "approved optical body marker missing"
 
     animations = [x for x in elements if x.tag in (
         NS + "animate", NS + "animateTransform", NS + "animateMotion")]
@@ -277,12 +276,10 @@ def check() -> None:
             "moving caustic may not animate a raster-heavy filter")
         assert still.get("opacity") == plasma_intensity.get("values").split(";")[1]
 
-    shadow = next(node for node in elements
-                  if node.get("id") == "iris-directional-occlusion")
-    assert len(shadow.findall(NS + "path")) == 2, (
-        "directional optical shadow missing")
-    assert not list(shadow.iter(NS + "animateTransform"))
-    assert not list(shadow.iter(NS + "animate"))
+    # Under-iris occlusion was explicitly rejected by visual review. Retain
+    # synchronized caustics; never reintroduce the dark crescents.
+    assert all(node.get("id") != "iris-directional-occlusion"
+               for node in elements), "rejected shadow returned"
     assert {"rim-caustic-magenta", "rim-caustic-cyan", "rim-caustic-violet",
             "rim-light-spark"} <= known
     assert ".light-coupling-motion {display:none}" in source
@@ -301,7 +298,7 @@ def check() -> None:
           "four actual cloud contours, two noise textures restored to motion; "
           "11 closed original-body transforms, six breathing cloud layers; "
           "three breathing coronas plus three phase-coupled luminous rim caustics; "
-          "static directional occlusion; unchanged iris and spaghetti motion; "
+          "no under-iris shadow; unchanged iris and spaghetti motion; "
           "full reduced-motion fallback; no filter-parameter animation.")
 
 
