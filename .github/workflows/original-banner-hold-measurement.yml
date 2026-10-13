@@ -5,6 +5,8 @@ on:
       - ".github/workflows/original-banner-hold-measurement.yml"
 permissions:
   contents: read
+env:
+  PYTHON_VERSION: "3.13.16"
 jobs:
   measure:
     name: measure-immutable-original-only-hold
