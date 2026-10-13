@@ -248,11 +248,6 @@
   </g>
   <g class="ambient-still" data-corona-still="violet" opacity=".80"><ellipse rx="240" ry="150" fill="url(#corona-violet)"/></g>
 </g>
-<!-- The dark lens interrupts plasma behind it: static, directional optical occlusion. -->
-<g id="iris-directional-occlusion" transform="translate(640 129) scale(1 .74)" pointer-events="none">
-  <path d="M-150 -39 A156 156 0 0 0 -38 149" fill="none" stroke="#01030c" stroke-width="29" opacity=".31" filter="url(#soft)"/>
-  <path d="M155 13 A156 156 0 0 1 91 124" fill="none" stroke="#010919" stroke-width="21" opacity=".27" filter="url(#soft)"/>
-</g>
 <!-- Lens-inspired optical architecture. Animation is limited to small transform-only vectors. -->
 <g transform="translate(640 129) scale(1 .74)">
   <circle r="166" fill="url(#opticalMist)" opacity=".82"/>
