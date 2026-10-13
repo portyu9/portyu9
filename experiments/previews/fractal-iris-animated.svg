@@ -126,36 +126,36 @@
 <g id="original-nebula-motion" opacity=".96">
   <g class="ambient-motion" data-role="original-nebula-contour" data-layer="outer-aurora">
     <animateTransform attributeName="transform" type="translate" values="-45 12;42 -12;-45 12" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="13s" repeatCount="indefinite"/>
-    <animate attributeName="opacity" values=".38;.96;.38" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="7s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values=".38;.96;.38" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="7s" repeatCount="indefinite" begin="-3s" />
     <use href="#original-nebula-geometry-0"/>
   </g>
   <g class="ambient-still"><use href="#original-nebula-geometry-0"/></g>
   <g class="ambient-motion" data-role="original-nebula-contour" data-layer="upper-nebula">
     <animateTransform attributeName="transform" type="translate" values="32 -14;-43 14;32 -14" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="17s" repeatCount="indefinite"/>
-    <animate attributeName="opacity" values=".31;.94;.31" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="9s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values=".31;.94;.31" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="9s" repeatCount="indefinite" begin="-5s" />
     <use href="#original-nebula-geometry-1"/>
   </g>
   <g class="ambient-still"><use href="#original-nebula-geometry-1"/></g>
   <g class="ambient-motion" data-role="original-nebula-contour" data-layer="lower-nebula">
     <animateTransform attributeName="transform" type="translate" values="-38 12;39 -15;-38 12" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="19s" repeatCount="indefinite"/>
-    <animate attributeName="opacity" values=".42;1;.42" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="11s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values=".42;1;.42" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="11s" repeatCount="indefinite" begin="-7s" />
     <use href="#original-nebula-geometry-2"/>
   </g>
   <g class="ambient-still"><use href="#original-nebula-geometry-2"/></g>
   <g class="ambient-motion" data-role="original-nebula-contour" data-layer="inner-cloud">
     <animateTransform attributeName="transform" type="translate" values="37 14;-39 -11;37 14" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="23s" repeatCount="indefinite"/>
-    <animate attributeName="opacity" values=".26;.97;.26" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="8s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values=".26;.97;.26" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="8s" repeatCount="indefinite" begin="-2s" />
     <use href="#original-nebula-geometry-3"/>
   </g>
   <g class="ambient-still"><use href="#original-nebula-geometry-3"/></g>
 </g>
 <!-- Original filtered gas textures move as pre-existing images, never vary noise seeds/frequency. -->
 <g mask="url(#nebMask)">
-  <g class="ambient-motion" data-role="original-nebula-texture"><animateTransform attributeName="transform" type="translate" values="-31 -6;30 7;-31 -6" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="18s" repeatCount="indefinite"/><animate attributeName="opacity" values=".35;.95;.35" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="10s" repeatCount="indefinite"/><use href="#original-nebula-plasma"/></g>
+  <g class="ambient-motion" data-role="original-nebula-texture"><animateTransform attributeName="transform" type="translate" values="-31 -6;30 7;-31 -6" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="18s" repeatCount="indefinite"/><animate attributeName="opacity" values=".35;.95;.35" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="10s" repeatCount="indefinite" begin="-4s" /><use href="#original-nebula-plasma"/></g>
   <g class="ambient-still"><use href="#original-nebula-plasma"/></g>
 </g>
 <g mask="url(#dustMaskRef)">
-  <g class="ambient-motion" data-role="original-nebula-texture"><animateTransform attributeName="transform" type="translate" values="24 5;-29 -6;24 5" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="21s" repeatCount="indefinite"/><animate attributeName="opacity" values=".33;.92;.33" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="12s" repeatCount="indefinite"/><use href="#original-nebula-cyan"/></g>
+  <g class="ambient-motion" data-role="original-nebula-texture"><animateTransform attributeName="transform" type="translate" values="24 5;-29 -6;24 5" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="21s" repeatCount="indefinite"/><animate attributeName="opacity" values=".33;.92;.33" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="12s" repeatCount="indefinite" begin="-6s" /><use href="#original-nebula-cyan"/></g>
   <g class="ambient-still"><use href="#original-nebula-cyan"/></g>
 </g>
 <ellipse cx="644" cy="131" rx="218" ry="109" fill="url(#halo)" opacity=".77" filter="url(#bloom)"/>
@@ -197,20 +197,20 @@
 <!-- Layered atmospheric photon scattering around the original, unchanged iris. -->
 <g id="iris-nebula-corona" transform="translate(640 129)">
   <g class="ambient-motion" data-role="iris-nebula-corona" data-color="magenta">
-    <animateTransform attributeName="transform" type="scale" values=".97 .92;1.075 1.12;.97 .92" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="8s" repeatCount="indefinite"/>
-    <animate attributeName="opacity" values=".31;.92;.31" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="8s" repeatCount="indefinite"/>
+    <animateTransform attributeName="transform" type="scale" values=".97 .92;1.075 1.12;.97 .92" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="8s" repeatCount="indefinite" begin="-3s" />
+    <animate attributeName="opacity" values=".31;.92;.31" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="8s" repeatCount="indefinite" begin="-3s" />
     <ellipse rx="275" ry="160" fill="url(#corona-magenta)"/>
   </g>
   <g class="ambient-still" data-corona-still="magenta" opacity=".92"><ellipse rx="275" ry="160" fill="url(#corona-magenta)"/></g>
   <g class="ambient-motion" data-role="iris-nebula-corona" data-color="cyan">
-    <animateTransform attributeName="transform" type="scale" values="1.065 1.07;.945 .91;1.065 1.07" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="11s" repeatCount="indefinite"/>
-    <animate attributeName="opacity" values=".27;.86;.27" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="11s" repeatCount="indefinite"/>
+    <animateTransform attributeName="transform" type="scale" values="1.065 1.07;.945 .91;1.065 1.07" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="11s" repeatCount="indefinite" begin="-5s" />
+    <animate attributeName="opacity" values=".27;.86;.27" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="11s" repeatCount="indefinite" begin="-5s" />
     <ellipse rx="316" ry="154" fill="url(#corona-cyan)"/>
   </g>
   <g class="ambient-still" data-corona-still="cyan" opacity=".86"><ellipse rx="316" ry="154" fill="url(#corona-cyan)"/></g>
   <g class="ambient-motion" data-role="iris-nebula-corona" data-color="violet">
-    <animateTransform attributeName="transform" type="scale" values=".93 1.04;1.095 .94;.93 1.04" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="13s" repeatCount="indefinite"/>
-    <animate attributeName="opacity" values=".24;.80;.24" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="13s" repeatCount="indefinite"/>
+    <animateTransform attributeName="transform" type="scale" values=".93 1.04;1.095 .94;.93 1.04" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="13s" repeatCount="indefinite" begin="-7s" />
+    <animate attributeName="opacity" values=".24;.80;.24" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="13s" repeatCount="indefinite" begin="-7s" />
     <ellipse rx="240" ry="150" fill="url(#corona-violet)"/>
   </g>
   <g class="ambient-still" data-corona-still="violet" opacity=".80"><ellipse rx="240" ry="150" fill="url(#corona-violet)"/></g>
