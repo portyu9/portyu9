@@ -89,7 +89,7 @@
       "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "expansionSha256": "1c44d1abf42c3bb918db41beeb57cb27a005c7c09d2cad61c6713376d3fa8a0e",
       "id": "cap-banner-original-only-production-hold-v1",
-      "rationale": "Authorize frozen original-only production hold #1645 head 78910bfb56b0eb43eb568d2633160de43523933f, candidate tree 690e069b7e43c5066340782c7c9c3ad8ae283aef. Exact trusted accepted-main read-only diagnostic #1646 run 38393139490/job/115281609926 measured one existing protected Spotlight README renderer source change, zero reductions, unchanged semantic workflow capability BOMs, candidate protected TCB SHA256 9cf062b80a1f3777dc9a482f6960889ee572bdbbd59af143eeb87162f16c3099. Freeze the original desktop/mobile/footer banners while retaining seven experimental assets off rotation; no trigger, permission, API endpoint, mutation, secret, OIDC, merge authority, direct-main write, check reduction, candidate execution, or bypass is added."
+      "rationale": "Authorize frozen original-only banner hold PR #1645 (`78910bfb56b0eb43eb568d2633160de43523933f`) measured by trusted read-only diagnostic #1646 (run 38393139490). One protected Spotlight publisher source change, zero reductions, unchanged semantic BOM, TCB SHA256 9cf062b80a1f3777dc9a482f6960889ee572bdbbd59af143eeb87162f16c3099. Disables publication of unapproved seven-theme artwork; no new trigger, permission, API, mutation, secret, check reduction, direct-main write or bypass."
     },
     {
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
