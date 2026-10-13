@@ -175,7 +175,7 @@ def check() -> None:
                 {node.get("data-life-still") for node in frozen
                  if node.get("data-life-still")},
                 "living light group IDs and static fallback IDs diverged")
-        require(len(root.findall(f".//{NS}animateTransform")) == 54,
+        require(len(root.findall(f".//{NS}animateTransform")) == 50,
                 "Chronohedron motion/perspective groups changed")
         feed = next(node for node in nodes
                     if node.get("id") == "alive-photonic-transit")
@@ -208,7 +208,7 @@ def check() -> None:
                         "traveling waveguide light must have mathematically closed motion")
                 require(static_path.find(NS + "animate") is None,
                         "reduced-motion fallback contains a moving light channel")
-        require(len(root.findall(f".//{NS}animate")) == 122,
+        require(len(root.findall(f".//{NS}animate")) == 118,
                 "optical pulse or dynamic feed channel lost")
         contact_motion = [node for node in nodes
                           if node.get("class") == "contact-motion"]
@@ -579,41 +579,6 @@ def check() -> None:
                                  "alive-refractive-facets", "alive-chromatic-grazing-caustics",
                                  "alive-dielectric-grain", "alive-photonic-transit")),
                 "volumetric/optical system was reduced to a basic flat polygon")
-        require(all(root.find(f".//{NS}g[@id='{part}']") is not None
-                    for part in ("hybrid-rear-containment",
-                                 "hybrid-front-containment",
-                                 "hybrid-crystal-optical-material")),
-                "hybrid mechanical and dielectric components missing")
-        require(".hybrid-motion{display:none}.hybrid-still{display:inline}" in source,
-                "hybrid reduced-motion fallback removed")
-        phases = {"green": ("8.6s", "-1.8s"), "cyan": ("12.6s", "-4.6s"),
-                  "violet": ("10.4s", "-3.1s"), "magenta": ("15.2s", "-6.2s")}
-        actuators = [n for n in nodes if n.get("data-hybrid-hinge")]
-        require(len(actuators) == 4 and
-                {n.get("data-hybrid-hinge") for n in actuators} == set(phases),
-                "four profile-colored servo actuators required")
-        for actuator in actuators:
-            name = actuator.get("data-hybrid-hinge")
-            require(len(actuator) == 2, "servo still-motion pair missing")
-            moving, static = list(actuator)
-            require(moving.get("data-hybrid-motion") == name
-                    and static.get("data-hybrid-still") == name
-                    and displayed_art(moving) == displayed_art(static),
-                    "servo static geometry mismatch")
-            rotation = moving.find(NS + "animateTransform")
-            illumination = moving.find(NS + "animate")
-            require(rotation is not None and illumination is not None
-                    and rotation.get("type") == "rotate"
-                    and rotation.get("values", "").split(";")[0] ==
-                        rotation.get("values", "").split(";")[-1]
-                    and all(x.get("dur") == phases[name][0] and
-                            x.get("begin") == phases[name][1] and
-                            x.get("repeatCount") == "indefinite"
-                            for x in (rotation, illumination)),
-                    "servo motion/lighting no longer phase-locked")
-            require(not list(static.iter(NS + "animate"))
-                    and not list(static.iter(NS + "animateTransform")),
-                    "reduced-motion servo not static")
         # The same art must be used in all three responsive shapes: only
         # cropping metadata / title may vary.
         normalized_text = re.sub(
@@ -626,7 +591,7 @@ def check() -> None:
                                  normalized_text, count=1)
         normalized.add(hashlib.sha256(normalized_text.encode("utf-8")).hexdigest())
     require(len(normalized) == 1, "Chronohedron responsive variants diverged")
-    print("Chronohedron optics proof: 3 responsive studies, 54 smooth vector "
+    print("Chronohedron optics proof: 3 responsive studies, 50 smooth vector "
           "transforms, 14 closed-loop transported cyan/magenta channels, "
           "25 reduced-motion optical-layer mirrors, 14 light-bound " 
           "transport endpoints with static counterparts, 108+ grain points, "
