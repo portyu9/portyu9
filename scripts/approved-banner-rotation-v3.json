@@ -1,0 +1,74 @@
+{
+  "version": "approved-profile-banners-v3",
+  "epoch": "2026-10-12",
+  "timezone": "UTC",
+  "period_seconds": 86400,
+  "slots": [
+    {
+      "slot": 1,
+      "slug": "01-original-quantum-apex",
+      "state": "approved",
+      "assets": {
+        "top": "assets/profile-banners/quantum-apex-signal-crown-hero.svg",
+        "top-compact": "assets/profile-banners/quantum-apex-signal-crown-hero-compact.svg",
+        "bottom": "assets/profile-banners/elite-evidence-horizon-bottom.svg"
+      },
+      "blobs": {
+        "top": "cba6be419ca838ada1accd02b714cd99fdd06664",
+        "top-compact": "7a9b12381c15fe6811e57af07a5569b15354c219",
+        "bottom": "de437b518adae0a8a501d4c6693b8a6b987576a2"
+      }
+    },
+    {
+      "slot": 2,
+      "slug": "02-fractal-iris",
+      "state": "approved",
+      "assets": {
+        "top": "assets/profile-banners/approved/02-fractal-iris-top.svg",
+        "top-compact": "assets/profile-banners/approved/02-fractal-iris-top-compact.svg",
+        "bottom": "assets/profile-banners/approved/02-fractal-iris-bottom.svg"
+      },
+      "blobs": {
+        "top": "3aa2750a47287f6715699545dc9ea996da4ccf3e",
+        "top-compact": "8612b29e0e3638c23de296c0366fd06e622f9375",
+        "bottom": "ffb6b1202bdc6e8bed706ef8c2a77fd04e0bf130"
+      }
+    },
+    {
+      "slot": 3,
+      "slug": "03-reserved",
+      "state": "reserved",
+      "fallback_slot": 1
+    },
+    {
+      "slot": 4,
+      "slug": "04-reserved",
+      "state": "reserved",
+      "fallback_slot": 1
+    },
+    {
+      "slot": 5,
+      "slug": "05-reserved",
+      "state": "reserved",
+      "fallback_slot": 1
+    },
+    {
+      "slot": 6,
+      "slug": "06-reserved",
+      "state": "reserved",
+      "fallback_slot": 1
+    },
+    {
+      "slot": 7,
+      "slug": "07-reserved",
+      "state": "reserved",
+      "fallback_slot": 1
+    },
+    {
+      "slot": 8,
+      "slug": "08-reserved",
+      "state": "reserved",
+      "fallback_slot": 1
+    }
+  ]
+}
