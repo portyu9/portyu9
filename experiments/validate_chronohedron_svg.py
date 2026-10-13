@@ -42,12 +42,14 @@ def check() -> None:
         require(path.is_file() and not path.is_symlink(),
                 f"Chronohedron {surface} must be a regular file")
         source = path.read_text(encoding="utf-8")
-        require(65000 < len(source.encode("utf-8")) < 100000,
+        require(120000 < len(source.encode("utf-8")) < 150000,
                 f"Chronohedron {surface}: artwork density or payload bound regressed")
         lower = source.lower()
         require(not any(token.lower() in lower for token in BAD),
                 f"Chronohedron {surface}: unsafe or repaint-heavy payload")
-        require("prefers-reduced-motion:reduce" in source,
+        require("prefers-reduced-motion:reduce" in source and
+                ".alive-motion{display:none}" in source and
+                ".alive-still{display:inline}" in source,
                 f"Chronohedron {surface}: reduced-motion selector missing")
         require("Not approved for production" in source,
                 f"Chronohedron {surface}: preview must remain review-only")
@@ -116,6 +118,91 @@ def check() -> None:
                 values = fade.get("values", "").split(";")
                 require(len(values) == 3 and values[0] == values[-1],
                         "lighting pulse has a hard loop seam")
+        # NEW physical coupling proof: all atmospheric beds, refractive
+        # caustics, actual luminous core, and energy transport must be visible
+        # as animated art, while reduced motion uses identical optical geometry.
+        life = [node for node in nodes if node.get("class") == "alive-motion"]
+        frozen = [node for node in nodes if node.get("class") == "alive-still"]
+        require(len(life) == len(frozen) == 25,
+                "Chronohedron living optical system or its static fallback vanished")
+        require({node.get("data-life") for node in life if node.get("data-life")} ==
+                {node.get("data-life-still") for node in frozen
+                 if node.get("data-life-still")},
+                "living light group IDs and static fallback IDs diverged")
+        require(len(root.findall(f".//{NS}animateTransform")) == 38,
+                "Chronohedron motion/perspective groups changed")
+        feed = next(node for node in nodes
+                    if node.get("id") == "alive-photonic-transit")
+        no_motion_feed = next(node for node in nodes
+                              if node.get("id") == "alive-photonic-transit-still")
+        live_channels = list(feed)
+        still_channels = list(no_motion_feed)
+        require(len(live_channels) == len(still_channels) == 14,
+                "both cyan and amber waveguide banks require seven light pulses")
+        for active, static in zip(live_channels, still_channels):
+            require(active.get("data-feed") and
+                    active.get("data-feed") == static.get("data-feed-still"),
+                    "approved energy channels lost their reduced-motion counterpart")
+            bright = active.findall(NS + "path")
+            dead = static.findall(NS + "path")
+            require(len(bright) == len(dead) == 2,
+                    "moving energy pulse must contain bloom and contact reflection")
+            for moving_path, static_path in zip(bright, dead):
+                require(moving_path.attrib == static_path.attrib,
+                        "static waveguide stroke no longer matches moving geometry")
+                pulse = moving_path.find(NS + "animate")
+                require(pulse is not None and
+                        pulse.get("attributeName") == "stroke-dashoffset" and
+                        pulse.get("from") == "0" and pulse.get("to") == "-1000" and
+                        pulse.get("repeatCount") == "indefinite" and
+                        pulse.get("calcMode") == "linear" and
+                        moving_path.get("pathLength") == "1000" and
+                        moving_path.get("stroke-dasharray") in ("12 988",) and
+                        pulse.get("dur") and pulse.get("begin", "").startswith("-"),
+                        "traveling waveguide light must have mathematically closed motion")
+                require(static_path.find(NS + "animate") is None,
+                        "reduced-motion fallback contains a moving light channel")
+        require(len(root.findall(f".//{NS}animate")) == 64,
+                "optical pulse or dynamic feed channel lost")
+        parents = {child: parent for parent in nodes for child in parent}
+        for live in life:
+            parent = parents[live]
+            peers = list(parent)
+            i = peers.index(live)
+            require(i + 1 < len(peers) and peers[i + 1].get("class") == "alive-still",
+                    "every animated light response requires adjacent static fallback")
+            still_layer = peers[i + 1]
+            if live is feed:
+                continue  # checked above with every dynamic guide pulse stripped
+            require(displayed_art(live) == displayed_art(still_layer),
+                    "reduced-motion optical geometry differs from moving artwork")
+            anim = live.find(NS + "animateTransform")
+            require(anim is not None and
+                    anim.get("attributeName") == "transform" and
+                    anim.get("type") == "translate" and
+                    anim.get("keyTimes") == "0;.5;1" and
+                    anim.get("calcMode") == "spline" and
+                    anim.get("keySplines") == ".42 0 .58 1;.42 0 .58 1" and
+                    anim.get("repeatCount") == "indefinite",
+                    "living layer lost smooth non-discontinuous displacement")
+            steps = anim.get("values", "").split(";")
+            require(len(steps) == 3 and steps[0] == steps[-1] and
+                    steps[0] != steps[1], "living motion seam or amplitude regressed")
+            intensity = live.find(NS + "animate")
+            if intensity is not None:
+                require(intensity.get("attributeName") == "opacity" and
+                        intensity.get("dur") == anim.get("dur") and
+                        intensity.get("begin") == anim.get("begin") and
+                        intensity.get("keyTimes") == "0;.5;1" and
+                        intensity.get("calcMode") == "spline" and
+                        intensity.get("values", "").split(";")[0] ==
+                        intensity.get("values", "").split(";")[-1],
+                        "moving light and luminous pulse are no longer phase coupled")
+        require(all(root.find(f".//{NS}g[@id='{part}']") is not None
+                    for part in ("alive-reactor-heart", "alive-volumetric-plasma",
+                                 "alive-refractive-facets", "alive-chromatic-grazing-caustics",
+                                 "alive-dielectric-grain", "alive-photonic-transit")),
+                "volumetric/optical system was reduced to a basic flat polygon")
         # The same art must be used in all three responsive shapes: only
         # cropping metadata / title may vary.
         normalized_text = re.sub(
@@ -128,10 +215,12 @@ def check() -> None:
                                  normalized_text, count=1)
         normalized.add(hashlib.sha256(normalized_text.encode("utf-8")).hexdigest())
     require(len(normalized) == 1, "Chronohedron responsive variants diverged")
-    print("Chronohedron proof passed: 3 shared-geometry review variants, "
-          "100+ facets, 14 closed/eased physical motion systems, "
-          "14 parity-checked reduced-motion copies, zero external scripts, "
-          "zero animated filters; no production enrollment.")
+    print("Chronohedron optics proof: 3 responsive studies, 38 smooth vector "
+          "transforms, 14 closed-loop transported cyan/amber channels, "
+          "25 reduced-motion optical-layer mirrors, 108+ grain points, "
+          "bright breathing reactor, independently moving gaseous environment, "
+          "phase-linked glass caustics, no animated noise or blurs, "
+          "no production enrollment.")
 
 
 if __name__ == "__main__":
