@@ -70,8 +70,8 @@ def check() -> None:
         require(not any(token.lower() in lower for token in BAD),
                 f"Chronohedron {surface}: unsafe or repaint-heavy payload")
         require("prefers-reduced-motion:reduce" in source and
-                ".kinetic,.alive-motion,.contact-motion,.theme-motion{display:none}" in source and
-                ".still,.alive-still,.contact-still,.theme-still{display:inline}" in source,
+                ".kinetic,.alive-motion,.contact-motion,.theme-motion,.theme-optic-motion{display:none}" in source and
+                ".still,.alive-still,.contact-still,.theme-still,.theme-optic-still{display:inline}" in source,
                 f"Chronohedron {surface}: reduced-motion selector missing")
         require("Not approved for production" in source,
                 f"Chronohedron {surface}: preview must remain review-only")
@@ -173,7 +173,7 @@ def check() -> None:
                 {node.get("data-life-still") for node in frozen
                  if node.get("data-life-still")},
                 "living light group IDs and static fallback IDs diverged")
-        require(len(root.findall(f".//{NS}animateTransform")) == 38,
+        require(len(root.findall(f".//{NS}animateTransform")) == 42,
                 "Chronohedron motion/perspective groups changed")
         feed = next(node for node in nodes
                     if node.get("id") == "alive-photonic-transit")
@@ -206,7 +206,7 @@ def check() -> None:
                         "traveling waveguide light must have mathematically closed motion")
                 require(static_path.find(NS + "animate") is None,
                         "reduced-motion fallback contains a moving light channel")
-        require(len(root.findall(f".//{NS}animate")) == 86,
+        require(len(root.findall(f".//{NS}animate")) == 90,
                 "optical pulse or dynamic feed channel lost")
         contact_motion = [node for node in nodes
                           if node.get("class") == "contact-motion"]
@@ -317,6 +317,52 @@ def check() -> None:
                         "faceted energy streak must traverse a closed, smooth route")
         require(routing_colors == set(canonical),
                 "one of the four profile theme colors has no animated facet channel")
+        # Four chromatic caustic groups are coupled to the four
+        # physically travelling spectral circuits. Do not let unrelated
+        # decorative swirls or phase-slipping color effects return.
+        impact = root.find(f".//{NS}g[@id='theme-spectral-impact']")
+        require(impact is not None and len(impact) == 8,
+                "four optical caustic actions and their static copies required")
+        impact_groups = list(impact)
+        intended = ("#00FBCC", "#28D7FF", "#8C7CFF", "#FF4DE1")
+        for index, color in enumerate(intended):
+            live = impact_groups[index * 2]
+            still = impact_groups[index * 2 + 1]
+            require(live.get("class") == "theme-optic-motion" and
+                    still.get("class") == "theme-optic-still" and
+                    live.get("data-theme-caustic") ==
+                    still.get("data-theme-caustic-still"),
+                    "each phase-locked glass-edge caustic must have a static twin")
+            require(displayed_art(live) == displayed_art(still),
+                    "moving and reduced-motion glass caustic geometry diverged")
+            shape = live.find(f"{NS}g/{NS}path")
+            require(shape is not None and shape.get("stroke") == color,
+                    "edge caustic must exactly match canonical profile hue")
+            motion = live.find(NS + "animateTransform")
+            intensity = live.find(NS + "animate")
+            route = list(spectral)[index]
+            feed_phase = route.find(f"{NS}path/{NS}animate")
+            require(motion is not None and intensity is not None and
+                    feed_phase is not None and
+                    motion.get("dur") == intensity.get("dur") ==
+                    feed_phase.get("dur") and
+                    motion.get("begin") == intensity.get("begin") ==
+                    feed_phase.get("begin"),
+                    "glass caustic stopped responding to spectral energy phase")
+            vals = motion.get("values", "").split(";")
+            lighting = intensity.get("values", "").split(";")
+            require(len(vals) == len(lighting) == 3 and
+                    vals[0] == vals[-1] and
+                    lighting[0] == lighting[-1] and
+                    motion.get("calcMode") == intensity.get("calcMode") == "spline" and
+                    motion.get("keySplines") ==
+                    ".42 0 .58 1;.42 0 .58 1" and
+                    motion.get("repeatCount") ==
+                    intensity.get("repeatCount") == "indefinite",
+                    "glass edge caustic must loop smoothly without frame jump")
+            require(not list(still.iter(NS + "animate")) and
+                    not list(still.iter(NS + "animateTransform")),
+                    "reduced-motion static glass should contain no SMIL animations")
         # Physical surface grain is a fixed bounded noise kernel, never a
         # time-varying turbulence or blur operation on the moving artwork.
         glass = root.find(f".//{NS}g[@id='alive-dielectric-material-depth']")
@@ -359,14 +405,15 @@ def check() -> None:
                                  normalized_text, count=1)
         normalized.add(hashlib.sha256(normalized_text.encode("utf-8")).hexdigest())
     require(len(normalized) == 1, "Chronohedron responsive variants diverged")
-    print("Chronohedron optics proof: 3 responsive studies, 38 smooth vector "
+    print("Chronohedron optics proof: 3 responsive studies, 42 smooth vector "
           "transforms, 14 closed-loop transported cyan/magenta channels, "
           "25 reduced-motion optical-layer mirrors, 14 light-bound " 
           "transport endpoints with static counterparts, 108+ grain points, "
           "bright breathing reactor, independently moving gaseous environment, "
           "phase-linked glass caustics, no animated noise or blurs, "
           "four exact profile phosphors, no amber/yellow center swirl, "
-          "four additional closed spectral energy routes; no production enrollment.")
+          "four closed spectral energy routes, four corresponding optical caustics; "
+          "no production enrollment.")
 
 
 if __name__ == "__main__":
