@@ -1,0 +1,44 @@
+name: One-shot Dependabot reference inventory authorization measurement
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/dependabot-reference-inventory-measurement.yml"
+permissions:
+  contents: read
+env:
+  PYTHON_VERSION: "3.13.16"
+jobs:
+  measure:
+    name: measure-frozen-trusted-inventory-candidate-read-only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout immutable accepted main as reviewed evaluator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 5f2c4c085187d53a99cdb7d562a83c209822ae93
+          path: trusted
+          persist-credentials: false
+      - name: Checkout exact feature tree strictly as data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: d4c606cc6e7e4b20ce582955b06fa4e957174ef2
+          path: candidate
+          persist-credentials: false
+      - name: Set up pinned Python runtime
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.16"
+      - name: Measure immutable candidate under trusted prior-authorization compiler
+        run: |
+          set -euo pipefail
+          test "$(git -C trusted rev-parse HEAD)" = "5f2c4c085187d53a99cdb7d562a83c209822ae93"
+          test "$(git -C candidate rev-parse HEAD)" = "d4c606cc6e7e4b20ce582955b06fa4e957174ef2"
+          python3 trusted/scripts/verify-python-runtime.py
+          TREE_SHA="$(git -C candidate rev-parse 'HEAD^{tree}')"
+          [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          echo "Trusted main 5f2c4c085187d53a99cdb7d562a83c209822ae93; feature d4c606cc6e7e4b20ce582955b06fa4e957174ef2; exact tree $TREE_SHA"
+          python3 trusted/scripts/workflow_capability_admission.py candidate \
+            --candidate-tree-sha "$TREE_SHA" --measure
