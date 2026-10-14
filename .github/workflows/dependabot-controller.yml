@@ -283,6 +283,8 @@ jobs:
           TREE="$(cat "$RUNNER_TEMP/dependabot-candidate-tree-read-normalized.json")"
           test "$(jq -r .truncated <<<"$TREE")" = "false"
 
+          REFERENCE_PATHS="$(PYTHONPATH="$GITHUB_WORKSPACE/scripts" python3 -c 'import dependabot_artifact_reconciliation as reconciler; print(*reconciler.REFERENCE_SOURCES, sep=chr(10))')"
+          test -n "$REFERENCE_PATHS"
           mapfile -t FETCH_PATHS < <(
             {
               find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -printf '%p\n' | sed 's#^./##'
@@ -290,7 +292,7 @@ jobs:
               printf '%s\n' scripts/dependabot_artifact_reconciliation.py
               printf '%s\n' scripts/privileged_workflow_identity_v21_core.py scripts/validate-privileged-workflow-identity.py
               find .github -maxdepth 1 -name 'workflow-capability-bom-v1-*.json' -type f -printf '%p\n' | sed 's#^./##'
-              python3 -c 'import dependabot_artifact_reconciliation as reconciler; print("\\n".join(reconciler.REFERENCE_SOURCES))'
+              printf '%s\n' "$REFERENCE_PATHS"
             } | LC_ALL=C sort -u
           )
           for PATH_VALUE in "${FETCH_PATHS[@]}"; do
