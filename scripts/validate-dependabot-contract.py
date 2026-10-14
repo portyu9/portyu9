@@ -2579,7 +2579,6 @@ def validate_trusted_reference_hydration(controller: str) -> None:
         )
         nonempty_marker = 'test -n "$REFERENCE_PATHS"'
         mapfile_marker = f"mapfile -t {inventory} < <("
-        output_marker = """printf '%s\\n' "$REFERENCE_PATHS" """
         require(source.count(import_marker) == 1,
                 f"{label}: trusted artifact references must be imported synchronously")
         require(source.count(nonempty_marker) == 1,
