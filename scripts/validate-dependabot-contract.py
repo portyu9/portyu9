@@ -2455,7 +2455,7 @@ def validate_quality_contract(text: str) -> None:
         "- name: Evaluate exact accepted-base semantic admission",
         "python3 trusted-base/scripts/dependabot_capability_admission.py",
         "candidate-source",
-        '.decision.authorizationId == "delegated-dependabot-codeql-v1"',
+        '.decision.authorizationId == "delegated-dependabot-artifact-v1"',
         'echo "Exact accepted-base PR-native Dependabot semantic admission passed without cross-run proof polling."',
     )
     for fragment in required_fragments:
