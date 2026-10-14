@@ -32,6 +32,7 @@ from dependabot_pin_diff import classify_pin_only_update
 from dependabot_pr_identity import classify_pr_identity, fixture as pr_fixture
 import trusted_workflow_capability
 import workflow_capability_bom
+import dependabot_artifact_reconciliation as artifact_reconciliation
 
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = "portyu9/portyu9"
@@ -97,10 +98,12 @@ def probe(
         workflow_corpus(candidate_root),
         load_action_lock(base_root / ACTION_LOCK),
     )
-    require(pin.get("repository") == CODEQL_REPOSITORY,
-            "zero-touch delegated admission is initially restricted to github/codeql-action")
+    require(pin.get("repository") == CODEQL_REPOSITORY or
+            pin.get("repository") in artifact_reconciliation.REPOSITORIES,
+            "zero-touch admission refuses an Action repository outside the governed release policy")
     return {
-        "classification": "dependabot-codeql-probe",
+        "classification": ("dependabot-codeql-probe" if pin["repository"] == CODEQL_REPOSITORY
+                           else "dependabot-artifact-probe"),
         "repository": REPOSITORY,
         "pullRequest": identity["pullRequest"],
         "headRef": identity["headRef"],
@@ -132,8 +135,9 @@ def admit(
         resolve_release=lambda repository, tag, expected_sha: resolved_release,
     )
     require(result.get("classification") == "allowed", "Dependabot release was not admitted")
-    require(result.get("dependencyRepository") == CODEQL_REPOSITORY,
-            "zero-touch delegated admission is initially restricted to github/codeql-action")
+    require(result.get("dependencyRepository") == CODEQL_REPOSITORY or
+            result.get("dependencyRepository") in artifact_reconciliation.REPOSITORIES,
+            "zero-touch admission refuses an Action repository outside the governed release policy")
     return result
 
 
@@ -216,6 +220,20 @@ def derive_codeql_files(
     }
 
 
+def derive_release_files(
+    *, base_root: Path, candidate_root: Path, proof: Mapping[str, Any],
+) -> dict[str, str]:
+    """Choose a trusted, exact-scope release derivative; never run candidate code."""
+    repo = proof.get("dependencyRepository")
+    if repo == CODEQL_REPOSITORY:
+        return derive_codeql_files(base_root=base_root, candidate_root=candidate_root, proof=proof)
+    require(repo in artifact_reconciliation.REPOSITORIES,
+            "unsupported Action repository cannot enter automatic reconciliation")
+    return artifact_reconciliation.derive(
+        trusted_root=base_root, candidate_root=candidate_root, proof=proof,
+    )
+
+
 def validate_reconciled_candidate(
     *,
     base_root: Path,
@@ -223,11 +241,11 @@ def validate_reconciled_candidate(
     proof: Mapping[str, Any],
     changed_paths: list[str],
 ) -> dict[str, object]:
-    expected = derive_codeql_files(base_root=base_root, candidate_root=candidate_root, proof=proof)
+    expected = derive_release_files(base_root=base_root, candidate_root=candidate_root, proof=proof)
     pin_files = proof.get("files")
     require(isinstance(pin_files, list) and all(isinstance(path, str) for path in pin_files),
             "Dependabot proof changed-file inventory is malformed")
-    expected_paths = sorted(set(pin_files) | set(DERIVED_PATHS))
+    expected_paths = sorted(set(pin_files) | set(expected))
     require(sorted(set(changed_paths)) == expected_paths,
             f"reconciled Dependabot PR changed unexpected files: expected={expected_paths} observed={sorted(set(changed_paths))}")
     for relative, text in expected.items():
@@ -236,10 +254,12 @@ def validate_reconciled_candidate(
         require(path.read_text(encoding="utf-8") == text,
                 f"reconciled Dependabot derived file differs from trusted derivation: {relative}")
     return {
-        "classification": "dependabot-codeql-reconciled",
+        "classification": ("dependabot-codeql-reconciled"
+                           if proof.get("dependencyRepository") == CODEQL_REPOSITORY
+                           else "dependabot-artifact-reconciled"),
         "pullRequest": proof["pullRequest"],
         "headSha": proof["headSha"],
-        "dependencyRepository": CODEQL_REPOSITORY,
+        "dependencyRepository": proof["dependencyRepository"],
         "changedPaths": expected_paths,
     }
 
@@ -2266,7 +2286,7 @@ def main() -> int:
             return 0
         proof = load_json(args.proof)
         if args.command == "derive":
-            files = derive_codeql_files(base_root=args.base_root, candidate_root=args.candidate_root, proof=proof)
+            files = derive_release_files(base_root=args.base_root, candidate_root=args.candidate_root, proof=proof)
             write_outputs(files, args.output_root)
             return 0
         if args.command == "validate":
