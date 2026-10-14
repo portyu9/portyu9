@@ -665,7 +665,15 @@ jobs:
               --input dependabot-file-pages.json \
               --out dependabot-changed-paths.txt
             test -s dependabot-changed-paths.txt
-            for PATH_VALUE in .github/action-lock.json .github/workflow-capability-bom-v1.json scripts/validate-codeql-contract.py; do
+            mapfile -t SUPPLEMENTAL_PATHS < <(
+              {
+                printf '%s\n' .github/action-lock.json .github/workflow-capability-bom-v1.json scripts/validate-codeql-contract.py
+                printf '%s\n' scripts/validate-privileged-workflow-identity.py
+                find .github -maxdepth 1 -type f -name 'workflow-capability-bom-v1-*.json' -printf '%p\n' | sed 's#^./##'
+                python3 -c 'import dependabot_artifact_reconciliation as r; print("\\n".join(r.REFERENCE_SOURCES))'
+              } | LC_ALL=C sort -u
+            )
+            for PATH_VALUE in "${SUPPLEMENTAL_PATHS[@]}"; do
               ENTRY="$(jq -c --arg path "$PATH_VALUE" '[.tree[] | select(.path == $path and .type == "blob")]' <<<"$TREE")"
               test "$(jq 'length' <<<"$ENTRY")" = "1"
               test "$(jq -r '.[0].mode' <<<"$ENTRY")" = "100644"
@@ -740,6 +748,7 @@ jobs:
               --resolved-release dependabot-release-identity.json \
               --changed-paths dependabot-changed-paths.txt \
               > capability-admission.json
+            DEPENDENCY_REPOSITORY="$(jq -r .dependencyRepository dependabot-probe.json)"
             ADMITTED_DELEGATION="$(jq -r .decision.authorizationId capability-admission.json)"
             if [ "$DEPENDENCY_REPOSITORY" = "github/codeql-action" ]; then
               test "$ADMITTED_DELEGATION" = "delegated-dependabot-codeql-v1"
