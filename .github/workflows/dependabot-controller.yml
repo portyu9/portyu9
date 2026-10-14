@@ -290,10 +290,7 @@ jobs:
               printf '%s\n' scripts/dependabot_artifact_reconciliation.py
               printf '%s\n' scripts/privileged_workflow_identity_v21_core.py scripts/validate-privileged-workflow-identity.py
               find .github -maxdepth 1 -name 'workflow-capability-bom-v1-*.json' -type f -printf '%p\n' | sed 's#^./##'
-              python3 - <<'PY'
-import dependabot_artifact_reconciliation as reconciler
-print('\n'.join(reconciler.REFERENCE_SOURCES))
-PY
+              python3 -c 'import dependabot_artifact_reconciliation as reconciler; print("\\n".join(reconciler.REFERENCE_SOURCES))'
             } | LC_ALL=C sort -u
           )
           for PATH_VALUE in "${FETCH_PATHS[@]}"; do
