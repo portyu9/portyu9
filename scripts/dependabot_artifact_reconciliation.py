@@ -200,11 +200,11 @@ def update_profile_source_epoch(
             data = candidate_workflows[relative].encode("utf-8")
         else:
             data = (trusted_root / relative).read_bytes()
-        oid = hashlib.sha1(f"blob {len(data)}\\0".encode("ascii") + data).hexdigest()
+        oid = hashlib.sha1(f"blob {len(data)}\0".encode("ascii") + data).hexdigest()
         digest.update(relative.encode("utf-8"))
-        digest.update(b"\\0")
+        digest.update(b"\0")
         digest.update(oid.encode("ascii"))
-        digest.update(b"\\n")
+        digest.update(b"\n")
     updated = dict(original)
     updated["closure_sha256"] = digest.hexdigest()
     require(updated["file_count"] == len(candidate_files) and
