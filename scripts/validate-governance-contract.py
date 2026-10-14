@@ -58,7 +58,7 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         'HEAD_REF_RESPONSE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
         'BASE_GATE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${BASE_SHA}")"',
         'HEAD_GATE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${HEAD_SHA}")"',
-        'test "$BASE_GATE_BLOB" = "$HEAD_GATE_BLOB" || {',
+        'if [ "$BASE_GATE_BLOB" != "$HEAD_GATE_BLOB" ]; then',
         "name: Checkout exact Dependabot candidate as inert data",
         "ref: ${{ github.event.pull_request.head.sha }}",
         "path: candidate-source",
@@ -208,7 +208,7 @@ def self_test_profile_quality_dependabot_admission_evidence(block: str) -> None:
             "contract is missing",
         ),
         (
-            'test "$BASE_GATE_BLOB" = "$HEAD_GATE_BLOB" || {',
+            'if [ "$BASE_GATE_BLOB" != "$HEAD_GATE_BLOB" ]; then',
             'true || {',
             "contract is missing",
         ),
