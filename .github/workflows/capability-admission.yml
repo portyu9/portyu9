@@ -670,7 +670,7 @@ jobs:
             mapfile -t SUPPLEMENTAL_PATHS < <(
               {
                 printf '%s\n' .github/action-lock.json .github/workflow-capability-bom-v1.json scripts/validate-codeql-contract.py
-                printf '%s\n' scripts/validate-privileged-workflow-identity.py
+                printf '%s\n' scripts/validate-privileged-workflow-identity.py scripts/profile-stats-source-epoch-v1.json
                 find .github -maxdepth 1 -type f -name 'workflow-capability-bom-v1-*.json' -printf '%p\n' | sed 's#^./##'
                 printf '%s\n' "$REFERENCE_PATHS"
               } | LC_ALL=C sort -u
