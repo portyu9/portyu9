@@ -751,7 +751,7 @@ def validate_text(text: str) -> None:
         "--out dependabot-changed-paths.txt",
         'for PATH_VALUE in .github/action-lock.json .github/workflow-capability-bom-v1.json scripts/validate-codeql-contract.py; do',
         "python3 scripts/dependabot_controller.py probe",
-        'test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"',
+        'github/codeql-action|actions/upload-artifact|actions/download-artifact) ;;',
         'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git"',
         "python3 scripts/dependabot_release.py",
         'python3 scripts/automation_github_repository_read.py "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json',
@@ -760,7 +760,7 @@ def validate_text(text: str) -> None:
         '--release-json dependabot-release.json',
         'test "$(jq -r .sha dependabot-release-identity.json)" = "$CANDIDATE_SHA"',
         '--resolved-release dependabot-release-identity.json',
-        'test "$(jq -r .decision.authorizationId capability-admission.json)" = "delegated-dependabot-codeql-v1"',
+        'test "$ADMITTED_DELEGATION" = "delegated-dependabot-artifact-v1"',
         '[[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]',
         '[[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]',
         'for HISTORY_ATTEMPT in $(seq 1 20); do',
@@ -1591,11 +1591,11 @@ def self_test() -> None:
         'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}"',
         "must use exactly one governed singleton JSON read call site",
     )
-    expect_failure(text, 'test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"',
+    expect_failure(text, 'github/codeql-action|actions/upload-artifact|actions/download-artifact) ;;',
                    'test -n "$DEPENDENCY_REPOSITORY"', "delegated Dependabot proof")
     expect_failure(
         text,
-        'test "$(jq -r .decision.authorizationId capability-admission.json)" = "delegated-dependabot-codeql-v1"',
+        'test "$ADMITTED_DELEGATION" = "delegated-dependabot-artifact-v1"',
         'test "$(jq -r .decision.allowed capability-admission.json)" = "true"',
         "delegated Dependabot proof",
     )
