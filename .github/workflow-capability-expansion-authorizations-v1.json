@@ -638,6 +638,13 @@
       "rationale": "Authorize #817's exact bounded Dependabot admission retry-history proof: Capability Admission records prior terminal attempts under existing actions:read; the trusted Dependabot controller re-proves the current attempt under existing Actions authority; native proof consumers keep existing read-only permissions. No new write permission, trigger, secret, OIDC, mutation class, candidate execution, merge authority, ruleset change, required-check reduction, direct-main write, or bypass."
     },
     {
+      "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "expansionSha256": "2728e7b62a48ffa7066a2893fb58d2246a458186f163c1a280c9f3d1d9a98618",
+      "id": "cap-dependabot-artifact-action-zero-touch-release-v1",
+      "rationale": "Prior-authorize #1660's exact immutable candidate tree bc31f0f662206bacb35d9f388d74ab02d7f2dda3 measured by read-only job 38649240193 against accepted main ec6f4253a2c0be0321b98a82b5f31ab88a1877bf. Extend trusted Dependabot admission beyond CodeQL to exact actions/upload-artifact and actions/download-artifact immutable release identities, derive scoped Action-lock, BOM, validator and workflow-byte-identity follow-on files from trusted main without executing candidate code, require original bot identity/current base/exact head, release provenance and protected checks before terminal merge. Five measured protected-source expansions; no new write permission, trigger, external API mutation surface, secret/OIDC authority, weakened checks, direct-main write, branch protection bypass, or unaudited PR merge. Original native bot PRs #1657/#1658 remain must-preserve until autonomously reconciled and tested."
+    },
+    {
       "baseBomSha256": "14fae0e37c39df7314307f0fb35fd2df61bfa9a91d3c39f4b0f2765e320c60ba",
       "candidateBomSha256": "1b6e92a93cd373a3c2367bad2c9f891ccb918b70ef83e5ab8506f0285ee42ef7",
       "expansionSha256": "fe1330b557b934203b65689552bced42ab7975059ee50fa0aa1d7e3f341067b7",
