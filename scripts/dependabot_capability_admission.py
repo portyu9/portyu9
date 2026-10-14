@@ -16,6 +16,7 @@ import sys
 from typing import Any, Mapping
 
 import dependabot_controller
+import dependabot_artifact_reconciliation as artifact_reconciliation
 import trusted_workflow_capability
 import workflow_capability_admission
 import workflow_capability_bom
@@ -24,6 +25,7 @@ import workflow_capability_snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
 DELEGATION_ID = "delegated-dependabot-codeql-v1"
+ARTIFACT_DELEGATION_ID = "delegated-dependabot-artifact-v1"
 BASE_BOM_PATH = ".github/workflow-capability-bom-v1.json"
 
 
@@ -49,22 +51,29 @@ def _mapping(value: Any, label: str) -> Mapping[str, Any]:
     return value
 
 
-def _action_identity(value: Mapping[str, Any]) -> str:
+def _action_identity(value: Mapping[str, Any], expected_repository: str) -> str:
     repository = value.get("repository")
     path = value.get("path")
-    require(repository == dependabot_controller.CODEQL_REPOSITORY,
+    require(repository == expected_repository,
             "delegated Dependabot action repository changed")
     require(isinstance(path, str), "delegated Dependabot action subpath is malformed")
     return repository + (f"/{path}" if path else "")
 
 
-def _validate_semantic_bounds(diff: Mapping[str, Any], proof: Mapping[str, Any]) -> None:
+def _validate_semantic_bounds(
+    diff: Mapping[str, Any], proof: Mapping[str, Any],
+    derived_paths: set[str] | None = None,
+) -> None:
     before = _mapping(proof.get("before"), "Dependabot before identity")
     after = _mapping(proof.get("after"), "Dependabot after identity")
     old_sha = before.get("sha")
     new_sha = after.get("sha")
     actions = set(proof.get("actions", []))
     require(actions, "Dependabot delegated admission has no action inventory")
+    repository = proof.get("dependencyRepository", dependabot_controller.CODEQL_REPOSITORY)
+    require(repository == dependabot_controller.CODEQL_REPOSITORY or
+            repository in artifact_reconciliation.REPOSITORIES,
+            "delegated Dependabot repository is outside the approved governance scope")
 
     expansions = diff.get("expansions")
     reductions = diff.get("reductions")
@@ -74,6 +83,7 @@ def _validate_semantic_bounds(diff: Mapping[str, Any], proof: Mapping[str, Any])
 
     action_expansions = []
     source_expansions = []
+    expanded_actions: set[str] = set()
     for item in expansions:
         entry = _mapping(item, "Dependabot capability expansion")
         category = entry.get("category")
@@ -81,22 +91,27 @@ def _validate_semantic_bounds(diff: Mapping[str, Any], proof: Mapping[str, Any])
             candidate = _mapping(entry.get("after"), "Dependabot candidate action capability")
             require(candidate.get("ref") == new_sha,
                     "delegated Dependabot expansion introduced an unproved Action SHA")
-            require(_action_identity(candidate) in actions,
+            name = _action_identity(candidate, repository)
+            require(name in actions,
                     "delegated Dependabot expansion introduced an unproved Action subpath")
+            expanded_actions.add(name)
             action_expansions.append(entry)
         elif category == "trusted-control-source":
-            require(entry.get("key") == BASE_BOM_PATH,
+            expected_paths = (derived_paths if repository in artifact_reconciliation.REPOSITORIES
+                              else {BASE_BOM_PATH})
+            require(entry.get("key") in expected_paths,
                     "delegated Dependabot admission changed an unapproved trusted-control source")
             source_expansions.append(entry)
         else:
             raise ValueError(f"delegated Dependabot admission forbids capability expansion category: {category}")
 
-    require(len(action_expansions) == len(actions),
-            "delegated Dependabot capability expansion does not exactly cover the admitted Action set")
-    require(len(source_expansions) == 1,
-            "delegated Dependabot reconciliation must change exactly the protected base BOM snapshot")
+    require(expanded_actions == actions,
+            "delegated Dependabot capability expansion does not cover exactly the admitted Action set")
+    require(source_expansions and BASE_BOM_PATH in {e.get("key") for e in source_expansions},
+            "delegated Dependabot reconciliation lost the protected base BOM snapshot")
 
     action_reductions = []
+    reduced_actions: set[str] = set()
     for item in reductions:
         entry = _mapping(item, "Dependabot capability reduction")
         require(entry.get("category") == "action",
@@ -104,10 +119,12 @@ def _validate_semantic_bounds(diff: Mapping[str, Any], proof: Mapping[str, Any])
         previous = _mapping(entry.get("before"), "Dependabot previous action capability")
         require(previous.get("ref") == old_sha,
                 "delegated Dependabot reduction removed an unproved Action SHA")
-        require(_action_identity(previous) in actions,
+        name = _action_identity(previous, repository)
+        require(name in actions,
                 "delegated Dependabot reduction removed an unproved Action subpath")
+        reduced_actions.add(name)
         action_reductions.append(entry)
-    require(len(action_reductions) == len(actions),
+    require(reduced_actions == actions and len(action_expansions) == len(action_reductions),
             "delegated Dependabot capability reductions do not exactly retire the prior Action set")
 
 
@@ -139,12 +156,19 @@ def evaluate(
     diff = workflow_capability_diff.semantic_diff(base, candidate)
     diff = workflow_capability_admission.protect_trusted_control(base, candidate, diff)
     diff = workflow_capability_admission.protect_trusted_sources(candidate_root, candidate_tree_sha, diff)
-    _validate_semantic_bounds(diff, proof)
+    derived_paths = None
+    if proof["dependencyRepository"] in artifact_reconciliation.REPOSITORIES:
+        derived_paths = set(artifact_reconciliation.derive(
+            trusted_root=ROOT, candidate_root=candidate_root, proof=proof,
+        ))
+    _validate_semantic_bounds(diff, proof, derived_paths)
 
     decision = {
         "allowed": True,
         "authorizationRequired": True,
-        "authorizationId": DELEGATION_ID,
+        "authorizationId": (ARTIFACT_DELEGATION_ID
+                            if proof["dependencyRepository"] in artifact_reconciliation.REPOSITORIES
+                            else DELEGATION_ID),
         "baseBomSha256": diff["baseBomSha256"],
         "candidateBomSha256": diff["candidateBomSha256"],
         "expansionSha256": diff["expansionSha256"],
