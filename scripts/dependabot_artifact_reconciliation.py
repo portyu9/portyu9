@@ -31,7 +31,7 @@ REPOSITORIES = frozenset({
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 LOCK_PATH = ".github/action-lock.json"
 BOM_PATH = ".github/workflow-capability-bom-v1.json"
-PRIVILEGED_IDENTITY = "scripts/privileged_workflow_identity_v21_core.py"
+PRIVILEGED_IDENTITY = "scripts/validate-privileged-workflow-identity.py"
 WORKFLOW_PREFIX = ".github/workflows/"
 SHARD_PREFIX = ".github/workflow-capability-bom-v1-"
 # These are read-only validators/fixture contracts whose identity literals must
