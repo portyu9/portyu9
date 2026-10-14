@@ -1,0 +1,44 @@
+name: One-shot artifact governance measurement (read only)
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/dependabot-artifact-measurement.yml"
+permissions:
+  contents: read
+env:
+  PYTHON_VERSION: "3.13.16"
+jobs:
+  measure:
+    name: measure-frozen-artifact-admission-v2-read-only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: e271d65d0b68f5c0b91cf84d1168d32033e916ae
+          path: trusted
+          persist-credentials: false
+      - name: Checkout frozen implementation as inert data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 7b5fc418cb9796e3a43fcda1c55be4665a67f71b
+          path: candidate
+          persist-credentials: false
+      - name: Set up trusted exact Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.16"
+      - name: Verify immutable sources and report sanitized exact authorization
+        run: |
+          set -euo pipefail
+          test "$(git -C trusted rev-parse HEAD)" = "e271d65d0b68f5c0b91cf84d1168d32033e916ae"
+          test "$(git -C candidate rev-parse HEAD)" = "7b5fc418cb9796e3a43fcda1c55be4665a67f71b"
+          python3 trusted/scripts/verify-python-runtime.py
+          TREE_SHA="$(git -C candidate rev-parse 'HEAD^{tree}')"
+          [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          echo "Measured exact main e271d65d0b68f5c0b91cf84d1168d32033e916ae, candidate 7b5fc418cb9796e3a43fcda1c55be4665a67f71b, tree $TREE_SHA"
+          python3 trusted/scripts/workflow_capability_admission.py candidate \
+            --candidate-tree-sha "$TREE_SHA" --measure
