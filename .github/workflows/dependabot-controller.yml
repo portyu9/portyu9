@@ -287,6 +287,10 @@ jobs:
             {
               find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -printf '%p\n' | sed 's#^./##'
               printf '%s\n' .github/action-lock.json .github/workflow-capability-bom-v1.json scripts/validate-codeql-contract.py
+              printf '%s\n' scripts/dependabot_artifact_reconciliation.py
+              printf '%s\n' scripts/privileged_workflow_identity_v21_core.py scripts/validate-privileged-workflow-identity.py
+              find .github -maxdepth 1 -name 'workflow-capability-bom-v1-*.json' -type f -printf '%p\n' | sed 's#^./##'
+              python3 -c 'import dependabot_artifact_reconciliation as reconciler; print("\\n".join(reconciler.REFERENCE_SOURCES))'
             } | LC_ALL=C sort -u
           )
           for PATH_VALUE in "${FETCH_PATHS[@]}"; do
@@ -334,7 +338,10 @@ jobs:
           DEPENDENCY_REPOSITORY="$(jq -r .dependencyRepository probe.json)"
           CANDIDATE_TAG="$(jq -r .after.tag probe.json)"
           CANDIDATE_SHA="$(jq -r .after.sha probe.json)"
-          test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"
+          case "$DEPENDENCY_REPOSITORY" in
+            github/codeql-action|actions/upload-artifact|actions/download-artifact) ;;
+            *) echo "ERROR: unsupported Dependabot dependency Action repository" >&2; exit 1 ;;
+          esac
           [[ "$CANDIDATE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
@@ -364,7 +371,13 @@ jobs:
             --out dependabot-proof.json
 
           jq -r '.files[]' dependabot-proof.json | LC_ALL=C sort -u > expected-raw-paths.txt
-          { cat expected-raw-paths.txt; printf '%s\n' .github/action-lock.json .github/workflow-capability-bom-v1.json scripts/validate-codeql-contract.py; } \
+          python3 scripts/dependabot_controller.py derive \
+            --proof dependabot-proof.json \
+            --base-root . \
+            --candidate-root "$CANDIDATE_ROOT" \
+            --output-root "$RUNNER_TEMP/dependabot-expected-derivatives"
+          find "$RUNNER_TEMP/dependabot-expected-derivatives" -type f -printf '%P\n' | LC_ALL=C sort -u > expected-derived-paths.txt
+          { cat expected-raw-paths.txt; cat expected-derived-paths.txt; } \
             | LC_ALL=C sort -u > expected-reconciled-paths.txt
           if cmp -s changed-paths.txt expected-raw-paths.txt; then
             STATE=raw
@@ -423,7 +436,7 @@ jobs:
             --output-root "$RUNNER_TEMP/derived"
 
           echo '[]' > tree-entries.json
-          for PATH_VALUE in .github/action-lock.json .github/workflow-capability-bom-v1.json scripts/validate-codeql-contract.py; do
+          while IFS= read -r PATH_VALUE; do
             FILE="$RUNNER_TEMP/derived/$PATH_VALUE"
             test -s "$FILE"
             base64 -w0 < "$FILE" | jq -Rs '{content: ., encoding: "base64"}' > git-blob-request.json
@@ -443,7 +456,7 @@ jobs:
             jq --arg path "$PATH_VALUE" --arg sha "$BLOB_SHA" '. + [{path:$path,mode:"100644",type:"blob",sha:$sha}]' \
               tree-entries.json > tree-entries.next.json
             mv tree-entries.next.json tree-entries.json
-          done
+          done < expected-derived-paths.txt
           jq -n --arg base_tree "$TREE_SHA" --slurpfile tree tree-entries.json \
             '{base_tree:$base_tree,tree:$tree[0]}' > tree-request.json
           gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/trees" --input tree-request.json > git-tree-http-response.txt
@@ -459,7 +472,7 @@ jobs:
           NEW_TREE_SHA="$(jq -r .sha git-tree-response-normalized.json)"
           [[ "$NEW_TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
-          jq -n --arg message 'Reconcile Dependabot CodeQL governance' --arg tree "$NEW_TREE_SHA" --arg parent "$HEAD_SHA" \
+          jq -n --arg message 'Reconcile exact attested Dependabot Action governance' --arg tree "$NEW_TREE_SHA" --arg parent "$HEAD_SHA" \
             '{message:$message,tree:$tree,parents:[$parent]}' > commit-request.json
           gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/commits" --input commit-request.json > git-commit-http-response.txt
           GIT_COMMIT_STATUS_LINE="$(head -n 1 git-commit-http-response.txt | tr -d '\r')"
@@ -1171,13 +1184,11 @@ jobs:
           python3 scripts/workflow_capability_api_collection.py files \
             --input pr-file-pages.json \
             --out changed-paths.txt
-          cat > expected-paths.txt <<'EOF'
-          .github/action-lock.json
-          .github/workflow-capability-bom-v1.json
-          .github/workflows/codeql.yml
-          scripts/validate-codeql-contract.py
-          EOF
-          cmp -s expected-paths.txt changed-paths.txt
+          # Every candidate path is reconstructed as inert data. The following
+          # independent proof validates exact pin-only and deterministic derived
+          # governance bytes, so this early list is intentionally not authoritative.
+          cp changed-paths.txt expected-paths.txt
+          test -s expected-paths.txt
 
           printf 'pr_number=%s\n' "$PR_NUMBER" >> "$GITHUB_OUTPUT"
           printf 'base_sha=%s\n' "$BASE_SHA" >> "$GITHUB_OUTPUT"
@@ -1261,7 +1272,10 @@ jobs:
           DEPENDENCY_REPOSITORY="$(jq -r .dependencyRepository probe.json)"
           CANDIDATE_TAG="$(jq -r .after.tag probe.json)"
           CANDIDATE_SHA="$(jq -r .after.sha probe.json)"
-          test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"
+          case "$DEPENDENCY_REPOSITORY" in
+            github/codeql-action|actions/upload-artifact|actions/download-artifact) ;;
+            *) echo "ERROR: unsupported Dependabot dependency Action repository" >&2; exit 1 ;;
+          esac
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
           test "$(git rev-parse HEAD:scripts/automation_github_repository_read.py)" = "12acd01e53c84558617e868e9f3489f9770c85d8"
@@ -1292,7 +1306,7 @@ jobs:
             --candidate-root "$CANDIDATE_ROOT" \
             --changed-paths changed-paths.txt \
             --out reconciled.json
-          test "$(jq -r .classification reconciled.json)" = "dependabot-codeql-reconciled"
+          test "$(jq -r .classification reconciled.json)" = "dependabot-$(if [ "$DEPENDENCY_REPOSITORY" = "github/codeql-action" ]; then echo codeql; else echo artifact; fi)-reconciled"
           test "$(jq -r .headSha reconciled.json)" = "$HEAD_SHA"
 
       - name: Verify exact delegated admission proof

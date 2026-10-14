@@ -58,15 +58,15 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         'HEAD_REF_RESPONSE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
         'BASE_GATE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${BASE_SHA}")"',
         'HEAD_GATE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${HEAD_SHA}")"',
-        'test "$BASE_GATE_BLOB" = "$HEAD_GATE_BLOB" || {',
+        'if [ "$BASE_GATE_BLOB" != "$HEAD_GATE_BLOB" ]; then',
         "name: Checkout exact Dependabot candidate as inert data",
         "ref: ${{ github.event.pull_request.head.sha }}",
         "path: candidate-source",
         "name: Verify exact accepted-base admission source identity",
         'test "$(git -C trusted-base rev-parse HEAD)" = "$BASE_SHA"',
         'test "$(git -C candidate-source rev-parse HEAD)" = "$HEAD_SHA"',
-        'HEAD:scripts/dependabot_capability_admission.py)" = "96107595641a0f9ff0203d9df2b684b1822b0346"',
-        'HEAD:scripts/dependabot_controller.py)" = "eec756bba94ed616a47598d903ca37c66b34d68e"',
+        'HEAD:scripts/dependabot_capability_admission.py)" = "dae31fecbda3470fb77c9a6f27ed37500c4ced20"',
+        'HEAD:scripts/dependabot_controller.py)" = "929dfe7df389b108ab8040f5232920c1a6dd0b19"',
         'HEAD:scripts/dependabot_release.py)" = "229faaf9eadb7f187b71ce5c25809258cbf0c23a"',
         'HEAD:scripts/workflow_capability_api_collection.py)" = "fd111c3aae1ecaf704e522f17a998118978aa994"',
         'HEAD:scripts/workflow_capability_tcb.py)" = "58f4d55e7e65bc7f417c1ce3c006f0b7b9c412c7"',
@@ -105,8 +105,8 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         "PR-native Dependabot admission must use exactly two immutable checkouts and one exact Python setup",
     )
     require(
-        block.count('PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts"') == 2,
-        "PR-native Dependabot admission must execute both trusted Python phases from accepted-base modules",
+        block.count('PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts"') == 3,
+        "PR-native Dependabot admission must execute all three trusted Python phases from accepted-base modules",
     )
     require(
         block.count("python3 trusted-base/scripts/automation_github_read.py") == 6,
@@ -208,7 +208,7 @@ def self_test_profile_quality_dependabot_admission_evidence(block: str) -> None:
             "contract is missing",
         ),
         (
-            'test "$BASE_GATE_BLOB" = "$HEAD_GATE_BLOB" || {',
+            'if [ "$BASE_GATE_BLOB" != "$HEAD_GATE_BLOB" ]; then',
             'true || {',
             "contract is missing",
         ),
@@ -229,7 +229,7 @@ def self_test_profile_quality_dependabot_admission_evidence(block: str) -> None:
             "forbidden relay/candidate/write/direct-singleton surface",
         ),
         (
-            'HEAD:scripts/dependabot_capability_admission.py)" = "96107595641a0f9ff0203d9df2b684b1822b0346"',
+            'HEAD:scripts/dependabot_capability_admission.py)" = "dae31fecbda3470fb77c9a6f27ed37500c4ced20"',
             'HEAD:scripts/dependabot_capability_admission.py)" = "' + ("0" * 40) + '"',
             "contract is missing",
         ),

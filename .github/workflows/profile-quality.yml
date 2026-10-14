@@ -774,10 +774,45 @@ jobs:
           }
           BASE_GATE_BLOB="$(jq -r .sha <<<"$BASE_GATE")"
           HEAD_GATE_BLOB="$(jq -r .sha <<<"$HEAD_GATE")"
-          test "$BASE_GATE_BLOB" = "$HEAD_GATE_BLOB" || {
-            echo "ERROR: Dependabot candidate attempted to alter its PR-native admission workflow." >&2
-            exit 1
-          }
+          if [ "$BASE_GATE_BLOB" != "$HEAD_GATE_BLOB" ]; then
+            # The only acceptable source delta is a forward immutable pin-only
+            # artifact Action update. The admitted release is re-proved below.
+            jq -r .content <<<"$BASE_GATE" | base64 --decode > "$RUNNER_TEMP/dependabot-profile-base.yml"
+            jq -r .content <<<"$HEAD_GATE" | base64 --decode > "$RUNNER_TEMP/dependabot-profile-head.yml"
+            PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts" python3 - \
+              "$RUNNER_TEMP/dependabot-profile-base.yml" "$RUNNER_TEMP/dependabot-profile-head.yml" <<'PY'
+          from pathlib import Path
+          import sys
+          from action_identity_lock import load_action_lock
+          from dependabot_pin_diff import parse_uses, compare_semver
+
+          base, head = (Path(name).read_text(encoding="utf-8").splitlines()
+                        for name in sys.argv[1:])
+          if len(base) != len(head):
+              raise ValueError("untrusted Dependabot changed Profile Quality line count")
+          lock = load_action_lock(Path("trusted-base/.github/action-lock.json"))
+          changed = 0
+          for number, (before, after) in enumerate(zip(base, head), 1):
+              if before == after:
+                  continue
+              old = parse_uses(before, f"base:{number}")
+              new = parse_uses(after, f"head:{number}")
+              action = old["action"]
+              if action not in {"actions/upload-artifact", "actions/download-artifact"}:
+                  raise ValueError("untrusted candidate changed protected Profile Quality source")
+              if (new["action"] != action or old["prefix"] != new["prefix"]
+                      or old["comment"] != new["comment"] or old["suffix"] != new["suffix"]):
+                  raise ValueError("untrusted Dependabot changed Action workflow syntax")
+              if not (lock[action]["sha"] == old["sha"]
+                      and lock[action]["tag"] == old["tag"]
+                      and old["sha"] != new["sha"]
+                      and compare_semver(new["tag"], old["tag"]) > 0):
+                  raise ValueError("untrusted Dependabot changed unapproved Action identity")
+              changed += 1
+          if changed == 0:
+              raise ValueError("untrusted Dependabot candidate contains no approved pin changes")
+          PY
+          fi
 
       - name: Checkout exact Dependabot candidate as inert data
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -797,8 +832,8 @@ jobs:
           test "$(git -C candidate-source rev-parse HEAD)" = "$HEAD_SHA"
           test -z "$(git -C trusted-base status --porcelain)"
           test -z "$(git -C candidate-source status --porcelain)"
-          test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_capability_admission.py)" = "96107595641a0f9ff0203d9df2b684b1822b0346"
-          test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_controller.py)" = "eec756bba94ed616a47598d903ca37c66b34d68e"
+          test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_capability_admission.py)" = "dae31fecbda3470fb77c9a6f27ed37500c4ced20"
+          test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_controller.py)" = "929dfe7df389b108ab8040f5232920c1a6dd0b19"
           test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_release.py)" = "229faaf9eadb7f187b71ce5c25809258cbf0c23a"
           test "$(git -C trusted-base rev-parse HEAD:scripts/workflow_capability_api_collection.py)" = "fd111c3aae1ecaf704e522f17a998118978aa994"
           test "$(git -C trusted-base rev-parse HEAD:scripts/workflow_capability_tcb.py)" = "58f4d55e7e65bc7f417c1ce3c006f0b7b9c412c7"
@@ -836,7 +871,10 @@ jobs:
           DEPENDENCY_REPOSITORY="$(jq -r .dependencyRepository "$RUNNER_TEMP/dependabot-probe.json")"
           CANDIDATE_TAG="$(jq -r .after.tag "$RUNNER_TEMP/dependabot-probe.json")"
           CANDIDATE_SHA="$(jq -r .after.sha "$RUNNER_TEMP/dependabot-probe.json")"
-          test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"
+          case "$DEPENDENCY_REPOSITORY" in
+            github/codeql-action|actions/upload-artifact|actions/download-artifact) ;;
+            *) echo "ERROR: Dependabot PR-native admission rejected unsupported Action repository" >&2; exit 1 ;;
+          esac
           [[ "$CANDIDATE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
@@ -872,7 +910,8 @@ jobs:
             > "$RUNNER_TEMP/dependabot-native-admission.json"
           jq -e '
             .decision.allowed == true and
-            .decision.authorizationId == "delegated-dependabot-codeql-v1" and
+            (.decision.authorizationId == "delegated-dependabot-codeql-v1" or
+             .decision.authorizationId == "delegated-dependabot-artifact-v1") and
             (.diff.expansions | type == "array") and
             (.diff.reductions | type == "array")
           ' "$RUNNER_TEMP/dependabot-native-admission.json" >/dev/null

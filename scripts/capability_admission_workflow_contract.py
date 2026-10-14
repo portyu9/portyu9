@@ -10,7 +10,7 @@ import automation_pr_closing_directive_guard
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
 CLOSING_GUARD = ROOT / "scripts/automation_pr_closing_directive_guard.py"
-EXPECTED_GIT_BLOB = "bac9f39e9489c0b542d2fee3a03d72fb86c12bbb"
+EXPECTED_GIT_BLOB = "645f9baf427f6556b657700288e94662d1456361"
 EXPECTED_CLOSING_GUARD_GIT_BLOB = "f006aba7f00e860039b1c0f5f5372ab69eb06406"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
@@ -749,9 +749,9 @@ def validate_text(text: str) -> None:
         "python3 scripts/workflow_capability_api_collection.py files",
         "--input dependabot-file-pages.json",
         "--out dependabot-changed-paths.txt",
-        'for PATH_VALUE in .github/action-lock.json .github/workflow-capability-bom-v1.json scripts/validate-codeql-contract.py; do',
+        'for PATH_VALUE in "${SUPPLEMENTAL_PATHS[@]}"; do',
         "python3 scripts/dependabot_controller.py probe",
-        'test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"',
+        'github/codeql-action|actions/upload-artifact|actions/download-artifact) ;;',
         'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git"',
         "python3 scripts/dependabot_release.py",
         'python3 scripts/automation_github_repository_read.py "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json',
@@ -760,7 +760,7 @@ def validate_text(text: str) -> None:
         '--release-json dependabot-release.json',
         'test "$(jq -r .sha dependabot-release-identity.json)" = "$CANDIDATE_SHA"',
         '--resolved-release dependabot-release-identity.json',
-        'test "$(jq -r .decision.authorizationId capability-admission.json)" = "delegated-dependabot-codeql-v1"',
+        'test "$ADMITTED_DELEGATION" = "delegated-dependabot-artifact-v1"',
         '[[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]',
         '[[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]',
         'for HISTORY_ATTEMPT in $(seq 1 20); do',
@@ -1591,11 +1591,11 @@ def self_test() -> None:
         'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}"',
         "must use exactly one governed singleton JSON read call site",
     )
-    expect_failure(text, 'test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"',
+    expect_failure(text, 'github/codeql-action|actions/upload-artifact|actions/download-artifact) ;;',
                    'test -n "$DEPENDENCY_REPOSITORY"', "delegated Dependabot proof")
     expect_failure(
         text,
-        'test "$(jq -r .decision.authorizationId capability-admission.json)" = "delegated-dependabot-codeql-v1"',
+        'test "$ADMITTED_DELEGATION" = "delegated-dependabot-artifact-v1"',
         'test "$(jq -r .decision.allowed capability-admission.json)" = "true"',
         "delegated Dependabot proof",
     )

@@ -12,6 +12,8 @@ import re
 import sys
 
 from dependabot_admission import self_test as admission_self_test
+from dependabot_artifact_reconciliation import self_test as artifact_reconciliation_self_test
+from artifact_delegation_contract import self_test as artifact_delegation_contract_self_test
 from dependabot_capability_admission import self_test as capability_admission_self_test
 from dependabot_controller import self_test as controller_self_test
 from dependabot_admission_proof import self_test as admission_proof_self_test
@@ -2438,7 +2440,7 @@ def validate_quality_contract(text: str) -> None:
         'HEAD_GATE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${HEAD_SHA}")"',
         'validate_contents_file_object "$BASE_GATE" ".github/workflows/profile-quality.yml"',
         'validate_contents_file_object "$HEAD_GATE" ".github/workflows/profile-quality.yml"',
-        'test "$BASE_GATE_BLOB" = "$HEAD_GATE_BLOB" || {',
+        'if [ "$BASE_GATE_BLOB" != "$HEAD_GATE_BLOB" ]; then',
         "- name: Checkout exact Dependabot candidate as inert data",
         "ref: ${{ github.event.pull_request.head.sha }}",
         "path: candidate-source",
@@ -2454,7 +2456,7 @@ def validate_quality_contract(text: str) -> None:
         "- name: Evaluate exact accepted-base semantic admission",
         "python3 trusted-base/scripts/dependabot_capability_admission.py",
         "candidate-source",
-        '.decision.authorizationId == "delegated-dependabot-codeql-v1"',
+        '.decision.authorizationId == "delegated-dependabot-artifact-v1"',
         'echo "Exact accepted-base PR-native Dependabot semantic admission passed without cross-run proof polling."',
     )
     for fragment in required_fragments:
@@ -2542,7 +2544,7 @@ def validate_quality_contract(text: str) -> None:
         'HEAD_GATE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${HEAD_SHA}")"',
         'validate_contents_file_object "$BASE_GATE" ".github/workflows/profile-quality.yml"',
         'validate_contents_file_object "$HEAD_GATE" ".github/workflows/profile-quality.yml"',
-        'test "$BASE_GATE_BLOB" = "$HEAD_GATE_BLOB" || {',
+        'if [ "$BASE_GATE_BLOB" != "$HEAD_GATE_BLOB" ]; then',
         "- name: Checkout exact Dependabot candidate as inert data",
         "- name: Verify exact accepted-base admission source identity",
         "- name: Fetch exact candidate release evidence",
@@ -2598,6 +2600,8 @@ def self_test() -> None:
     release_self_test()
     approval_comment_self_test()
     controller_self_test()
+    artifact_reconciliation_self_test()
+    artifact_delegation_contract_self_test()
     admission_proof_self_test()
     capability_admission_self_test()
     good_sha = "a" * 40
