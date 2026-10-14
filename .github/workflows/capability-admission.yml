@@ -700,7 +700,10 @@ jobs:
           DEPENDENCY_REPOSITORY="$(jq -r .dependencyRepository dependabot-probe.json)"
           CANDIDATE_TAG="$(jq -r .after.tag dependabot-probe.json)"
           CANDIDATE_SHA="$(jq -r .after.sha dependabot-probe.json)"
-          test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"
+          case "$DEPENDENCY_REPOSITORY" in
+            github/codeql-action|actions/upload-artifact|actions/download-artifact) ;;
+            *) echo "ERROR: Capability Admission delegated release repository is unapproved" >&2; exit 1 ;;
+          esac
           [[ "$CANDIDATE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
           git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" \
@@ -737,7 +740,12 @@ jobs:
               --resolved-release dependabot-release-identity.json \
               --changed-paths dependabot-changed-paths.txt \
               > capability-admission.json
-            test "$(jq -r .decision.authorizationId capability-admission.json)" = "delegated-dependabot-codeql-v1"
+            ADMITTED_DELEGATION="$(jq -r .decision.authorizationId capability-admission.json)"
+            if [ "$DEPENDENCY_REPOSITORY" = "github/codeql-action" ]; then
+              test "$ADMITTED_DELEGATION" = "delegated-dependabot-codeql-v1"
+            else
+              test "$ADMITTED_DELEGATION" = "delegated-dependabot-artifact-v1"
+            fi
           else
             python3 scripts/workflow_capability_admission.py \
               candidate-capability-source \
