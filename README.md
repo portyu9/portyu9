@@ -1,10 +1,10 @@
 <br>
 
-<!-- banner-rotation:v3 utc-day=2026-10-13 slot=2 slug=02-fractal-iris -->
+<!-- banner-rotation:v3 utc-day=2026-10-14 slot=3 slug=03-chronohedron -->
 <p align="center">
 <picture>
-  <source media="(max-width: 640px)" srcset="assets/profile-banners/approved/02-fractal-iris-top-compact.svg">
-  <img alt="Animated quantum apex signal crown" src="assets/profile-banners/approved/02-fractal-iris-top.svg" width="100%">
+  <source media="(max-width: 640px)" srcset="assets/profile-banners/approved/03-chronohedron-top-compact.svg">
+  <img alt="Animated quantum apex signal crown" src="assets/profile-banners/approved/03-chronohedron-top.svg" width="100%">
 </picture>
 </p>
 
@@ -138,20 +138,20 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 <p align="center"><sub>3 systems · deterministic daily rotation · scoped live <code>main</code>-branch evidence</sub></p>
 
 <!-- spotlight-direct-links:start -->
-<!-- generated-publication-epoch:v1 sequence=37 generated=1760d778021e2d26c778a03d39d9ebb818df3d94 tree=42f1cfac0fa763b54f4f2fbff6beebeaeb106613 -->
+<!-- generated-publication-epoch:v1 sequence=38 generated=e3a10ad8fd5791db64133ffcab7037d38ca7d2e7 tree=4689919fc0becd11e97b8b33383544891e2f1a1f -->
 <p align="center">
-<a href="https://github.com/portyu9/qa-automation-node-playwright"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/1760d778021e2d26c778a03d39d9ebb818df3d94/engineering-spotlight/spotlight-1-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 1" src="https://raw.githubusercontent.com/portyu9/portyu9/1760d778021e2d26c778a03d39d9ebb818df3d94/engineering-spotlight/spotlight-1-light.svg" width="620"></picture></a><br>
-<a href="https://github.com/portyu9/qa-automation-node-playwright/actions/workflows/ci.yml"><img alt="Spotlight slot 1 CI" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-node-playwright/main?nameFilter=ci-gate&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-node-playwright/actions/workflows/security.yml"><img alt="Spotlight slot 1 security" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-node-playwright/main?nameFilter=security-gate&style=flat-square&label=SECURITY"></a>
+<a href="https://github.com/portyu9/qa-automation-ui-cypress"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/e3a10ad8fd5791db64133ffcab7037d38ca7d2e7/engineering-spotlight/spotlight-1-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 1" src="https://raw.githubusercontent.com/portyu9/portyu9/e3a10ad8fd5791db64133ffcab7037d38ca7d2e7/engineering-spotlight/spotlight-1-light.svg" width="620"></picture></a><br>
+<a href="https://github.com/portyu9/qa-automation-ui-cypress/actions/workflows/ci.yml"><img alt="Spotlight slot 1 CI" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-ui-cypress/main?nameFilter=ci-gate&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-ui-cypress/actions/workflows/security.yml"><img alt="Spotlight slot 1 security" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-ui-cypress/main?nameFilter=security-gate&style=flat-square&label=SECURITY"></a>
 </p>
 
 <p align="center">
-<a href="https://github.com/portyu9/qa-automation-mobile-appium"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/1760d778021e2d26c778a03d39d9ebb818df3d94/engineering-spotlight/spotlight-2-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 2" src="https://raw.githubusercontent.com/portyu9/portyu9/1760d778021e2d26c778a03d39d9ebb818df3d94/engineering-spotlight/spotlight-2-light.svg" width="620"></picture></a><br>
-<a href="https://github.com/portyu9/qa-automation-mobile-appium/actions/workflows/ci.yml"><img alt="Spotlight slot 2 CI" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-mobile-appium/main?nameFilter=ci-gate&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-mobile-appium/actions/workflows/security.yml"><img alt="Spotlight slot 2 security" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-mobile-appium/main?nameFilter=security-gate&style=flat-square&label=SECURITY"></a>
+<a href="https://github.com/portyu9/k6-performance-testing-framework"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/e3a10ad8fd5791db64133ffcab7037d38ca7d2e7/engineering-spotlight/spotlight-2-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 2" src="https://raw.githubusercontent.com/portyu9/portyu9/e3a10ad8fd5791db64133ffcab7037d38ca7d2e7/engineering-spotlight/spotlight-2-light.svg" width="620"></picture></a><br>
+<a href="https://github.com/portyu9/k6-performance-testing-framework/actions/workflows/ci.yml"><img alt="Spotlight slot 2 CI" height="24" src="https://img.shields.io/github/check-runs/portyu9/k6-performance-testing-framework/main?nameFilter=ci-gate&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/k6-performance-testing-framework/actions/workflows/security.yml"><img alt="Spotlight slot 2 security" height="24" src="https://img.shields.io/github/check-runs/portyu9/k6-performance-testing-framework/main?nameFilter=security-gate&style=flat-square&label=SECURITY"></a>
 </p>
 
 <p align="center">
-<a href="https://github.com/portyu9/qa-automation-java-restassured"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/1760d778021e2d26c778a03d39d9ebb818df3d94/engineering-spotlight/spotlight-3-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 3" src="https://raw.githubusercontent.com/portyu9/portyu9/1760d778021e2d26c778a03d39d9ebb818df3d94/engineering-spotlight/spotlight-3-light.svg" width="620"></picture></a><br>
-<a href="https://github.com/portyu9/qa-automation-java-restassured/actions/workflows/ci.yml"><img alt="Spotlight slot 3 CI" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-java-restassured/main?nameFilter=ci-gate&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-java-restassured/actions/workflows/security.yml"><img alt="Spotlight slot 3 security" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-java-restassured/main?nameFilter=security-gate&style=flat-square&label=SECURITY"></a>
+<a href="https://github.com/portyu9/qa-automation-mobile-appium"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/e3a10ad8fd5791db64133ffcab7037d38ca7d2e7/engineering-spotlight/spotlight-3-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 3" src="https://raw.githubusercontent.com/portyu9/portyu9/e3a10ad8fd5791db64133ffcab7037d38ca7d2e7/engineering-spotlight/spotlight-3-light.svg" width="620"></picture></a><br>
+<a href="https://github.com/portyu9/qa-automation-mobile-appium/actions/workflows/ci.yml"><img alt="Spotlight slot 3 CI" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-mobile-appium/main?nameFilter=ci-gate&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-mobile-appium/actions/workflows/security.yml"><img alt="Spotlight slot 3 security" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-mobile-appium/main?nameFilter=security-gate&style=flat-square&label=SECURITY"></a>
 </p>
 
 <!-- spotlight-direct-links:end -->
@@ -184,6 +184,6 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 
 <p align="center">
 <picture>
-  <img alt="Animated evidence horizon" src="assets/profile-banners/approved/02-fractal-iris-bottom.svg" width="100%">
+  <img alt="Animated evidence horizon" src="assets/profile-banners/approved/03-chronohedron-bottom.svg" width="100%">
 </picture>
 </p>
