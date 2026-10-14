@@ -13,6 +13,7 @@ import sys
 
 from dependabot_admission import self_test as admission_self_test
 from dependabot_artifact_reconciliation import self_test as artifact_reconciliation_self_test
+from artifact_delegation_contract import self_test as artifact_delegation_contract_self_test
 from dependabot_capability_admission import self_test as capability_admission_self_test
 from dependabot_controller import self_test as controller_self_test
 from dependabot_admission_proof import self_test as admission_proof_self_test
@@ -2600,6 +2601,7 @@ def self_test() -> None:
     approval_comment_self_test()
     controller_self_test()
     artifact_reconciliation_self_test()
+    artifact_delegation_contract_self_test()
     admission_proof_self_test()
     capability_admission_self_test()
     good_sha = "a" * 40
