@@ -105,8 +105,8 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         "PR-native Dependabot admission must use exactly two immutable checkouts and one exact Python setup",
     )
     require(
-        block.count('PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts"') == 2,
-        "PR-native Dependabot admission must execute both trusted Python phases from accepted-base modules",
+        block.count('PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts"') == 3,
+        "PR-native Dependabot admission must execute all three trusted Python phases from accepted-base modules",
     )
     require(
         block.count("python3 trusted-base/scripts/automation_github_read.py") == 6,
