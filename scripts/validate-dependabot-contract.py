@@ -2565,6 +2565,59 @@ def validate_quality_contract(text: str) -> None:
         require(position > cursor, f"Profile Quality PR-native admission ordering changed: {fragment}")
         cursor = position
 
+def validate_trusted_reference_hydration(controller: str) -> None:
+    """Reject process substitution that silently swallows a trusted Python import failure."""
+    capability = (ROOT / ".github/workflows/capability-admission.yml").read_text(encoding="utf-8")
+    for label, source, inventory in (
+        ("controller", controller, "FETCH_PATHS"),
+        ("capability-admission", capability, "SUPPLEMENTAL_PATHS"),
+    ):
+        import_marker = (
+            'REFERENCE_PATHS="$(PYTHONPATH="$GITHUB_WORKSPACE/scripts" python3 -c '
+            "'import dependabot_artifact_reconciliation as reconciler; "
+            "print(*reconciler.REFERENCE_SOURCES, sep=chr(10))')\""
+        )
+        nonempty_marker = 'test -n "$REFERENCE_PATHS"'
+        mapfile_marker = f"mapfile -t {inventory} < <("
+        output_marker = """printf '%s\\n' "$REFERENCE_PATHS" """
+        require(source.count(import_marker) == 1,
+                f"{label}: trusted artifact references must be imported synchronously")
+        require(source.count(nonempty_marker) == 1,
+                f"{label}: trusted artifact reference output must be nonempty")
+        require(source.count(mapfile_marker) == 1,
+                f"{label}: canonical inventory mapfile changed")
+        require(source.count("printf '%s\\n' \"$REFERENCE_PATHS\"") == 1,
+                f"{label}: trusted artifact references were omitted from candidate inventory")
+        require(
+            source.index(import_marker) < source.index(nonempty_marker)
+            < source.index(mapfile_marker)
+            < source.index("printf '%s\\n' \"$REFERENCE_PATHS\""),
+            f"{label}: import must complete before process substitution starts",
+        )
+        require("python3 -c 'import dependabot_artifact_reconciliation" not in
+                source[source.index(mapfile_marker):source.index(mapfile_marker) + 1050],
+                f"{label}: process substitution must not conceal Python import errors")
+
+    # Regression: the exact silent-failure shape from live controller run 38655020728.
+    broken = controller.replace(
+        'REFERENCE_PATHS="$(PYTHONPATH="$GITHUB_WORKSPACE/scripts" python3 -c ',
+        'REFERENCE_PATHS="$(python3 -c ', 1,
+    )
+    try:
+        validate_trusted_reference_hydration_single_controller(broken)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("trusted hydration regression accepted unqualified Python imports")
+
+
+def validate_trusted_reference_hydration_single_controller(text: str) -> None:
+    require(
+        'REFERENCE_PATHS="$(PYTHONPATH="$GITHUB_WORKSPACE/scripts" python3 -c ' in text,
+        "trusted inventory Python must use reviewed scripts module root",
+    )
+
+
 def validate_governance(text: str) -> None:
     for phrase in (
         "## Dependency update automation",
@@ -2637,6 +2690,7 @@ def main() -> int:
         validate_all_workflow_pins()
         controller_text = CONTROLLER.read_text(encoding="utf-8")
         validate_controller_wake_contract(controller_text)
+        validate_trusted_reference_hydration(controller_text)
         validate_controller_read_ref_response_contract(controller_text)
         validate_controller_protected_workflow_evidence_contract(controller_text)
         self_test_controller_workflow_run_approval_status(controller_text)
