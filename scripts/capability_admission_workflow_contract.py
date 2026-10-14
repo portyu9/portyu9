@@ -749,7 +749,7 @@ def validate_text(text: str) -> None:
         "python3 scripts/workflow_capability_api_collection.py files",
         "--input dependabot-file-pages.json",
         "--out dependabot-changed-paths.txt",
-        'for PATH_VALUE in .github/action-lock.json .github/workflow-capability-bom-v1.json scripts/validate-codeql-contract.py; do',
+        'for PATH_VALUE in "${SUPPLEMENTAL_PATHS[@]}"; do',
         "python3 scripts/dependabot_controller.py probe",
         'github/codeql-action|actions/upload-artifact|actions/download-artifact) ;;',
         'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git"',
