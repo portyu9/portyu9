@@ -188,6 +188,12 @@
               "target": "repos/${TARGET_REPOSITORY}/dispatches"
             },
             {
+              "class": "graphql-mutation",
+              "method": "POST",
+              "step": "Bind current main and one native Dependabot candidate",
+              "target": "graphql"
+            },
+            {
               "class": "issue-or-pr-metadata",
               "method": "POST",
               "step": "Perform exact-head protected Dependabot merge",
@@ -198,12 +204,6 @@
               "method": "POST",
               "step": "Bind current main and one native Dependabot candidate",
               "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"
-            },
-            {
-              "class": "pull-request",
-              "method": "PUT",
-              "step": "Bind current main and one native Dependabot candidate",
-              "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch"
             },
             {
               "class": "pull-request-merge",
