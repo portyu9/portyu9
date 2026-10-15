@@ -1025,6 +1025,13 @@
     {
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "expansionSha256": "26b2deee9dc40a1720cbd8587393b5be8485d1b9d28892bdbf88704888737722",
+      "id": "cap-dependabot-verified-native-source-bounds-v1",
+      "rationale": "Prior-authorize frozen #1686 tree 73b9500f6f1b41aec643e042c2604028e32647e5, independently measured by accepted-main read-only Actions run 38737041602: one protected source expansion, zero reductions, unchanged semantic BOM. Bind delegated native artifact source changes only to exact attested Dependabot pin-only workflow files or trusted deterministic derivative paths; negative tests still reject forged paths and SHAs. No new permission, endpoint, trigger, secret, bypass or merge authority."
+    },
+    {
+      "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "expansionSha256": "991375023da1ee2743e1e2b7c799534a04e879c1ae5d08c6d7a1206fcb50dde0",
       "id": "cap-dependabot-wake-head-affinity-v1",
       "rationale": "Prior-authorize exact immutable tree 816674bb67da1201b96d669198749837ccd895e9 from #1679, independently measured by read-only accepted-main Actions run 38672379539: one protected Dependabot controller source expansion, zero reductions, unchanged semantic BOM. Native workflow_run wakes select only their exact branch/head; stale wakes exit before mutation. Adds no trigger, token, permission, API write, release-pin override, reduced checks, unauthorized merge, or candidate-code execution."
