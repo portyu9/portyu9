@@ -35,7 +35,7 @@ def self_test() -> None:
         # Derive a forward-only synthetic release from the current canonical
         # lock. The fixture must keep working after each genuine Dependabot
         # release is accepted; never pin its future version to today's release.
-        current = re.fullmatch(r"v([0-9]+)\\.([0-9]+)\\.([0-9]+)", before["tag"])
+        current = re.fullmatch(r"v([0-9]+)\.([0-9]+)\.([0-9]+)", before["tag"])
         require(current is not None,
                 f"{repo}: fixture requires a stable three-component lock release")
         major, minor, patch = (int(part) for part in current.groups())
