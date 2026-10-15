@@ -1,10 +1,10 @@
 <br>
 
-<!-- banner-rotation:v3 utc-day=2026-10-14 slot=3 slug=03-chronohedron -->
+<!-- banner-rotation:v3 utc-day=2026-10-15 slot=4 slug=04-reserved -->
 <p align="center">
 <picture>
-  <source media="(max-width: 640px)" srcset="assets/profile-banners/approved/03-chronohedron-top-compact.svg">
-  <img alt="Animated quantum apex signal crown" src="assets/profile-banners/approved/03-chronohedron-top.svg" width="100%">
+  <source media="(max-width: 640px)" srcset="assets/profile-banners/quantum-apex-signal-crown-hero-compact.svg">
+  <img alt="Animated quantum apex signal crown" src="assets/profile-banners/quantum-apex-signal-crown-hero.svg" width="100%">
 </picture>
 </p>
 
@@ -184,6 +184,6 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 
 <p align="center">
 <picture>
-  <img alt="Animated evidence horizon" src="assets/profile-banners/approved/03-chronohedron-bottom.svg" width="100%">
+  <img alt="Animated evidence horizon" src="assets/profile-banners/elite-evidence-horizon-bottom.svg" width="100%">
 </picture>
 </p>
