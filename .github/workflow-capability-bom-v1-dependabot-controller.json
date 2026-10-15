@@ -27,6 +27,14 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
+              "endpoint": "graphql",
+              "graphqlOperation": "mutation",
+              "method": "POST",
+              "mutating": true,
+              "step": "Bind current main and one native Dependabot candidate"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/approve",
               "method": "POST",
               "mutating": true,
@@ -120,13 +128,6 @@
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers",
               "method": "POST",
-              "mutating": true,
-              "step": "Bind current main and one native Dependabot candidate"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch",
-              "method": "PUT",
               "mutating": true,
               "step": "Bind current main and one native Dependabot candidate"
             },
