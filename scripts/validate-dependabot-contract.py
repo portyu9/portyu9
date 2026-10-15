@@ -327,6 +327,11 @@ def validate_controller_native_rebase_permission_defer_contract(text: str) -> No
     ):
         require(section.count(marker) == 1,
                 f"GraphQL HTTP-200 denial classifier missing exact fail-closed evidence: {marker}")
+    require(
+        "rebase-denial-response.json >/dev/null ||" not in section and
+        section.count("rebase-denial-response.json >/dev/null") == 1,
+        "GraphQL denial predicate must not swallow a malformed or unrelated error",
+    )
     denial_start = section.index('if [ "$REBASE_EXIT" -ne 0 ]; then')
     require(
         section.index("grep -qF 'refusing to allow a GitHub App", denial_start) <
