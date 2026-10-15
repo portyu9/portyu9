@@ -645,6 +645,13 @@
       "rationale": "Authorize #1660 tree 30d09b01e46d323b470ac36d4a6a9bd9a6d65fd8, measured in read-only run 38650043271: five protected-source expansions and no semantic BOM changes. Governed Dependabot updates for actions/upload-artifact and actions/download-artifact preserve bot/head/base identity, immutable release provenance, trusted Action-lock/BOM/validator derivation, required checks and protected merge. No new permission, trigger, mutation, secret, ruleset bypass or direct-main write."
     },
     {
+      "id": "cap-dependabot-atomic-native-graphql-rebase-v1",
+      "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "candidateBomSha256": "3e9a73f4266c60f637e71f8b997f1bda666770edda547b3266ef98c59960ed68",
+      "expansionSha256": "c7c56d46cea1491b76297e06aaf968f4be3d8d31ea1d558c7e770fd38dca7ff9",
+      "rationale": "Authorize frozen #1690 tree 11e02f1a9f1638cef1ed8b6ac3a0c84144fd8a5f measured by accepted-main read-only run 38752687766. Replace unmarked REST PUT Dependabot branch update with PR-node/upstream-SHA-bound GraphQL REBASE, retaining exact-head convergence and negative tests. Five expansions, two reductions; no added trigger, secret, role, OIDC, reduced checks or bypass."
+    },
+    {
       "baseBomSha256": "14fae0e37c39df7314307f0fb35fd2df61bfa9a91d3c39f4b0f2765e320c60ba",
       "candidateBomSha256": "1b6e92a93cd373a3c2367bad2c9f891ccb918b70ef83e5ab8506f0285ee42ef7",
       "expansionSha256": "fe1330b557b934203b65689552bced42ab7975059ee50fa0aa1d7e3f341067b7",
