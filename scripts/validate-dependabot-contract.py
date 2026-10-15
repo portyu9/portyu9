@@ -278,89 +278,92 @@ def self_test_controller_wake_affinity_contract(text: str) -> None:
 
 
 def validate_controller_native_rebase_permission_defer_contract(text: str) -> None:
-    """Keep exact-main liveness without granting workflow-file mutation authority."""
+    """Current-main recovery must rebase, never leave a non-skippable merge commit."""
     start = "      - name: Bind current main and one native Dependabot candidate\n"
     end = "      - name: Assemble exact candidate tree as data\n"
     require(text.count(start) == 1 and text.count(end) == 1,
-            "Dependabot native rebase gate step boundaries changed")
+            "Dependabot native rebase gate boundaries changed")
     section = text.split(start, 1)[1].split(end, 1)[0]
     same_base_first = (
         'MATCHES="$(jq -c --arg main "$MAIN_SHA" '
         "'sort_by([(if .base.sha == $main then 0 else 1 end), .number])' <<<\"$MATCHES\")\""
     )
-    wake_scope = 'if [ "$EVENT_NAME" != "workflow_run" ] || [ "$WAKE_HEAD_BRANCH" = "main" ]; then'
-    defer_exit = 'echo "Deferred stale native Dependabot PR #${PR_NUMBER}: GitHub denies workflow-file update to the controller token; awaiting Dependabot-owned rebase."'
-    exact_403 = "grep -Eq '^HTTP/[0-9.]+[[:space:]]+403([[:space:]]|$)' update-branch-http-response.txt"
-    workflow_permission = (
-        "grep -qF 'refusing to allow a GitHub App to create or update workflow' "
-        "update-branch-http-response.txt"
-    )
-    update_api = 'gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch"'
     for marker in (
-        wake_scope, same_base_first, 'UPDATE_BRANCH_EXIT=0',
-        update_api, '|| UPDATE_BRANCH_EXIT="$?"',
-        'if [ "$UPDATE_BRANCH_EXIT" -ne 0 ]; then',
-        exact_403, workflow_permission, defer_exit,
-        'echo "ERROR: Dependabot update-branch returned an unrecognized or non-workflow-permission failure." >&2',
+        'if [ "$EVENT_NAME" != "workflow_run" ] || [ "$WAKE_HEAD_BRANCH" = "main" ]; then',
+        same_base_first,
+        'PRE_UPDATE_HEAD_SHA="$HEAD_SHA"',
+        'REBASING_PR_NODE_ID="$(jq -r .nodeId dependabot-pr-normalized.json)"',
+        'REBASE_EXIT=0',
+        'gh api --include graphql',
+        'updatePullRequestBranch(input:{pullRequestId:$prId, expectedHeadOid:$expectedHead, updateMethod:REBASE})',
+        '-F prId="$REBASING_PR_NODE_ID"',
+        '-F expectedHead="$MAIN_SHA"',
+        '|| REBASE_EXIT="$?"',
+        'if [ "$REBASE_EXIT" -ne 0 ]; then',
+        "grep -Eq '^HTTP/[0-9.]+[[:space:]]+403([[:space:]]|$)' rebase-http-response.txt",
+        "grep -qF 'refusing to allow a GitHub App to create or update workflow' rebase-http-response.txt",
+        "Deferred stale native Dependabot PR #",
+        '[[ "$REBASE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+        "python3 scripts/dependabot_controller.py rebase-graphql-response",
+        '--expected-pr-id "$REBASING_PR_NODE_ID"',
+        '--expected-number "$PR_NUMBER"',
+        '--expected-main-sha "$MAIN_SHA"',
+        "for UPDATE_ATTEMPT in $(seq 1 24); do",
+        'UPDATED_HEAD_SHA="$(jq -r .headSha "$RUNNER_TEMP/dependabot-post-update-pr-normalized.json")"',
+        'if [ "$UPDATED_BASE_SHA" = "$MAIN_SHA" ]; then',
     ):
-        require(section.count(marker) == 1,
-                f"Dependabot native-rebase permission-safe contract lost unique guard: {marker}")
-    require(
-        section.index('MATCHES="$(jq -c --arg ref "$WAKE_HEAD_BRANCH"') <
-        section.index(wake_scope) < section.index(same_base_first) <
-        section.index('COUNT="$(jq \'length\' <<<"$MATCHES")"') <
-        section.index('PR_NUMBER="$(jq -r'),
-        "Dependabot current-main preference must follow native wake affinity and precede selection",
-    )
-    denied_start = section.index('if [ "$UPDATE_BRANCH_EXIT" -ne 0 ]; then')
-    denied_end = section.index('UPDATE_BRANCH_STATUS_LINE=', denied_start)
-    denied_block = section[denied_start:denied_end]
-    require(
-        denied_block.index(exact_403) < denied_block.index(workflow_permission) <
-        denied_block.index('printf \'has_target=false\\n\' >> "$GITHUB_OUTPUT"') <
-        denied_block.index(defer_exit) <
-        denied_block.index('exit 0') <
-        denied_block.index('echo "ERROR: Dependabot update-branch returned an unrecognized'),
-        "Only exact GitHub workflow-file HTTP 403 may defer safely before protected HTTP-202 gate",
-    )
-    require(denied_block.count("exit 0") == 1 and denied_block.count("exit 1") == 1,
-            "Native rebase defer must be a single no-target success; all unrelated failures fail closed")
-    require(
-        section.index('UPDATE_BRANCH_EXIT=0') < section.index(update_api) <
-        section.index('|| UPDATE_BRANCH_EXIT="$?"') < denied_start <
-        section.index('UPDATE_BRANCH_STATUS_LINE='),
-        "Dependabot must classify the exact attempted API response before proceeding to rebind",
-    )
+        required_count = 4 if marker == '--expected-number "$PR_NUMBER"' else 1
+        require(section.count(marker) == required_count,
+                f"native exact rebase lost verified frozen guard: {marker}")
+    for legacy in ('repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch',
+                   "python3 scripts/dependabot_controller.py update-branch-response",
+                   'REBASE_EXIT=0 || true', 'updateMethod:MERGE'):
+        require(legacy not in section, f"native rebase regained unsafe merge/fallback: {legacy}")
+    required_order = [
+        'PRE_UPDATE_HEAD_SHA="$HEAD_SHA"',
+        'REBASING_PR_NODE_ID="$(jq -r .nodeId dependabot-pr-normalized.json)"',
+        'gh api --include graphql',
+        '|| REBASE_EXIT="$?"',
+        'if [ "$REBASE_EXIT" -ne 0 ]; then',
+        'REBASE_STATUS_LINE=',
+        "sed '1,/^[[:space:]]*$/d' rebase-http-response.txt > rebase-response.json",
+        "python3 scripts/dependabot_controller.py rebase-graphql-response",
+        "for UPDATE_ATTEMPT in $(seq 1 24); do",
+        'HEAD_SHA="$UPDATED_HEAD_SHA"',
+    ]
+    positions = [section.index(marker) for marker in required_order]
+    require(positions == sorted(positions),
+            "native GraphQL rebase response/schema/head convergence order changed")
+    denied = section[section.index('if [ "$REBASE_EXIT" -ne 0 ]; then'):
+                     section.index("REBASE_STATUS_LINE=")]
+    require(denied.count("exit 0") == 1 and denied.count("exit 1") == 1,
+            "native workflow permission fallback was widened")
+    require(denied.index("grep -Eq") < denied.index("grep -qF") <
+            denied.index('printf \'has_target=false') < denied.index("exit 0") <
+            denied.index('echo "ERROR: Dependabot GraphQL rebase'),
+            "native workflow 403 defer must be exact, before unconditional fail close")
 
 
 def self_test_controller_native_rebase_permission_defer_contract(text: str) -> None:
     validate_controller_native_rebase_permission_defer_contract(text)
-    for tampered in (
-        text.replace(
-            "'sort_by([(if .base.sha == $main then 0 else 1 end), .number])'",
-            "'sort_by(.number)'", 1,
-        ),
-        text.replace(
-            "grep -Eq '^HTTP/[0-9.]+[[:space:]]+403([[:space:]]|$)'",
-            "grep -Eq '^HTTP/[0-9.]+[[:space:]]+4[0-9][0-9]([[:space:]]|$)'", 1,
-        ),
-        text.replace(
-            "'refusing to allow a GitHub App to create or update workflow'",
-            "'Forbidden'", 1,
-        ),
-        text.replace(
-            '|| UPDATE_BRANCH_EXIT="$?"', '|| UPDATE_BRANCH_EXIT=0', 1,
-        ),
-        text.replace(
-            'Deferred stale native Dependabot PR #${PR_NUMBER}', 'Updated stale native Dependabot PR #${PR_NUMBER}', 1,
-        ),
+    for before, after in (
+        ("updateMethod:REBASE", "updateMethod:MERGE"),
+        ('-F expectedHead="$MAIN_SHA"', '-F expectedHead="$HEAD_SHA"'),
+        ('-F prId="$REBASING_PR_NODE_ID"', '-F prId="$PR_NUMBER"'),
+        ("grep -Eq '^HTTP/[0-9.]+[[:space:]]+403([[:space:]]|$)'",
+         "grep -Eq '^HTTP/[0-9.]+[[:space:]]+4[0-9][0-9]([[:space:]]|$)'"),
+        ("'refusing to allow a GitHub App to create or update workflow'", "'Forbidden'"),
+        ('|| REBASE_EXIT="$?"', '|| REBASE_EXIT=0'),
+        ("Deferred stale native Dependabot PR #", "Updated stale native Dependabot PR #"),
     ):
+        require(text.count(before) >= 1, "native rebase negative fixture anchor missing")
+        tampered = text.replace(before, after, 1)
         try:
             validate_controller_native_rebase_permission_defer_contract(tampered)
         except ValueError:
             pass
         else:
-            raise ValueError("Dependabot native-rebase permission regression admitted unsafe broad fallback")
+            raise ValueError("native rebase negative fixture admitted unbound or unsafe mutation")
 
 
 def validate_controller_read_ref_response_contract(text: str) -> None:
@@ -482,8 +485,8 @@ def validate_controller_pr_response_contract(text: str) -> None:
         "Dependabot controller pull-request response boundary count changed",
     )
     require(
-        text.count("python3 scripts/dependabot_controller.py update-branch-response") == 1,
-        "Dependabot controller update-branch response boundary count changed",
+        text.count("python3 scripts/dependabot_controller.py rebase-graphql-response") == 1,
+        "Dependabot controller GraphQL rebase response boundary count changed",
     )
     for forbidden in (
         'HEAD_SHA="$(jq -r .head.sha dependabot-pr.json)"',
@@ -562,45 +565,33 @@ def validate_controller_pr_response_contract(text: str) -> None:
         "Dependabot reviewer mutation response must be typed before reviewer-state consumption",
     )
 
-    update_fetch = (
-        'gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch" \\\n'
-        '              -f expected_head_sha="$PRE_UPDATE_HEAD_SHA" > update-branch-http-response.txt'
-    )
-    update_status = 'UPDATE_BRANCH_STATUS_LINE="$(head -n 1 update-branch-http-response.txt | tr -d \'\\r\')"'
-    update_guard = '[[ "$UPDATE_BRANCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+202([[:space:]]|$) ]] || {'
-    update_extract = "sed '1,/^[[:space:]]*$/d' update-branch-http-response.txt > update-branch.json"
-    update_schema = "python3 scripts/dependabot_controller.py update-branch-response"
-    update_consume = 'test "$(jq -r .message update-branch-normalized.json)" = "Updating pull request branch."'
+    rebase_fetch = 'gh api --include graphql'
+    rebase_status = 'REBASE_STATUS_LINE="$(head -n 1 rebase-http-response.txt | tr -d \'\\r\')"'
+    rebase_guard = '[[ "$REBASE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {'
+    rebase_extract = "sed '1,/^[[:space:]]*$/d' rebase-http-response.txt > rebase-response.json"
+    rebase_schema = "python3 scripts/dependabot_controller.py rebase-graphql-response"
+    rebase_consume = 'test "$(jq -r .baseSha rebase-response-normalized.json)" = "$MAIN_SHA"'
     for fragment, label in (
-        (update_fetch, "response capture"),
-        (update_status, "status extraction"),
-        (update_guard, "HTTP 202 guard"),
-        ("Dependabot update-branch returned unexpected status:", "fail-closed diagnostic"),
-        (update_extract, "body extraction"),
-        (update_schema, "typed response validator"),
-        (update_consume, "acknowledgement consumption"),
+        (rebase_fetch, "response capture"),
+        (rebase_status, "status extraction"),
+        (rebase_guard, "HTTP 200 guard"),
+        (rebase_extract, "body extraction"),
+        (rebase_schema, "typed response validator"),
+        (rebase_consume, "bound main acknowledgement"),
     ):
-        require(
-            text.count(fragment) == 1,
-            f"Dependabot update-branch {label} changed",
-        )
+        require(text.count(fragment) == 1,
+                f"Dependabot GraphQL rebase {label} changed")
     require(
-        'gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch"' not in text,
-        "Dependabot update-branch must not use response-blind transport",
+        'repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch' not in text,
+        "Dependabot regressed to non-skippable REST merge updates",
     )
     positions = [text.index(fragment) for fragment in (
-        update_fetch,
-        update_status,
-        update_guard,
-        update_extract,
-        update_schema,
-        update_consume,
+        rebase_fetch, rebase_status, rebase_guard, rebase_extract,
+        rebase_schema, rebase_consume,
     )]
-    require(
-        positions == sorted(positions),
-        "Dependabot update-branch must prove HTTP 202 before body/schema/acknowledgement consumption",
-    )
-    update_consume_pos = text.index(update_consume)
+    require(positions == sorted(positions),
+            "Dependabot GraphQL rebase must prove HTTP 200 and type identity before consumption")
+    update_consume_pos = text.index(rebase_consume)
 
     require(
         "Requested exact-head Dependabot branch update; next scheduled pass will re-prove the new head." not in text,
@@ -1671,64 +1662,22 @@ def self_test_controller_git_mutation_status_contract(text: str) -> None:
 
 def self_test_controller_update_branch_status_contract(text: str) -> None:
     validate_controller_pr_response_contract(text)
-
-    response_blind = text.replace(
-        'gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch"',
-        'gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch"',
-        1,
-    )
-    try:
-        validate_controller_pr_response_contract(response_blind)
-    except ValueError as exc:
-        require(
-            "response capture changed" in str(exc),
-            f"Dependabot update-branch response self-test failed for wrong reason: {exc}",
-        )
-    else:
-        fail("Dependabot update-branch self-test accepted response-blind mutation")
-
-    wrong_status = text.replace(
-        '[[ "$UPDATE_BRANCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+202([[:space:]]|$) ]] || {',
-        '[[ "$UPDATE_BRANCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
-        1,
-    )
-    try:
-        validate_controller_pr_response_contract(wrong_status)
-    except ValueError as exc:
-        require(
-            "HTTP 202 guard changed" in str(exc),
-            f"Dependabot update-branch status self-test failed for wrong reason: {exc}",
-        )
-    else:
-        fail("Dependabot update-branch self-test accepted non-202 success class")
-
-    status_block = (
-        '            UPDATE_BRANCH_STATUS_LINE="$(head -n 1 update-branch-http-response.txt | tr -d \'\\r\')"\n'
-        '            [[ "$UPDATE_BRANCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+202([[:space:]]|$) ]] || {\n'
-        '              echo "ERROR: Dependabot update-branch returned unexpected status: ${UPDATE_BRANCH_STATUS_LINE}" >&2\n'
-        '              exit 1\n'
-        '            }\n'
-        "            sed '1,/^[[:space:]]*$/d' update-branch-http-response.txt > update-branch.json\n"
-    )
-    reordered = (
-        "            sed '1,/^[[:space:]]*$/d' update-branch-http-response.txt > update-branch.json\n"
-        '            UPDATE_BRANCH_STATUS_LINE="$(head -n 1 update-branch-http-response.txt | tr -d \'\\r\')"\n'
-        '            [[ "$UPDATE_BRANCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+202([[:space:]]|$) ]] || {\n'
-        '              echo "ERROR: Dependabot update-branch returned unexpected status: ${UPDATE_BRANCH_STATUS_LINE}" >&2\n'
-        '              exit 1\n'
-        '            }\n'
-    )
-    require(text.count(status_block) == 1, "Dependabot update-branch status/body self-test anchor changed")
-    mutated = text.replace(status_block, reordered, 1)
-    try:
-        validate_controller_pr_response_contract(mutated)
-    except ValueError as exc:
-        require(
-            "before body/schema/acknowledgement consumption" in str(exc),
-            f"Dependabot update-branch ordering self-test failed for wrong reason: {exc}",
-        )
-    else:
-        fail("Dependabot update-branch self-test accepted body extraction before status proof")
+    for before, after in (
+        ('gh api --include graphql', 'gh api graphql'),
+        ('[[ "$REBASE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+         '[[ "$REBASE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+202([[:space:]]|$) ]] || {'),
+        ('--expected-main-sha "$MAIN_SHA"', '--expected-main-sha "$HEAD_SHA"'),
+        ('-F expectedHead="$MAIN_SHA"', '-F expectedHead="$HEAD_SHA"'),
+    ):
+        require(before in text, "native rebase status negative fixture anchor missing")
+        weakened = text.replace(before, after, 1)
+        try:
+            validate_controller_pr_response_contract(weakened)
+            validate_controller_native_rebase_permission_defer_contract(weakened)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"native rebase status test accepted weakened response binding: {before}")
 
 
 def validate_controller_repository_dispatch_status(text: str) -> None:
@@ -2519,7 +2468,18 @@ def validate_controller_residual_read_transport_contract(text: str) -> None:
         if "gh api" in line
     ]
     require(raw_api_lines, "Dependabot controller unexpectedly lost all explicit mutation transports")
+    # gh api graphql is a POST-only mutation transport. Admit only the one
+    # separately provenance-bound updatePullRequestBranch REBASE call.
+    graphql_transport = "gh api --include graphql \\"
+    require(raw_api_lines.count(graphql_transport) == 1,
+            "Dependabot controller GraphQL mutation transport count changed")
+    require(
+        text.count("updatePullRequestBranch(input:{pullRequestId:$prId, expectedHeadOid:$expectedHead, updateMethod:REBASE})") == 1,
+        "Dependabot controller GraphQL transport lost exact bound rebase mutation",
+    )
     for line in raw_api_lines:
+        if line == graphql_transport:
+            continue
         require(
             re.search(r"--method (?:POST|PUT|PATCH|DELETE)\b", line) is not None,
             f"Dependabot controller direct gh api transport must be mutation-only: {line}",

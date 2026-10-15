@@ -399,6 +399,9 @@ def validate_pull_request_response(
         "expected Dependabot pull-request repository identity changed",
     )
     require(isinstance(value, Mapping), "Dependabot pull-request response must be an object")
+    node_id = value.get("node_id")
+    require(isinstance(node_id, str) and re.fullmatch(r"PR_[A-Za-z0-9_-]{8,128}", node_id) is not None,
+            "Dependabot pull-request response GraphQL node identity changed")
     number = _response_positive_int(value.get("number"), "Dependabot pull-request response number")
     require(number == expected_number, "Dependabot pull-request response number changed")
     user = value.get("user")
@@ -475,6 +478,7 @@ def validate_pull_request_response(
         )
     return {
         "kind": "pull-request",
+        "nodeId": node_id,
         "number": number,
         "user": "dependabot[bot]",
         "state": "open",
@@ -490,6 +494,34 @@ def validate_pull_request_response(
         "mergeable": mergeable,
         "mergeableState": mergeable_state,
     }
+
+
+def validate_rebase_graphql_response(
+    value: Any, *, expected_pr_id: str, expected_number: int, expected_main_sha: str
+) -> dict[str, str | int]:
+    """Type only the bound GraphQL REBASE acknowledgement; re-check head later."""
+    expected_main_sha = _response_sha(expected_main_sha, "expected rebase main sha")
+    require(isinstance(expected_pr_id, str)
+            and re.fullmatch(r"PR_[A-Za-z0-9_-]{8,128}", expected_pr_id) is not None,
+            "Dependabot rebase expected PR node identity changed")
+    expected_number = _response_positive_int(expected_number, "expected rebase PR number")
+    require(isinstance(value, Mapping) and value.get("errors") in (None, []),
+            "Dependabot GraphQL rebase reported an error")
+    data = value.get("data")
+    require(isinstance(data, Mapping), "Dependabot GraphQL rebase data is not an object")
+    mutation = data.get("updatePullRequestBranch")
+    require(isinstance(mutation, Mapping), "Dependabot GraphQL rebase acknowledgement is absent")
+    pr = mutation.get("pullRequest")
+    require(isinstance(pr, Mapping), "Dependabot GraphQL rebase PR identity is absent")
+    require(pr.get("id") == expected_pr_id,
+            "Dependabot GraphQL rebase PR node identity drifted")
+    require(type(pr.get("number")) is int and pr["number"] == expected_number,
+            "Dependabot GraphQL rebase PR number drifted")
+    require(_response_sha(pr.get("baseRefOid"), "Dependabot GraphQL rebase base oid") == expected_main_sha,
+            "Dependabot GraphQL rebase main head moved")
+    updated_head = _response_sha(pr.get("headRefOid"), "Dependabot GraphQL rebase head oid")
+    return {"kind": "graph-ql-rebase", "nodeId": expected_pr_id,
+            "number": expected_number, "baseSha": expected_main_sha, "headSha": updated_head}
 
 
 def validate_update_branch_response(value: Any) -> dict[str, str]:
@@ -1198,6 +1230,7 @@ def self_test() -> None:
     )
     pr_response_fixture = {
         "number": 17,
+        "node_id": "PR_fixtureController123",
         "user": {"login": "dependabot[bot]"},
         "state": "open",
         "draft": False,
@@ -1235,6 +1268,7 @@ def self_test() -> None:
     require(
         normalized_pr["headSha"] == commit_sha
         and normalized_pr["baseSha"] == parent_sha
+        and normalized_pr["nodeId"] == "PR_fixtureController123"
         and normalized_pr["maintainerCanModify"] is False
         and normalized_pr["portyu9Requested"] is True,
         "Dependabot pull-request response positive fixture changed",
@@ -1250,6 +1284,37 @@ def self_test() -> None:
         and volatile_pr["baseSha"] == parent_sha,
         "boolean maintainer_can_modify volatility changed trusted PR identity",
     )
+
+    safe_rebase = validate_rebase_graphql_response(
+        {"data": {"updatePullRequestBranch": {"pullRequest": {
+            "id": "PR_fixtureController123", "number": 17,
+            "headRefOid": commit_sha, "baseRefOid": parent_sha,
+        }}}},
+        expected_pr_id="PR_fixtureController123",
+        expected_number=17, expected_main_sha=parent_sha,
+    )
+    require(safe_rebase["headSha"] == commit_sha and safe_rebase["baseSha"] == parent_sha,
+            "Dependabot GraphQL rebase schema positive fixture changed")
+    for corrupt in (
+        {"data": {"updatePullRequestBranch": {"pullRequest": {
+            "id": "PR_attacker999", "number": 17, "headRefOid": commit_sha,
+            "baseRefOid": parent_sha,
+        }}}},
+        {"data": {"updatePullRequestBranch": {"pullRequest": {
+            "id": "PR_fixtureController123", "number": 17, "headRefOid": commit_sha,
+            "baseRefOid": "f" * 40,
+        }}}},
+        {"errors": [{"message": "Forbidden"}]},
+    ):
+        try:
+            validate_rebase_graphql_response(
+                corrupt, expected_pr_id="PR_fixtureController123",
+                expected_number=17, expected_main_sha=parent_sha,
+            )
+        except ValueError:
+            pass
+        else:
+            raise ValueError("Dependabot GraphQL rebase accepted mismatched identity or error")
 
     update_response = validate_update_branch_response(
         {
@@ -2142,6 +2207,12 @@ def parser() -> argparse.ArgumentParser:
     pull_request_response.add_argument("--expected-number", type=int, required=True)
     pull_request_response.add_argument("--expected-repository", required=True)
     pull_request_response.add_argument("--out", type=Path, required=True)
+    rebase_response = sub.add_parser("rebase-graphql-response")
+    rebase_response.add_argument("--response", type=Path, required=True)
+    rebase_response.add_argument("--expected-pr-id", required=True)
+    rebase_response.add_argument("--expected-number", type=int, required=True)
+    rebase_response.add_argument("--expected-main-sha", required=True)
+    rebase_response.add_argument("--out", type=Path, required=True)
     update_branch_response = sub.add_parser("update-branch-response")
     update_branch_response.add_argument("--response", type=Path, required=True)
     update_branch_response.add_argument("--out", type=Path, required=True)
@@ -2185,6 +2256,7 @@ def main() -> int:
             "pull-request-list-response",
             "pull-request-response",
             "update-branch-response",
+            "rebase-graphql-response",
             "wake-run-response",
             "workflow-definition-response",
             "protected-workflow-runs-response",
@@ -2241,6 +2313,11 @@ def main() -> int:
                 )
             elif args.command == "update-branch-response":
                 result = validate_update_branch_response(response)
+            elif args.command == "rebase-graphql-response":
+                result = validate_rebase_graphql_response(response,
+                    expected_pr_id=args.expected_pr_id,
+                    expected_number=args.expected_number,
+                    expected_main_sha=args.expected_main_sha)
             elif args.command == "wake-run-response":
                 result = validate_wake_run_response(
                     response,

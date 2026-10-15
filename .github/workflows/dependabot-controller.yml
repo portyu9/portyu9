@@ -200,32 +200,42 @@ jobs:
 
           if [ "$BASE_SHA" != "$MAIN_SHA" ]; then
             PRE_UPDATE_HEAD_SHA="$HEAD_SHA"
-            # The branch-update endpoint cannot write workflow files with GITHUB_TOKEN.
-            # Preserve the exact HTTP-202 success path, but if GitHub explicitly
-            # rejects workflow-file mutation, defer to Dependabot's own rebase.
-            UPDATE_BRANCH_EXIT=0
-            gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch" \
-              -f expected_head_sha="$PRE_UPDATE_HEAD_SHA" > update-branch-http-response.txt || UPDATE_BRANCH_EXIT="$?"
-            if [ "$UPDATE_BRANCH_EXIT" -ne 0 ]; then
-              if grep -Eq '^HTTP/[0-9.]+[[:space:]]+403([[:space:]]|$)' update-branch-http-response.txt &&
-                 grep -qF 'refusing to allow a GitHub App to create or update workflow' update-branch-http-response.txt; then
+            # GitHub REST update-branch creates a merge commit with no configurable
+            # message. That poisons Dependabot-native rebases because the merge
+            # lacks the documented native-rebase marker. Use GitHub REBASE instead
+            # instead, bound to this immutable native PR node and upstream SHA.
+            REBASING_PR_NODE_ID="$(jq -r .nodeId dependabot-pr-normalized.json)"
+            [[ "$REBASING_PR_NODE_ID" =~ ^PR_[A-Za-z0-9_-]{8,128}$ ]]
+            REBASE_EXIT=0
+            gh api --include graphql \
+              -f query='mutation($prId:ID!, $expectedHead:GitObjectID!) { updatePullRequestBranch(input:{pullRequestId:$prId, expectedHeadOid:$expectedHead, updateMethod:REBASE}) { pullRequest { id number headRefOid baseRefOid } } }' \
+              -F prId="$REBASING_PR_NODE_ID" \
+              -F expectedHead="$MAIN_SHA" > rebase-http-response.txt || REBASE_EXIT="$?"
+            if [ "$REBASE_EXIT" -ne 0 ]; then
+              if grep -Eq '^HTTP/[0-9.]+[[:space:]]+403([[:space:]]|$)' rebase-http-response.txt &&
+                 grep -qF 'refusing to allow a GitHub App to create or update workflow' rebase-http-response.txt; then
                 printf 'has_target=false\n' >> "$GITHUB_OUTPUT"
-                echo "Deferred stale native Dependabot PR #${PR_NUMBER}: GitHub denies workflow-file update to the controller token; awaiting Dependabot-owned rebase."
+                echo "Deferred stale native Dependabot PR #${PR_NUMBER}: GitHub denies a workflow-file rebase with the current controller token; awaiting Dependabot-owned rebase."
                 exit 0
               fi
-              echo "ERROR: Dependabot update-branch returned an unrecognized or non-workflow-permission failure." >&2
+              echo "ERROR: Dependabot GraphQL rebase returned an unrecognized failure." >&2
               exit 1
             fi
-            UPDATE_BRANCH_STATUS_LINE="$(head -n 1 update-branch-http-response.txt | tr -d '\r')"
-            [[ "$UPDATE_BRANCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+202([[:space:]]|$) ]] || {
-              echo "ERROR: Dependabot update-branch returned unexpected status: ${UPDATE_BRANCH_STATUS_LINE}" >&2
+            REBASE_STATUS_LINE="$(head -n 1 rebase-http-response.txt | tr -d '\r')"
+            [[ "$REBASE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {
+              echo "ERROR: Dependabot GraphQL rebase returned unexpected status: ${REBASE_STATUS_LINE}" >&2
               exit 1
             }
-            sed '1,/^[[:space:]]*$/d' update-branch-http-response.txt > update-branch.json
-            python3 scripts/dependabot_controller.py update-branch-response \
-              --response update-branch.json \
-              --out update-branch-normalized.json
-            test "$(jq -r .message update-branch-normalized.json)" = "Updating pull request branch."
+            sed '1,/^[[:space:]]*$/d' rebase-http-response.txt > rebase-response.json
+            python3 scripts/dependabot_controller.py rebase-graphql-response \
+              --response rebase-response.json \
+              --expected-pr-id "$REBASING_PR_NODE_ID" \
+              --expected-number "$PR_NUMBER" \
+              --expected-main-sha "$MAIN_SHA" \
+              --out rebase-response-normalized.json
+            test "$(jq -r .nodeId rebase-response-normalized.json)" = "$REBASING_PR_NODE_ID"
+            test "$(jq -r .number rebase-response-normalized.json)" = "$PR_NUMBER"
+            test "$(jq -r .baseSha rebase-response-normalized.json)" = "$MAIN_SHA"
 
             UPDATE_CONVERGED=false
             for UPDATE_ATTEMPT in $(seq 1 24); do
