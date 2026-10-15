@@ -312,8 +312,9 @@ def validate_controller_native_rebase_permission_defer_contract(text: str) -> No
         'UPDATED_HEAD_SHA="$(jq -r .headSha "$RUNNER_TEMP/dependabot-post-update-pr-normalized.json")"',
         'if [ "$UPDATED_BASE_SHA" = "$MAIN_SHA" ]; then',
     ):
-        require(section.count(marker) == 1,
-                f"native exact rebase lost unique frozen guard: {marker}")
+        required_count = 2 if marker == '--expected-number "$PR_NUMBER"' else 1
+        require(section.count(marker) == required_count,
+                f"native exact rebase lost verified frozen guard: {marker}")
     for legacy in ('repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch',
                    "python3 scripts/dependabot_controller.py update-branch-response",
                    'REBASE_EXIT=0 || true', 'updateMethod:MERGE'):
