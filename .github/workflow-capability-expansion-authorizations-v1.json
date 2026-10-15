@@ -939,6 +939,13 @@
       "rationale": "Prior-authorize frozen #1671 source tree 5149484c427b79f7d4f730b7de520a1b7a55ef6a measured read-only in run 38663876140. Restore typed exact Git-blob hydration of the changed Profile Stats source-epoch file to the trusted Dependabot controller, matching Capability Admission's existing candidate inventory; add missing-file regression. Fixes live run 38661183787 without new permissions, triggers, secrets, API mutations, reduced required checks or merge bypass."
     },
     {
+      "baseBomSha256": "6a250cd84991554f22c105201c27ae15220ab99edbfc4c409a5d3d5c347cf4a4",
+      "candidateBomSha256": "6a250cd84991554f22c105201c27ae15220ab99edbfc4c409a5d3d5c347cf4a4",
+      "expansionSha256": "574bcdfbd3dd0d5db421020114e5331bb184d03f5f78092800848046d19205c5",
+      "id": "cap-dependabot-profile-pre-review-liveness-v1",
+      "rationale": "Prior-authorize frozen #1697 tree 99bdfb0b68c3018d208ee5c8fb5d47e98e20a548, independently measured by accepted-main read-only run 38784543629: one protected controller-source expansion, zero reductions, identical semantic BOM. Treat canonical Profile Quality failure from pending exact owner review as transitional only; six exact-head pre-review gates, marker-bound owner approval, successful reviewer gate and protected merge remain mandatory. All other failed/cancelled canonical workflows fail closed. No new permission, trigger, API endpoint, mutation, secret, OIDC, bypass, direct-main authority or check reduction."
+    },
+    {
       "id": "cap-dependabot-profile-stats-epoch-v1",
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
