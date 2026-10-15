@@ -1479,7 +1479,7 @@ def self_test() -> None:
         "    name: job\n"
         "    steps:\n"
         "      - name: Missing artifact path\n"
-        "        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a\n"
+        "        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9\n"
         "        with:\n"
         "          name: fixture\n"
     )
