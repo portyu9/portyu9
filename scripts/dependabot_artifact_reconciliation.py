@@ -173,6 +173,10 @@ def update_profile_source_epoch(
     require(PROFILE_STATS_WORKFLOW in base_workflows and
             PROFILE_STATS_WORKFLOW in candidate_workflows,
             "profile source epoch requires exact base/candidate Profile Stats workflows")
+    resolved_trusted_root = trusted_root.resolve(strict=True)
+    require(trusted_root.absolute() == resolved_trusted_root and resolved_trusted_root.is_dir(),
+            "trusted source-epoch checkout root is missing or resolves through an alias")
+    trusted_root = resolved_trusted_root
     compiler = trusted_root / SOURCE_EPOCH_COMPILER
     require(compiler.is_file() and compiler.absolute() == compiler.resolve(),
             "trusted Profile Stats source-epoch compiler is missing or aliased")
