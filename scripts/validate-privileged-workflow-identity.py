@@ -3322,7 +3322,7 @@ def validate_dependabot_residual_read_transport_identity(dependabot: str) -> Non
         'gh api --include graphql \\',
         'updatePullRequestBranch(input:{pullRequestId:$prId, expectedHeadOid:$expectedHead, updateMethod:REBASE})',
         '-F prId="$REBASING_PR_NODE_ID"',
-        '-F expectedHead="$MAIN_SHA"',
+        '-F expectedHead="$PRE_UPDATE_HEAD_SHA"',
         'python3 scripts/dependabot_controller.py rebase-graphql-response',
     )
     require(
