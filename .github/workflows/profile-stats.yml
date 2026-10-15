@@ -154,21 +154,21 @@ jobs:
         run: python3 source/scripts/verify-python-runtime.py
 
       - name: Download validated Signal Field for attestation preparation
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: signal-field-svg
           path: profile-stats/profile
           digest-mismatch: error
 
       - name: Download validated Engineering Spotlight for attestation preparation
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: engineering-spotlight-svg
           path: engineering-spotlight
           digest-mismatch: error
 
       - name: Download validated Portfolio Evidence Ledger for attestation preparation
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: portfolio-evidence-ledger
           path: portfolio-evidence
@@ -398,7 +398,7 @@ jobs:
 
       - name: Download validated Signal Field for terminal attestation
         if: github.event_name != 'schedule' || needs.attest.outputs.changed == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: signal-field-svg
           path: profile-stats/profile
@@ -406,7 +406,7 @@ jobs:
 
       - name: Download validated Engineering Spotlight for terminal attestation
         if: github.event_name != 'schedule' || needs.attest.outputs.changed == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: engineering-spotlight-svg
           path: engineering-spotlight
@@ -414,7 +414,7 @@ jobs:
 
       - name: Download validated Portfolio Evidence Ledger for terminal attestation
         if: github.event_name != 'schedule' || needs.attest.outputs.changed == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: portfolio-evidence-ledger
           path: portfolio-evidence
@@ -422,7 +422,7 @@ jobs:
 
       - name: Download reviewed attestation predicate
         if: github.event_name != 'schedule' || needs.attest.outputs.changed == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: profile-evidence-attestation-predicate
           path: attestation-input
@@ -487,21 +487,21 @@ jobs:
         run: python3 source/scripts/verify-python-runtime.py
 
       - name: Download validated Signal Field for publication staging
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: signal-field-svg
           path: publish-input
           digest-mismatch: error
 
       - name: Download validated Engineering Spotlight for publication staging
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: engineering-spotlight-svg
           path: spotlight-publish-input
           digest-mismatch: error
 
       - name: Download validated Portfolio Evidence Ledger for publication staging
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: portfolio-evidence-ledger
           path: portfolio-ledger-publish-input
@@ -674,7 +674,7 @@ jobs:
 
       - name: Download sealed generated publication candidate
         if: needs.stage.outputs.changed == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: generated-publication-candidate
           path: publication-candidate
@@ -814,7 +814,7 @@ jobs:
         run: python3 source/scripts/verify-python-runtime.py
 
       - name: Download reviewed profile evidence predicate for receipt
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: profile-evidence-attestation-predicate
           path: receipt-input
@@ -959,7 +959,7 @@ jobs:
           test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
 
       - name: Download exact post-publication receipt predicate
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: generated-publication-receipt-predicate
           path: receipt-attestation-input
@@ -1320,7 +1320,7 @@ jobs:
           test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
 
       - name: Download exact Automation Decision Receipt artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: automation-decision-receipt-profile-${{ github.run_id }}-${{ github.run_attempt }}
           path: automation-decision-receipt-input
