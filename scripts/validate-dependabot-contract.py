@@ -312,7 +312,7 @@ def validate_controller_native_rebase_permission_defer_contract(text: str) -> No
         'UPDATED_HEAD_SHA="$(jq -r .headSha "$RUNNER_TEMP/dependabot-post-update-pr-normalized.json")"',
         'if [ "$UPDATED_BASE_SHA" = "$MAIN_SHA" ]; then',
     ):
-        required_count = 2 if marker == '--expected-number "$PR_NUMBER"' else 1
+        required_count = 4 if marker == '--expected-number "$PR_NUMBER"' else 1
         require(section.count(marker) == required_count,
                 f"native exact rebase lost verified frozen guard: {marker}")
     for legacy in ('repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch',
