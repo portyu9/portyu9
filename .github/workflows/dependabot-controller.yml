@@ -474,7 +474,7 @@ jobs:
           NEW_TREE_SHA="$(jq -r .sha git-tree-response-normalized.json)"
           [[ "$NEW_TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
-          jq -n --arg message 'Reconcile exact attested Dependabot Action governance' --arg tree "$NEW_TREE_SHA" --arg parent "$HEAD_SHA" \
+          jq -n --arg message 'Reconcile exact attested Dependabot Action governance [dependabot skip]' --arg tree "$NEW_TREE_SHA" --arg parent "$HEAD_SHA" \
             '{message:$message,tree:$tree,parents:[$parent]}' > commit-request.json
           gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/commits" --input commit-request.json > git-commit-http-response.txt
           GIT_COMMIT_STATUS_LINE="$(head -n 1 git-commit-http-response.txt | tr -d '\r')"

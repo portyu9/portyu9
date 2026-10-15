@@ -2577,6 +2577,32 @@ def validate_epoch_candidate_hydration(controller: str, capability: str) -> None
                 f"{label}: candidate Git-blob hydration omitted the derived Profile Stats source epoch")
 
 
+def validate_native_dependabot_rebase_marker(controller: str) -> None:
+    """Keep GitHub's documented native rebase recovery on trusted generated commits."""
+    exact_message = (
+        "--arg message 'Reconcile exact attested Dependabot Action governance "
+        "[dependabot skip]'"
+    )
+    require(controller.count(exact_message) == 1,
+            "controller reconciliation commit must allow Dependabot-native rebase")
+    require(controller.count("[dependabot skip]") == 1,
+            "controller contains unexpected duplicate native-rebase skip markers")
+    require(controller.index(exact_message) <
+            controller.index('gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/commits"'),
+            "native rebase marker must be bound to the immutable Git commit payload")
+
+
+def self_test_native_dependabot_rebase_marker(controller: str) -> None:
+    validate_native_dependabot_rebase_marker(controller)
+    tampered = controller.replace(" [dependabot skip]", "", 1)
+    try:
+        validate_native_dependabot_rebase_marker(tampered)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("controller accepted a reconciliation commit without Dependabot-native rebase")
+
+
 def validate_trusted_reference_hydration(controller: str) -> None:
     """Reject process substitution that silently swallows a trusted Python import failure."""
     capability = (ROOT / ".github/workflows/capability-admission.yml").read_text(encoding="utf-8")
@@ -2712,6 +2738,7 @@ def main() -> int:
         controller_text = CONTROLLER.read_text(encoding="utf-8")
         validate_controller_wake_contract(controller_text)
         validate_trusted_reference_hydration(controller_text)
+        self_test_native_dependabot_rebase_marker(controller_text)
         validate_controller_read_ref_response_contract(controller_text)
         validate_controller_protected_workflow_evidence_contract(controller_text)
         self_test_controller_workflow_run_approval_status(controller_text)
