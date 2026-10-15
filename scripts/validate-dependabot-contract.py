@@ -277,6 +277,92 @@ def self_test_controller_wake_affinity_contract(text: str) -> None:
             raise ValueError("Dependabot wake-affinity regression admitted unsafe candidate routing")
 
 
+def validate_controller_native_rebase_permission_defer_contract(text: str) -> None:
+    """Keep exact-main liveness without granting workflow-file mutation authority."""
+    start = "      - name: Bind current main and one native Dependabot candidate\n"
+    end = "      - name: Assemble exact candidate tree as data\n"
+    require(text.count(start) == 1 and text.count(end) == 1,
+            "Dependabot native rebase gate step boundaries changed")
+    section = text.split(start, 1)[1].split(end, 1)[0]
+    same_base_first = (
+        'MATCHES="$(jq -c --arg main "$MAIN_SHA" '
+        "'sort_by([(if .base.sha == $main then 0 else 1 end), .number])' <<<\"$MATCHES\")\""
+    )
+    wake_scope = 'if [ "$EVENT_NAME" != "workflow_run" ] || [ "$WAKE_HEAD_BRANCH" = "main" ]; then'
+    defer_exit = 'echo "Deferred stale native Dependabot PR #${PR_NUMBER}: GitHub denies workflow-file update to the controller token; awaiting Dependabot-owned rebase."'
+    exact_403 = "grep -Eq '^HTTP/[0-9.]+[[:space:]]+403([[:space:]]|$)' update-branch-http-response.txt"
+    workflow_permission = (
+        "grep -qF 'refusing to allow a GitHub App to create or update workflow' "
+        "update-branch-http-response.txt"
+    )
+    update_api = 'gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch"'
+    for marker in (
+        wake_scope, same_base_first, 'UPDATE_BRANCH_EXIT=0',
+        update_api, '|| UPDATE_BRANCH_EXIT="$?"',
+        'if [ "$UPDATE_BRANCH_EXIT" -ne 0 ]; then',
+        exact_403, workflow_permission, defer_exit,
+        'echo "ERROR: Dependabot update-branch returned an unrecognized or non-workflow-permission failure." >&2',
+    ):
+        require(section.count(marker) == 1,
+                f"Dependabot native-rebase permission-safe contract lost unique guard: {marker}")
+    require(
+        section.index('MATCHES="$(jq -c --arg ref "$WAKE_HEAD_BRANCH"') <
+        section.index(wake_scope) < section.index(same_base_first) <
+        section.index('COUNT="$(jq \'length\' <<<"$MATCHES")"') <
+        section.index('PR_NUMBER="$(jq -r'),
+        "Dependabot current-main preference must follow native wake affinity and precede selection",
+    )
+    denied_start = section.index('if [ "$UPDATE_BRANCH_EXIT" -ne 0 ]; then')
+    denied_end = section.index('UPDATE_BRANCH_STATUS_LINE=', denied_start)
+    denied_block = section[denied_start:denied_end]
+    require(
+        denied_block.index(exact_403) < denied_block.index(workflow_permission) <
+        denied_block.index('printf \'has_target=false\\n\' >> "$GITHUB_OUTPUT"') <
+        denied_block.index(defer_exit) <
+        denied_block.index('exit 0') <
+        denied_block.index('echo "ERROR: Dependabot update-branch returned an unrecognized'),
+        "Only exact GitHub workflow-file HTTP 403 may defer safely before protected HTTP-202 gate",
+    )
+    require(denied_block.count("exit 0") == 1 and denied_block.count("exit 1") == 1,
+            "Native rebase defer must be a single no-target success; all unrelated failures fail closed")
+    require(
+        section.index('UPDATE_BRANCH_EXIT=0') < section.index(update_api) <
+        section.index('|| UPDATE_BRANCH_EXIT="$?"') < denied_start <
+        section.index('UPDATE_BRANCH_STATUS_LINE='),
+        "Dependabot must classify the exact attempted API response before proceeding to rebind",
+    )
+
+
+def self_test_controller_native_rebase_permission_defer_contract(text: str) -> None:
+    validate_controller_native_rebase_permission_defer_contract(text)
+    for tampered in (
+        text.replace(
+            "'sort_by([(if .base.sha == $main then 0 else 1 end), .number])'",
+            "'sort_by(.number)'", 1,
+        ),
+        text.replace(
+            "grep -Eq '^HTTP/[0-9.]+[[:space:]]+403([[:space:]]|$)'",
+            "grep -Eq '^HTTP/[0-9.]+[[:space:]]+4[0-9][0-9]([[:space:]]|$)'", 1,
+        ),
+        text.replace(
+            "'refusing to allow a GitHub App to create or update workflow'",
+            "'Forbidden'", 1,
+        ),
+        text.replace(
+            '|| UPDATE_BRANCH_EXIT="$?"', '|| UPDATE_BRANCH_EXIT=0', 1,
+        ),
+        text.replace(
+            'Deferred stale native Dependabot PR #${PR_NUMBER}', 'Updated stale native Dependabot PR #${PR_NUMBER}', 1,
+        ),
+    ):
+        try:
+            validate_controller_native_rebase_permission_defer_contract(tampered)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("Dependabot native-rebase permission regression admitted unsafe broad fallback")
+
+
 def validate_controller_read_ref_response_contract(text: str) -> None:
     require(
         text.count("python3 scripts/dependabot_controller.py git-ref-read-response") == 13,
@@ -2804,6 +2890,7 @@ def main() -> int:
         controller_text = CONTROLLER.read_text(encoding="utf-8")
         validate_controller_wake_contract(controller_text)
         self_test_controller_wake_affinity_contract(controller_text)
+        self_test_controller_native_rebase_permission_defer_contract(controller_text)
         validate_trusted_reference_hydration(controller_text)
         self_test_native_dependabot_rebase_marker(controller_text)
         validate_controller_read_ref_response_contract(controller_text)
