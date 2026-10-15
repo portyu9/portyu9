@@ -327,11 +327,12 @@ def validate_controller_native_rebase_permission_defer_contract(text: str) -> No
     ):
         require(section.count(marker) == 1,
                 f"GraphQL HTTP-200 denial classifier missing exact fail-closed evidence: {marker}")
+    denial_start = section.index('if [ "$REBASE_EXIT" -ne 0 ]; then')
     require(
-        section.index("grep -qF 'refusing to allow a GitHub App") <
-        section.index("grep -Eq '^HTTP/[0-9.]+[[:space:]]+200") <
-        section.index("jq -e '") <
-        section.index("printf 'has_target=false"),
+        section.index("grep -qF 'refusing to allow a GitHub App", denial_start) <
+        section.index("grep -Eq '^HTTP/[0-9.]+[[:space:]]+200", denial_start) <
+        section.index("jq -e '", denial_start) <
+        section.index("printf 'has_target=false", denial_start),
         "GraphQL denial schema must precede no-target deferral",
     )
     for legacy in ('repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch',
