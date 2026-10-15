@@ -831,6 +831,12 @@ jobs:
                       exit 1
                     }
                     echo "Approved exact canonical Dependabot PR workflow: ${name} run ${run_id}."
+                  elif [ "$name" = "Profile quality" ] && [ "$status" = "completed" ] && [ "$conclusion" = "failure" ]; then
+                    # Before the owner review, this workflow fails only its governed-review job.
+                    # This is NOT clearance: checks_ready must independently prove all six
+                    # exact-head pre-review gates before requesting the owner review; the
+                    # terminal merge still requires the exact successful review gate.
+                    echo "Canonical Profile quality failed pre-review; awaiting independent six-gate proof and exact-head governed owner review."
                   elif [ "$status" = "completed" ] && [ "$conclusion" != "success" ]; then
                     echo "Canonical Dependabot PR workflow completed unsuccessfully before approval: ${name} (${conclusion})." >&2
                     exit 1

@@ -1247,6 +1247,66 @@ def validate_controller_protected_workflow_evidence_contract(text: str) -> None:
 
 
 
+def validate_controller_profile_review_deadlock_contract(text: str) -> None:
+    """Permit only the pre-review Profile Quality failure, never bypass protected checks."""
+    start = "          approve_exact_pr_workflows() {\n"
+    end = "\n\n          assert_transaction\n          approve_exact_pr_workflows\n"
+    require(text.count(start) == 1 and text.count(end) == 1,
+            "Dependabot canonical workflow approval boundary changed")
+    block = text[text.index(start):text.index(end, text.index(start))]
+    exception = (
+        'elif [ "$name" = "Profile quality" ] && [ "$status" = "completed" ] '
+        '&& [ "$conclusion" = "failure" ]; then'
+    )
+    fatal = 'elif [ "$status" = "completed" ] && [ "$conclusion" != "success" ]; then'
+    require(block.count(exception) == 1 and block.count(fatal) == 1,
+            "Dependabot must isolate exactly one pre-review Profile Quality failure")
+    require(block.index(exception) < block.index(fatal),
+            "Dependabot must preserve fatal handling of all other unsuccessful runs")
+    require(
+        "                    exit 1\n                  fi" in block[block.index(fatal):],
+        "Dependabot must continue rejecting other canonical workflow failures",
+    )
+    proof = '          if checks_ready; then\n            READY=true\n          fi'
+    reviewer = 'REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST '
+    require(
+        text.count(proof) == 1 and
+        text.index(proof, text.index(end)) < text.index(reviewer, text.index(end)),
+        "Dependabot must prove all six pre-review gates before reviewer dispatch",
+    )
+    require(
+        "steps.checks.outputs.ready == 'true' && steps.checks.outputs.review_ready == 'true'"
+        in text,
+        "Dependabot protected merge must require both pre-review and review gates",
+    )
+
+
+def self_test_controller_profile_review_deadlock_contract(text: str) -> None:
+    validate_controller_profile_review_deadlock_contract(text)
+    exception = (
+        'elif [ "$name" = "Profile quality" ] && [ "$status" = "completed" ] '
+        '&& [ "$conclusion" = "failure" ]; then'
+    )
+    fatal = 'elif [ "$status" = "completed" ] && [ "$conclusion" != "success" ]; then'
+    cases = (
+        (exception, exception.replace('Profile quality', 'CodeQL')),
+        (exception, exception.replace('"failure"', '"success"')),
+        (exception, exception.replace('"failure"', '"success" or "failure"')),
+        (fatal, fatal.replace('!= "success"', '= "success"')),
+    )
+    for original, replacement in cases:
+        require(text.count(original) == 1, "Dependabot deadlock mutation anchor changed")
+        mutated = text.replace(original, replacement, 1)
+        require(mutated != text, "Dependabot deadlock mutation fixture was inert")
+        try:
+            validate_controller_profile_review_deadlock_contract(mutated)
+        except ValueError as exc:
+            require("Dependabot must" in str(exc),
+                    f"Deadlock negative fixture failed for wrong reason: {exc}")
+        else:
+            fail("Dependabot deadlock contract accepted a weakened review exception")
+
+
 def validate_controller_workflow_run_approval_status(text: str) -> None:
     endpoint = 'repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/approve'
     response = (
@@ -2886,6 +2946,7 @@ def main() -> int:
         validate_controller_read_ref_response_contract(controller_text)
         validate_controller_protected_workflow_evidence_contract(controller_text)
         self_test_controller_workflow_run_approval_status(controller_text)
+        self_test_controller_profile_review_deadlock_contract(controller_text)
         validate_controller_pr_response_contract(controller_text)
         self_test_controller_update_branch_status_contract(controller_text)
         self_test_controller_reviewer_request_status(controller_text)
