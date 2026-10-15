@@ -1,0 +1,46 @@
+# One-shot inert-data measurement against accepted main; no candidate execution.
+name: One-shot GraphQL workflow permission capability measurement
+on:
+  pull_request:
+    types: [opened, synchronize]
+permissions:
+  contents: read
+env:
+  PYTHON_VERSION: "3.13.16"
+jobs:
+  measure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout immutable accepted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 84095a66b3f76919fc2b9ac5a125303eb03a773c
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up trusted Python runtime
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Measure exact frozen candidate as inert data
+        env:
+          TRUSTED_BASE: 84095a66b3f76919fc2b9ac5a125303eb03a773c
+          FROZEN_HEAD: 43e37321400d988e4f7af8865cfa9022dbbb0f50
+          FROZEN_TREE: 63234723bd7bd906748fcf0676b35089ace035fb
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TRUSTED_BASE"
+          test "$(git rev-parse HEAD:scripts/workflow_capability_admission.py)" = "a832c73cc3be625a8af9b5997c815b73c3520dab"
+          python3 -B scripts/verify-python-runtime.py
+          git fetch --no-tags --depth=1 origin "$FROZEN_HEAD"
+          test "$(git rev-parse "$FROZEN_HEAD^{tree}")" = "$FROZEN_TREE"
+          mkdir -p "$RUNNER_TEMP/frozen-graphql-denial-candidate"
+          git archive "$FROZEN_HEAD" | tar -x -C "$RUNNER_TEMP/frozen-graphql-denial-candidate"
+          test -z "$(git status --porcelain)"
+          python3 -B scripts/workflow_capability_admission.py \
+            "$RUNNER_TEMP/frozen-graphql-denial-candidate" \
+            --candidate-tree-sha "$FROZEN_TREE" --measure
+          test -z "$(git status --porcelain)"
