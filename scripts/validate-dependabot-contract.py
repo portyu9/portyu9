@@ -315,6 +315,25 @@ def validate_controller_native_rebase_permission_defer_contract(text: str) -> No
         required_count = 4 if marker == '--expected-number "$PR_NUMBER"' else 1
         require(section.count(marker) == required_count,
                 f"native exact rebase lost verified frozen guard: {marker}")
+    # Treat HTTP 200 GraphQL errors as failures unless exactly the safe denial.
+    for marker in (
+        "grep -Eq '^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$)' rebase-http-response.txt",
+        "sed '1,/^[[:space:]]*$/d' rebase-http-response.txt > rebase-denial-response.json",
+        '(.data == {"updatePullRequestBranch": null})',
+        '(.errors | type == "array" and length == 1 and',
+        "test(\"^refusing to allow a GitHub App to create or update workflow `\\\\.github/workflows/[A-Za-z0-9_.-]+\\\\.ya?ml` without `workflows` permission$\"; \"i\")",
+        '((has("path") | not) or .path == ["updatePullRequestBranch"])',
+        "' rebase-denial-response.json >/dev/null",
+    ):
+        require(section.count(marker) == 1,
+                f"GraphQL HTTP-200 denial classifier missing exact fail-closed evidence: {marker}")
+    require(
+        section.index("grep -qF 'refusing to allow a GitHub App") <
+        section.index("grep -Eq '^HTTP/[0-9.]+[[:space:]]+200") <
+        section.index("jq -e '") <
+        section.index("printf 'has_target=false"),
+        "GraphQL denial schema must precede no-target deferral",
+    )
     for legacy in ('repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch',
                    "python3 scripts/dependabot_controller.py update-branch-response",
                    'REBASE_EXIT=0 || true', 'updateMethod:MERGE'):
@@ -355,6 +374,14 @@ def self_test_controller_native_rebase_permission_defer_contract(text: str) -> N
         ("grep -Eq '^HTTP/[0-9.]+[[:space:]]+403([[:space:]]|$)'",
          "grep -Eq '^HTTP/[0-9.]+[[:space:]]+4[0-9][0-9]([[:space:]]|$)'"),
         ("'refusing to allow a GitHub App to create or update workflow'", "'Forbidden'"),
+        ('(.data == {"updatePullRequestBranch": null})',
+         '(.data != {"updatePullRequestBranch": null})'),
+        ('(.errors | type == "array" and length == 1 and',
+         '(.errors | type == "array" and length >= 1 and'),
+        ('((has("path") | not) or .path == ["updatePullRequestBranch"])',
+         '((has("path") | not) or .path == ["deleteRef"])'),
+        ("' rebase-denial-response.json >/dev/null",
+         "' rebase-denial-response.json >/dev/null || true"),
         ('|| REBASE_EXIT="$?"', '|| REBASE_EXIT=0'),
         ("Deferred stale native Dependabot PR #", "Updated stale native Dependabot PR #"),
     ):

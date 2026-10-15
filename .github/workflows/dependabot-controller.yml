@@ -212,8 +212,21 @@ jobs:
               -F prId="$REBASING_PR_NODE_ID" \
               -F expectedHead="$PRE_UPDATE_HEAD_SHA" > rebase-http-response.txt || REBASE_EXIT="$?"
             if [ "$REBASE_EXIT" -ne 0 ]; then
-              if grep -Eq '^HTTP/[0-9.]+[[:space:]]+403([[:space:]]|$)' rebase-http-response.txt &&
-                 grep -qF 'refusing to allow a GitHub App to create or update workflow' rebase-http-response.txt; then
+              if ( grep -Eq '^HTTP/[0-9.]+[[:space:]]+403([[:space:]]|$)' rebase-http-response.txt &&
+                   grep -qF 'refusing to allow a GitHub App to create or update workflow' rebase-http-response.txt ) ||
+                 ( grep -Eq '^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$)' rebase-http-response.txt &&
+                   sed '1,/^[[:space:]]*$/d' rebase-http-response.txt > rebase-denial-response.json &&
+                   jq -e '
+                     (type == "object") and
+                     (.data == {"updatePullRequestBranch": null}) and
+                     (.errors | type == "array" and length == 1 and
+                       (.[0] | type == "object" and
+                         (.message | type == "string" and
+                           test("^refusing to allow a GitHub App to create or update workflow `\\.github/workflows/[A-Za-z0-9_.-]+\\.ya?ml` without `workflows` permission$"; "i")) and
+                         ((has("path") | not) or .path == ["updatePullRequestBranch"])
+                       )
+                     )
+                   ' rebase-denial-response.json >/dev/null ); then
                 printf 'has_target=false\n' >> "$GITHUB_OUTPUT"
                 echo "Deferred stale native Dependabot PR #${PR_NUMBER}: GitHub denies a workflow-file rebase with the current controller token; awaiting Dependabot-owned rebase."
                 exit 0
