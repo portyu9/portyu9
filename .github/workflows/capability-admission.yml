@@ -84,7 +84,7 @@ jobs:
               (.user | (type == "object") and (.login | (type == "string") and length > 0)) and
               (.state == "open") and
               (.draft | type == "boolean") and
-              (.maintainer_can_modify | type == "boolean") and
+              (has("maintainer_can_modify") and (.maintainer_can_modify == null or (.maintainer_can_modify | type == "boolean"))) and
               (.base | type == "object" and
                 (.ref | type == "string" and length > 0) and
                 (.sha | type == "string" and test("^[0-9a-f]{40}$"))) and
