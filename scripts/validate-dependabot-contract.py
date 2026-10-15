@@ -1249,8 +1249,8 @@ def validate_controller_protected_workflow_evidence_contract(text: str) -> None:
 
 def validate_controller_profile_review_deadlock_contract(text: str) -> None:
     """Permit only the pre-review Profile Quality failure, never bypass protected checks."""
-    start = "          approve_exact_pr_workflows() {\\n"
-    end = "\\n\\n          assert_transaction\\n          approve_exact_pr_workflows\\n"
+    start = "          approve_exact_pr_workflows() {\n"
+    end = "\n\n          assert_transaction\n          approve_exact_pr_workflows\n"
     require(text.count(start) == 1 and text.count(end) == 1,
             "Dependabot canonical workflow approval boundary changed")
     block = text[text.index(start):text.index(end, text.index(start))]
@@ -1264,10 +1264,10 @@ def validate_controller_profile_review_deadlock_contract(text: str) -> None:
     require(block.index(exception) < block.index(fatal),
             "Dependabot must preserve fatal handling of all other unsuccessful runs")
     require(
-        "                    exit 1\\n                  fi" in block[block.index(fatal):],
+        "                    exit 1\n                  fi" in block[block.index(fatal):],
         "Dependabot must continue rejecting other canonical workflow failures",
     )
-    proof = '          if checks_ready; then\\n            READY=true\\n          fi'
+    proof = '          if checks_ready; then\n            READY=true\n          fi'
     reviewer = 'REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST '
     require(
         text.count(proof) == 1 and
@@ -1283,19 +1283,20 @@ def validate_controller_profile_review_deadlock_contract(text: str) -> None:
 
 def self_test_controller_profile_review_deadlock_contract(text: str) -> None:
     validate_controller_profile_review_deadlock_contract(text)
-    for original, replacement in (
-        ('[ "$name" = "Profile quality" ]', '[ "$name" = "CodeQL" ]'),
-        ('[ "$conclusion" = "failure" ]', '[ "$conclusion" != "success" ]'),
-        ('[ "$status" = "completed" ] && [ "$conclusion" != "success" ]',
-         '[ "$status" = "completed" ] && [ "$conclusion" = "success" ]'),
-    ):
-        anchor = (
-            'elif [ "$name" = "Profile quality" ] && [ "$status" = "completed" ] '
-            '&& [ "$conclusion" = "failure" ]; then'
-        )
-        start = text.index(anchor)
-        finish = text.index('                  fi', start)
-        mutated = text[:start] + text[start:finish].replace(original, replacement, 1) + text[finish:]
+    exception = (
+        'elif [ "$name" = "Profile quality" ] && [ "$status" = "completed" ] '
+        '&& [ "$conclusion" = "failure" ]; then'
+    )
+    fatal = 'elif [ "$status" = "completed" ] && [ "$conclusion" != "success" ]; then'
+    cases = (
+        (exception, exception.replace('Profile quality', 'CodeQL')),
+        (exception, exception.replace('"failure"', '"success"')),
+        (exception, exception.replace('"failure"', '"success" or "failure"')),
+        (fatal, fatal.replace('!= "success"', '= "success"')),
+    )
+    for original, replacement in cases:
+        require(text.count(original) == 1, "Dependabot deadlock mutation anchor changed")
+        mutated = text.replace(original, replacement, 1)
         require(mutated != text, "Dependabot deadlock mutation fixture was inert")
         try:
             validate_controller_profile_review_deadlock_contract(mutated)
