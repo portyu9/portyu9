@@ -411,11 +411,15 @@ def validate_pull_request_response(
     require(value.get("state") == "open", "Dependabot pull-request response state changed")
     require(type(value.get("draft")) is bool and value.get("draft") is False,
             "Dependabot pull-request response draft flag changed")
-    # Same-repository Dependabot PRs have exhibited transient true/false flips here.
-    # Type the field exactly, but bind authorization to immutable PR/head identity instead.
+    # GitHub REST may return explicit null for this advisory maintainer flag.
+    # It must be present and typed; null means no observed permission, never
+    # inferred permission. Actual identity/authorization uses exact immutable
+    # Dependabot actor, repository, node ID, branch and head SHA evidence.
     require(
-        type(value.get("maintainer_can_modify")) is bool,
-        "Dependabot pull-request response maintainer_can_modify must be boolean",
+        "maintainer_can_modify" in value
+        and (value["maintainer_can_modify"] is None
+             or type(value["maintainer_can_modify"]) is bool),
+        "Dependabot pull-request response maintainer_can_modify must be boolean or explicit null",
     )
     base = value.get("base")
     require(isinstance(base, Mapping), "Dependabot pull-request response base must be an object")
@@ -483,7 +487,7 @@ def validate_pull_request_response(
         "user": "dependabot[bot]",
         "state": "open",
         "draft": False,
-        "maintainerCanModify": value["maintainer_can_modify"],
+        "maintainerCanModify": value["maintainer_can_modify"] is True,
         "baseRef": "main",
         "baseSha": base_sha,
         "headRef": head_ref,
@@ -1284,6 +1288,31 @@ def self_test() -> None:
         and volatile_pr["baseSha"] == parent_sha,
         "boolean maintainer_can_modify volatility changed trusted PR identity",
     )
+
+    null_permission = validate_pull_request_response(
+        {**pr_response_fixture, "maintainer_can_modify": None},
+        expected_number=17,
+        expected_repository=REPOSITORY,
+    )
+    require(
+        null_permission["maintainerCanModify"] is False
+        and null_permission["headSha"] == commit_sha
+        and null_permission["nodeId"] == "PR_fixtureController123",
+        "Dependabot nullable permission metadata was not conservatively disabled",
+    )
+    for malformed in ({**pr_response_fixture, "maintainer_can_modify": "false"},
+                      {**pr_response_fixture, "maintainer_can_modify": 1},
+                      {key: value for key, value in pr_response_fixture.items()
+                       if key != "maintainer_can_modify"}):
+        try:
+            validate_pull_request_response(
+                malformed, expected_number=17, expected_repository=REPOSITORY
+            )
+        except ValueError as exc:
+            require("boolean or explicit null" in str(exc),
+                    "Dependabot nullable permission negative fixture failed at wrong guard")
+        else:
+            raise ValueError("Dependabot nullable permission admitted malformed/missing field")
 
     safe_rebase = validate_rebase_graphql_response(
         {"data": {"updatePullRequestBranch": {"pullRequest": {
