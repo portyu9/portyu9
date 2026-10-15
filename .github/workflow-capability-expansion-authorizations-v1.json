@@ -806,6 +806,13 @@
       "rationale": "Authorize frozen #1345 measured by closed #1346: route 13 existing Dependabot main/head Git-ref GETs through accepted bounded singleton reads; preserve endpoints, evidence files, #940 typed ref validation, and expected-SHA transaction semantics. Remove 13 mediated raw GET BOM surfaces. Mutations and all other reads stay unchanged. No permission, trigger, endpoint/query, mutation authority, secret/OIDC, check reduction, direct-main/ruleset/merge authority, replay, or bypass."
     },
     {
+      "baseBomSha256": "3e9a73f4266c60f637e71f8b997f1bda666770edda547b3266ef98c59960ed68",
+      "candidateBomSha256": "3e9a73f4266c60f637e71f8b997f1bda666770edda547b3266ef98c59960ed68",
+      "expansionSha256": "adffca2e842991caa9efdd0d882fd2f9aa839af451e9e85f433a4f6e109a805a",
+      "id": "cap-dependabot-graphql-expected-head-lease-v1",
+      "rationale": "Prior-authorize frozen #1692 tree 7e1ce8321969f8fb98e2a0175bd91d7c50dda7c5 independently measured from accepted main by read-only run 38755599255: one protected-source expansion, zero reductions, unchanged semantic BOM. Require GraphQL REBASE expectedHeadOid to equal exact immutable Dependabot pre-update PR head, not upstream main SHA; preserve independent base-SHA, PR node/number, provenance, protected-check and bounded convergence guards."
+    },
+    {
       "baseBomSha256": "1b6e92a93cd373a3c2367bad2c9f891ccb918b70ef83e5ab8506f0285ee42ef7",
       "candidateBomSha256": "82945c362cc9c5aaf4df583b9a932d01fbf385671cca113919c98166bcef71b0",
       "expansionSha256": "3eea6a94686eadf56be86dad63b67cdaf3a19aa61794a7729adc5a5767b867e4",
