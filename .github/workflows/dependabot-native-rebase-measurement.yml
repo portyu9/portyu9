@@ -1,0 +1,44 @@
+name: One-shot native Dependabot rebase skip authorization measurement
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/dependabot-native-rebase-measurement.yml"
+permissions:
+  contents: read
+env:
+  PYTHON_VERSION: "3.13.16"
+jobs:
+  measure:
+    name: measure-frozen-native-rebase-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout accepted immutable main for trusted evaluation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 1750e5874dfda1a3f5b7a098daabe0a52c513eed
+          path: trusted
+          persist-credentials: false
+      - name: Checkout immutable marker code as inert data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: cda4ed197a8cf0de9a2c1402b691033986fc1181
+          path: candidate
+          persist-credentials: false
+      - name: Setup pinned Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.16"
+      - name: Measure exact protected code expansion with accepted-main compiler
+        run: |
+          set -euo pipefail
+          test "$(git -C trusted rev-parse HEAD)" = "1750e5874dfda1a3f5b7a098daabe0a52c513eed"
+          test "$(git -C candidate rev-parse HEAD)" = "cda4ed197a8cf0de9a2c1402b691033986fc1181"
+          python3 trusted/scripts/verify-python-runtime.py
+          TREE_SHA="$(git -C candidate rev-parse 'HEAD^{tree}')"
+          [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          echo "Main 1750e5874dfda1a3f5b7a098daabe0a52c513eed; frozen source cda4ed197a8cf0de9a2c1402b691033986fc1181; measured tree $TREE_SHA"
+          python3 trusted/scripts/workflow_capability_admission.py candidate \
+            --candidate-tree-sha "$TREE_SHA" --measure
