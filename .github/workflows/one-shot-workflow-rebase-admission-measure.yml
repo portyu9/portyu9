@@ -1,0 +1,43 @@
+name: One-shot Workflow Rebase App admission measurement
+on:
+  pull_request:
+    types: [opened, synchronize]
+permissions:
+  contents: read
+jobs:
+  measure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout immutable accepted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: b19da544bed9bbd34beee2b1a158c7ae4d379537
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up trusted Python runtime
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.16"
+      - name: Read-only measure frozen source against accepted main
+        env:
+          TRUSTED_BASE: b19da544bed9bbd34beee2b1a158c7ae4d379537
+          FROZEN_HEAD: 57f70c0a429cc32c43dacf5e41b3ac22d16f3f04
+          FROZEN_TREE: f32cb7ef61dfe23ae18e251a15fc2f6ca2385a5c
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TRUSTED_BASE"
+          test "$(git rev-parse HEAD:scripts/workflow_capability_admission.py)" = "a832c73cc3be625a8af9b5997c815b73c3520dab"
+          python3 -B scripts/verify-python-runtime.py
+          git fetch --no-tags --depth=1 origin "$FROZEN_HEAD"
+          test "$(git rev-parse "$FROZEN_HEAD^{tree}")" = "$FROZEN_TREE"
+          mkdir -p "$RUNNER_TEMP/frozen-rebase-admission-candidate"
+          git archive "$FROZEN_HEAD" | tar -x -C "$RUNNER_TEMP/frozen-rebase-admission-candidate"
+          test -z "$(git status --porcelain)"
+          python3 -B scripts/workflow_capability_admission.py \
+            "$RUNNER_TEMP/frozen-rebase-admission-candidate" \
+            --candidate-tree-sha "$FROZEN_TREE" --measure
+          test -z "$(git status --porcelain)"
