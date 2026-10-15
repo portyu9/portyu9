@@ -1,0 +1,50 @@
+name: One-shot frozen native Dependabot admission measurement
+on:
+  pull_request:
+    types: [synchronize]
+permissions:
+  contents: read
+jobs:
+  measure:
+    if: github.event.pull_request.number == 1686
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    permissions:
+      contents: read
+    env:
+      PYTHON_VERSION: "3.13.16"
+      ACCEPTED_MAIN: 1746358e887cc5e37df9c249353a495d7b708d02
+      FROZEN_HEAD: 5190cac6e0fc0095973ac7480f45a1b2adc14597
+      FROZEN_TREE: 73b9500f6f1b41aec643e042c2604028e32647e5
+    steps:
+      - name: Checkout only exact accepted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 1746358e887cc5e37df9c249353a495d7b708d02
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Configure pinned Python from accepted main
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Verify exact immutable source provenance
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$ACCEPTED_MAIN"
+          test "$(git rev-parse HEAD:scripts/workflow_capability_admission.py)" = "a832c73cc3be625a8af9b5997c815b73c3520dab"
+          python3 -B scripts/verify-python-runtime.py
+          git fetch --no-tags --depth=1 origin "$FROZEN_HEAD"
+          test "$(git rev-parse "$FROZEN_HEAD^{tree}")" = "$FROZEN_TREE"
+          mkdir -p "$RUNNER_TEMP/native-dependabot-admission-candidate"
+          git archive "$FROZEN_HEAD" | tar -x -C "$RUNNER_TEMP/native-dependabot-admission-candidate"
+          test -z "$(git status --porcelain)"
+          echo "Read-only frozen candidate identity verified: $FROZEN_HEAD, tree $FROZEN_TREE"
+      - name: Emit accepted-main sanitized trusted capability measurement
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          set -euo pipefail
+          python3 -B scripts/workflow_capability_admission.py \
+            "$RUNNER_TEMP/native-dependabot-admission-candidate" \
+            --candidate-tree-sha "$FROZEN_TREE" --measure
+          test -z "$(git status --porcelain)"
