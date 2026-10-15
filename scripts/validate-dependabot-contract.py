@@ -2569,6 +2569,15 @@ def validate_quality_contract(text: str) -> None:
     start = text.index("\n  dependabot_admission:")
     end = text.index("\n  governed_bot_review:", start)
     block = text[start:end]
+    # The native-proof inline interpreter imports trusted Python modules in
+    # trusted-base/scripts before the next step asserts a byte-clean Git tree.
+    # Without -B, __pycache__ is untracked and the source-identity gate fails.
+    bytecode_guard = 'PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts" python3 -B - \\'
+    require(
+        block.count(bytecode_guard) == 1
+        and 'PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts" python3 - \\' not in block,
+        "Profile Quality PR-native admission must disable bytecode writes before its clean-checkout proof",
+    )
 
     required_fragments = (
         "- name: Checkout exact accepted-base trusted admission source",
@@ -2879,6 +2888,25 @@ def self_test() -> None:
             fail(f"Action-pin self-test accepted forbidden reference: {bad.strip()}")
 
 
+def self_test_profile_quality_native_bytecode_guard(text: str) -> None:
+    """Prevent a native bot PR from hiding a default-bytecode clean-tree failure."""
+    guard = 'PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts" python3 -B - \\'
+    unsafe = 'PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts" python3 - \\'
+    require(text.count(guard) == 1, "PR-native clean-checkout guard fixture changed")
+    validate_quality_contract(text)
+    weakened = text.replace(guard, unsafe, 1)
+    require(weakened != text, "PR-native clean-checkout negative fixture did not mutate")
+    try:
+        validate_quality_contract(weakened)
+    except ValueError as exc:
+        require(
+            "must disable bytecode writes" in str(exc),
+            f"PR-native bytecode negative fixture failed at wrong trust boundary: {exc}",
+        )
+    else:
+        raise ValueError("PR-native admission accepted untracked bytecode generation")
+
+
 def main() -> int:
     try:
         for path in (DEPENDABOT, QUALITY, CONTROLLER, GOVERNANCE, APPROVAL_COMMENT_HELPER):
@@ -2916,7 +2944,7 @@ def main() -> int:
         self_test_controller_merge_success_response_contract(controller_text)
         self_test_controller_approval_comment_contract(controller_text)
         validate_approval_comment_helper_contract(APPROVAL_COMMENT_HELPER.read_text(encoding="utf-8"))
-        validate_quality_contract(QUALITY.read_text(encoding="utf-8"))
+        self_test_profile_quality_native_bytecode_guard(QUALITY.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
 
         print(
