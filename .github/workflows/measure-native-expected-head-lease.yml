@@ -1,0 +1,50 @@
+name: One-shot accepted-main native rebase head-lease measure
+on:
+  pull_request:
+    types: [synchronize]
+permissions:
+  contents: read
+jobs:
+  measure:
+    if: github.event.pull_request.number == 1692
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    permissions:
+      contents: read
+    env:
+      PYTHON_VERSION: "3.13.16"
+      ACCEPTED_MAIN: 5d7732256ec1a195d9fd93c8c2690ed53424b2c6
+      FROZEN_HEAD: b1fb66b686bbfd5cf604ee19d0d6f0e393d46f83
+      FROZEN_TREE: 7e1ce8321969f8fb98e2a0175bd91d7c50dda7c5
+    steps:
+      - name: Checkout immutable trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 5d7732256ec1a195d9fd93c8c2690ed53424b2c6
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set pinned trusted Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Prove frozen tree and trusted evaluator byte identity
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$ACCEPTED_MAIN"
+          test "$(git rev-parse HEAD:scripts/workflow_capability_admission.py)" = "a832c73cc3be625a8af9b5997c815b73c3520dab"
+          python3 -B scripts/verify-python-runtime.py
+          git fetch --no-tags --depth=1 origin "$FROZEN_HEAD"
+          test "$(git rev-parse "${FROZEN_HEAD}^{tree}")" = "$FROZEN_TREE"
+          mkdir -p "$RUNNER_TEMP/frozen-expected-head-lease"
+          git archive "$FROZEN_HEAD" | tar -x -C "$RUNNER_TEMP/frozen-expected-head-lease"
+          test -z "$(git status --porcelain)"
+          echo "Proved source $FROZEN_HEAD tree $FROZEN_TREE as inert data"
+      - name: Run accepted-main read-only capability measurement
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          set -euo pipefail
+          python3 -B scripts/workflow_capability_admission.py \
+            "$RUNNER_TEMP/frozen-expected-head-lease" \
+            --candidate-tree-sha "$FROZEN_TREE" --measure
+          test -z "$(git status --porcelain)"
