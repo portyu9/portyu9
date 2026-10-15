@@ -2565,9 +2565,31 @@ def validate_quality_contract(text: str) -> None:
         require(position > cursor, f"Profile Quality PR-native admission ordering changed: {fragment}")
         cursor = position
 
+def validate_epoch_candidate_hydration(controller: str, capability: str) -> None:
+    """Require both trusted readers to materialize the byte-exact derived source epoch."""
+    for label, source, required in (
+        ("controller", controller,
+         "printf '%s\\n' scripts/dependabot_artifact_reconciliation.py scripts/profile-stats-source-epoch-v1.json"),
+        ("capability-admission", capability,
+         "printf '%s\\n' scripts/validate-privileged-workflow-identity.py scripts/profile-stats-source-epoch-v1.json"),
+    ):
+        require(source.count(required) == 1,
+                f"{label}: candidate Git-blob hydration omitted the derived Profile Stats source epoch")
+
+
 def validate_trusted_reference_hydration(controller: str) -> None:
     """Reject process substitution that silently swallows a trusted Python import failure."""
     capability = (ROOT / ".github/workflows/capability-admission.yml").read_text(encoding="utf-8")
+    validate_epoch_candidate_hydration(controller, capability)
+    # Regression: the live #1657 reconciled branch had a correct epoch Git blob,
+    # but the controller's path allowlist silently omitted it from candidate reads.
+    omitted = controller.replace(" scripts/profile-stats-source-epoch-v1.json", "", 1)
+    try:
+        validate_epoch_candidate_hydration(omitted, capability)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("epoch candidate hydration regression accepted missing exact blob path")
     for label, source, inventory in (
         ("controller", controller, "FETCH_PATHS"),
         ("capability-admission", capability, "SUPPLEMENTAL_PATHS"),
