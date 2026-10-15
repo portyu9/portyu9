@@ -1673,10 +1673,11 @@ def self_test_controller_update_branch_status_contract(text: str) -> None:
         weakened = text.replace(before, after, 1)
         try:
             validate_controller_pr_response_contract(weakened)
+            validate_controller_native_rebase_permission_defer_contract(weakened)
         except ValueError:
             pass
         else:
-            raise ValueError("native rebase status test accepted weakened response binding")
+            raise ValueError(f"native rebase status test accepted weakened response binding: {before}")
 
 
 def validate_controller_repository_dispatch_status(text: str) -> None:
