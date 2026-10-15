@@ -1016,6 +1016,13 @@
       "rationale": "Authorize frozen #1036 protected-TCB hardening that validates the existing Dependabot validation-bind pull-list response before PR-number selection. Equal base/candidate BOM hashes prove no semantic capability expansion. The exact GET endpoint, call count, triggers, permissions, secrets, mutations, delegated admission, protected checks, review behavior, merge/CodeQL dispatch authority, rulesets, direct-main writes, OIDC authority and bypasses remain unchanged."
     },
     {
+      "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "expansionSha256": "991375023da1ee2743e1e2b7c799534a04e879c1ae5d08c6d7a1206fcb50dde0",
+      "id": "cap-dependabot-wake-head-affinity-v1",
+      "rationale": "Prior-authorize exact immutable tree 816674bb67da1201b96d669198749837ccd895e9 from #1679, independently measured by read-only accepted-main Actions run 38672379539: one protected Dependabot controller source expansion, zero reductions, unchanged semantic BOM. Native workflow_run wakes select only their exact branch/head; stale wakes exit before mutation. Adds no trigger, token, permission, API write, release-pin override, reduced checks, unauthorized merge, or candidate-code execution."
+    },
+    {
       "baseBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
       "candidateBomSha256": "d78ed665d31068301a4e87777b17b8eb2dd19ca80de0f983987b99f1ac87ea53",
       "expansionSha256": "a41ed33c366fa1238054487ef38138d82836fefa9593ec3a58c33c8cb187e94c",
