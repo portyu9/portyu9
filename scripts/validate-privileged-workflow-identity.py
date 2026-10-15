@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v161"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "be42a02457df9b7f2a4a10b16c0f2c22f61e3b88",
-    ".github/workflows/profile-quality.yml": "a6d8f75139e89d2937da55053b572f47bc56f3d8",
+    ".github/workflows/profile-quality.yml": "06ff451bfb1c7e5254f0742cfe2ed584bfeb0eca",
     ".github/workflows/profile-stats.yml": "3d5b3b5cc4e278b2b71e37f6e4fa9fdb170ed925",
     ".github/workflows/spotlight-link-sync.yml": "fc8d6b4bd0936e03df49868b8dc8caa8b594be86",
 }
