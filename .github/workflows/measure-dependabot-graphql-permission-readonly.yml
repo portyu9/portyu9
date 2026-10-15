@@ -27,8 +27,8 @@ jobs:
       - name: Measure exact frozen candidate as inert data
         env:
           TRUSTED_BASE: 84095a66b3f76919fc2b9ac5a125303eb03a773c
-          FROZEN_HEAD: 43e37321400d988e4f7af8865cfa9022dbbb0f50
-          FROZEN_TREE: 63234723bd7bd906748fcf0676b35089ace035fb
+          FROZEN_HEAD: a39c05cbdb611b758bfc089a4cbcf605fcb67475
+          FROZEN_TREE: c106240b3e8af39b474665329fc2cd9da5de8773
           PYTHONDONTWRITEBYTECODE: "1"
         run: |
           set -euo pipefail
