@@ -289,7 +289,7 @@ jobs:
             {
               find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -printf '%p\n' | sed 's#^./##'
               printf '%s\n' .github/action-lock.json .github/workflow-capability-bom-v1.json scripts/validate-codeql-contract.py
-              printf '%s\n' scripts/dependabot_artifact_reconciliation.py
+              printf '%s\n' scripts/dependabot_artifact_reconciliation.py scripts/profile-stats-source-epoch-v1.json
               printf '%s\n' scripts/privileged_workflow_identity_v21_core.py scripts/validate-privileged-workflow-identity.py
               find .github -maxdepth 1 -name 'workflow-capability-bom-v1-*.json' -type f -printf '%p\n' | sed 's#^./##'
               printf '%s\n' "$REFERENCE_PATHS"
