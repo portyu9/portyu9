@@ -202,7 +202,7 @@ jobs:
             PRE_UPDATE_HEAD_SHA="$HEAD_SHA"
             # GitHub REST update-branch creates a merge commit with no configurable
             # message. That poisons Dependabot-native rebases because the merge
-            # lacks [dependabot skip]. Use the GitHub-supported REBASE method
+            # lacks the documented native-rebase marker. Use GitHub REBASE instead
             # instead, bound to this immutable native PR node and upstream SHA.
             REBASING_PR_NODE_ID="$(jq -r .nodeId dependabot-pr-normalized.json)"
             [[ "$REBASING_PR_NODE_ID" =~ ^PR_[A-Za-z0-9_-]{8,128}$ ]]
