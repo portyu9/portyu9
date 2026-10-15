@@ -1,0 +1,47 @@
+# One-shot, read-only accepted-main capability measurement. Delete after exact proof.
+name: One-shot nullable Dependabot permission measurement
+on:
+  pull_request:
+    types: [synchronize]
+permissions:
+  contents: read
+env:
+  PYTHON_VERSION: "3.13.16"
+jobs:
+  measure:
+    name: accepted-main-frozen-tree-measure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout immutable accepted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 5c8a5f038737cdd5d4449d100a2a2a35e0201e22
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Configure fixed Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Verify accepted evaluator and extract frozen candidate as inert data
+        env:
+          ACCEPTED_MAIN: 5c8a5f038737cdd5d4449d100a2a2a35e0201e22
+          FROZEN_HEAD: 610cf639f8f7a5e5786e14af8d888a2c84f43c4a
+          FROZEN_TREE: e3a10ffec47d5ff359f9ffd4b5ce13fe37acbbba
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$ACCEPTED_MAIN"
+          test "$(git rev-parse HEAD:scripts/workflow_capability_admission.py)" = "a832c73cc3be625a8af9b5997c815b73c3520dab"
+          python3 -B scripts/verify-python-runtime.py
+          git fetch --no-tags --depth=1 origin "$FROZEN_HEAD"
+          test "$(git rev-parse "$FROZEN_HEAD^{tree}")" = "$FROZEN_TREE"
+          mkdir -p "$RUNNER_TEMP/frozen-native-nullable-candidate"
+          git archive "$FROZEN_HEAD" | tar -x -C "$RUNNER_TEMP/frozen-native-nullable-candidate"
+          test -z "$(git status --porcelain)"
+          echo "Measured frozen source tree $FROZEN_TREE against accepted $ACCEPTED_MAIN"
+          PYTHONDONTWRITEBYTECODE=1 python3 -B scripts/workflow_capability_admission.py \
+            "$RUNNER_TEMP/frozen-native-nullable-candidate" \
+            --candidate-tree-sha "$FROZEN_TREE" --measure
+          test -z "$(git status --porcelain)"
