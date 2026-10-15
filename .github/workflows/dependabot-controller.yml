@@ -136,6 +136,12 @@ jobs:
             .head.repo.full_name == "portyu9/portyu9" and
             (.head.ref | test("^dependabot/github_actions/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$"))
           )] | sort_by(.number)' <<<"$PRS")"
+          # A PR workflow_run wakes only its own immutable candidate lane.
+          # Avoid routing a completed wake to a different native bot PR merely
+          # because another candidate sorts first; main/schedule keep recovery order.
+          if [ "$EVENT_NAME" = "workflow_run" ] && [ "$WAKE_HEAD_BRANCH" != "main" ]; then
+            MATCHES="$(jq -c --arg ref "$WAKE_HEAD_BRANCH" '[.[] | select(.head.ref == $ref)]' <<<"$MATCHES")"
+          fi
           COUNT="$(jq 'length' <<<"$MATCHES")"
           if [ "$COUNT" = "0" ]; then
             printf 'has_target=false\n' >> "$GITHUB_OUTPUT"
@@ -157,6 +163,15 @@ jobs:
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
           [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+          # A completed workflow from a superseded head cannot authorize even
+          # an otherwise valid Dependabot PR. The new exact head gets its own
+          # workflow_run or the trusted schedule can re-evaluate it.
+          if [ "$EVENT_NAME" = "workflow_run" ] && [ "$WAKE_HEAD_BRANCH" != "main" ] && [ "$HEAD_SHA" != "$WAKE_HEAD_SHA" ]; then
+            printf 'has_target=false\n' >> "$GITHUB_OUTPUT"
+            echo "Superseded Dependabot workflow-run wake for ${HEAD_REF}: event=${WAKE_HEAD_SHA}, current=${HEAD_SHA}. No mutation."
+            exit 0
+          fi
 
           REQUESTED="$(jq -r 'if .portyu9Requested then 1 else 0 end' dependabot-pr-normalized.json)"
           [[ "$REQUESTED" =~ ^[0-9]+$ ]]
