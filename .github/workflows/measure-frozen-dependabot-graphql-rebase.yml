@@ -1,0 +1,50 @@
+name: One-shot accepted-main native GraphQL rebase measure
+on:
+  pull_request:
+    types: [synchronize]
+permissions:
+  contents: read
+jobs:
+  measure:
+    if: github.event.pull_request.number == 1690
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    permissions:
+      contents: read
+    env:
+      PYTHON_VERSION: "3.13.16"
+      ACCEPTED_MAIN: 66f7cddcbfd5193a4554f5c516440816d1643330
+      FROZEN_HEAD: e380823757cf8106b7188823eb850c66e1ba42c6
+      FROZEN_TREE: 11e02f1a9f1638cef1ed8b6ac3a0c84144fd8a5f
+    steps:
+      - name: Checkout exact accepted main read-only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 66f7cddcbfd5193a4554f5c516440816d1643330
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Configure pinned Python from trusted main
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Prove exact evaluator and frozen data
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$ACCEPTED_MAIN"
+          test "$(git rev-parse HEAD:scripts/workflow_capability_admission.py)" = "a832c73cc3be625a8af9b5997c815b73c3520dab"
+          python3 -B scripts/verify-python-runtime.py
+          git fetch --no-tags --depth=1 origin "$FROZEN_HEAD"
+          test "$(git rev-parse "${FROZEN_HEAD}^{tree}")" = "$FROZEN_TREE"
+          mkdir -p "$RUNNER_TEMP/frozen-native-rebase"
+          git archive "$FROZEN_HEAD" | tar -x -C "$RUNNER_TEMP/frozen-native-rebase"
+          test -z "$(git status --porcelain)"
+          echo "Verified exact frozen source: $FROZEN_HEAD tree: $FROZEN_TREE"
+      - name: Run only accepted-main read-only capability measurement
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          set -euo pipefail
+          python3 -B scripts/workflow_capability_admission.py \
+            "$RUNNER_TEMP/frozen-native-rebase" \
+            --candidate-tree-sha "$FROZEN_TREE" --measure
+          test -z "$(git status --porcelain)"
