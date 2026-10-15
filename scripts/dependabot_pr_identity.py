@@ -82,11 +82,14 @@ def classify_pr_identity(
         isinstance(association, str) and association in NON_PRIVILEGED_AUTHOR_ASSOCIATIONS,
         "Dependabot PR author association is privileged, unknown, or changed",
     )
-    # GitHub can transiently flip this platform-owned field on same-repository bot PRs.
-    # Keep the response schema strict, but never use its value as Dependabot identity evidence.
+    # GitHub can report explicit null for a platform-owned advisory permission.
+    # Null confers no authority; identity is proved from the bot's exact actor,
+    # repository, PR and immutable commit, never this optional permission value.
     require(
-        type(pr.get("maintainer_can_modify")) is bool,
-        "Dependabot PR maintainer_can_modify flag must remain boolean",
+        "maintainer_can_modify" in pr
+        and (pr["maintainer_can_modify"] is None
+             or type(pr["maintainer_can_modify"]) is bool),
+        "Dependabot PR maintainer_can_modify must be boolean or explicit null",
     )
     require(type(pr.get("number")) is int and pr["number"] > 0, "Dependabot PR number is invalid")
     require(type(pr.get("commits")) is int and pr["commits"] >= 1,
@@ -214,9 +217,21 @@ def self_test() -> None:
         "boolean maintainer_can_modify volatility must not change Dependabot identity",
     )
 
-    malformed_maintainer = fixture()
-    malformed_maintainer["maintainer_can_modify"] = "false"
-    expect_failure(malformed_maintainer, "maintainer_can_modify flag must remain boolean")
+    nullable_maintainer = fixture()
+    nullable_maintainer["maintainer_can_modify"] = None
+    require(
+        classify_pr_identity(nullable_maintainer, repository="portyu9/portyu9",
+                             expected_head_sha="a" * 40)["classification"]
+        == "dependabot-github-actions",
+        "nullable maintainer permission must not erase exact native bot identity",
+    )
+    for corrupted in ("false", 1, [], {}):
+        malformed_maintainer = fixture()
+        malformed_maintainer["maintainer_can_modify"] = corrupted
+        expect_failure(malformed_maintainer, "maintainer_can_modify must be boolean or explicit null")
+    omitted_maintainer = fixture()
+    omitted_maintainer.pop("maintainer_can_modify")
+    expect_failure(omitted_maintainer, "maintainer_can_modify must be boolean or explicit null")
 
     contributor = fixture()
     contributor["author_association"] = "CONTRIBUTOR"
