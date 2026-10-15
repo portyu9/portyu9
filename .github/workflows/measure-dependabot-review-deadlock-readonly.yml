@@ -1,0 +1,47 @@
+# One-shot prior-authorization measurement; never execute or import candidate code.
+name: One-shot Dependabot review deadlock capability measurement
+on:
+  pull_request:
+    types: [opened, synchronize]
+permissions:
+  contents: read
+env:
+  PYTHON_VERSION: "3.13.16"
+jobs:
+  measure:
+    if: github.event.pull_request.head.ref == 'diag/dependabot-pre-review-admission-measure-20261015'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout immutable accepted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 0cb3e598970f36b99bda698b6278eae761bc4dcb
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up trusted Python runtime
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Measure exact frozen candidate as inert data
+        env:
+          TRUSTED_BASE: 0cb3e598970f36b99bda698b6278eae761bc4dcb
+          FROZEN_HEAD: f5914377364ff481c44bf7358b9d50227c87d2b3
+          FROZEN_TREE: 99bdfb0b68c3018d208ee5c8fb5d47e98e20a548
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TRUSTED_BASE"
+          test "$(git rev-parse HEAD:scripts/workflow_capability_admission.py)" = "a832c73cc3be625a8af9b5997c815b73c3520dab"
+          python3 -B scripts/verify-python-runtime.py
+          git fetch --no-tags --depth=1 origin "$FROZEN_HEAD"
+          test "$(git rev-parse "$FROZEN_HEAD^{tree}")" = "$FROZEN_TREE"
+          mkdir -p "$RUNNER_TEMP/frozen-dependabot-review-candidate"
+          git archive "$FROZEN_HEAD" | tar -x -C "$RUNNER_TEMP/frozen-dependabot-review-candidate"
+          test -z "$(git status --porcelain)"
+          python3 -B scripts/workflow_capability_admission.py \
+            "$RUNNER_TEMP/frozen-dependabot-review-candidate" \
+            --candidate-tree-sha "$FROZEN_TREE" --measure
+          test -z "$(git status --porcelain)"
