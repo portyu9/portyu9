@@ -3318,7 +3318,20 @@ def validate_dependabot_residual_read_transport_identity(dependabot: str) -> Non
 
     direct_lines = [line.strip() for line in dependabot.splitlines() if "gh api" in line]
     require(direct_lines, "Dependabot workflow unexpectedly lost all explicit mutation transports")
+    trusted_rebase = (
+        'gh api --include graphql \\',
+        'updatePullRequestBranch(input:{pullRequestId:$prId, expectedHeadOid:$expectedHead, updateMethod:REBASE})',
+        '-F prId="$REBASING_PR_NODE_ID"',
+        '-F expectedHead="$MAIN_SHA"',
+        'python3 scripts/dependabot_controller.py rebase-graphql-response',
+    )
+    require(
+        all(dependabot.count(fragment) == 1 for fragment in trusted_rebase),
+        "Dependabot exact-identity GraphQL rebase transport drifted",
+    )
     for line in direct_lines:
+        if line == trusted_rebase[0]:
+            continue
         require(
             any(
                 method in line
