@@ -5,6 +5,8 @@ on:
       - ".github/workflows/profile-stats-artifact-epoch-measurement.yml"
 permissions:
   contents: read
+env:
+  PYTHON_VERSION: "3.13.16"
 jobs:
   measure:
     name: trusted-main-measure-frozen-artifact-epoch-source
