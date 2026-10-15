@@ -932,6 +932,13 @@
       "rationale": "Authorize frozen #1493 measured by closed #1494: bind the existing Dependabot reconciled Git-commit response to exact GitHub Actions bot author and GitHub committer identity plus typed dates, while preserving exact tree and one-parent topology. Semantic Workflow Capability is unchanged. Adds no trigger, permission, endpoint/method, mutation, retry, secret/OIDC, required-check reduction, merge/ruleset/direct-main authority, or bypass."
     },
     {
+      "id": "cap-dependabot-relative-source-epoch-root-v1",
+      "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "expansionSha256": "3831fb2a511a0af1f71380faffccd2c5d2587852ca9e4ddf2ba08b3ac16804ed",
+      "rationale": "Prior-authorize frozen #1669 tree 74c4371e753436e72033697b223f4dade7d83dbe, measured read-only in run 38660233183. Normalize accepted-main checkout root to canonical non-aliased absolute path before executing trusted Profile Stats epoch validator, with positive relative-dot fixture tests for both artifact releases. Fixes live controller failure 38659724993. No new workflow mutation, permissions, triggers, secrets, unsafe candidate execution, reduced required checks or merge bypass."
+    },
+    {
       "baseBomSha256": "36d0790286cd4a3ebd02d9df98687e9cfd656819f920426c38c1fdd41e222889",
       "candidateBomSha256": "9976c120af0e18762e82ef1a26041c9bde4b825c001f2cbe50b85398c1665da6",
       "expansionSha256": "a9aa30bd74e3ba8582d171af07053a634e31e6e3dbda29b1b739481f8508d00b",
