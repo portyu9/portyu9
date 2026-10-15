@@ -855,6 +855,13 @@
       "rationale": "Authorize #541's source-only Dependabot identity fix after the live #516 controller proved GitHub may report native dependabot[bot] as CONTRIBUTOR. Exact bot login/ID/node/type/app URLs, same-repo Dependabot head, immutable expected head, and maintainer mutation lock remain authoritative. Only NONE or CONTRIBUTOR association is allowed; OWNER, MEMBER, COLLABORATOR, malformed, and unknown values remain fail-closed."
     },
     {
+      "id": "cap-dependabot-native-rebase-skip-marker-v1",
+      "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "expansionSha256": "c05180c0adeaf99e9d1c05c51708b1427187025c0c64815c2995bb2b0232a5f0",
+      "rationale": "Prior-authorize frozen #1674 tree cfeaec393f2f334d7dbfeb9dca1ef89910e79bb8, measured in read-only run 38666264384. Add GitHub-documented [dependabot skip] to the accepted-main controller's exact deterministic governance-derivative commit message, enabling Dependabot to autonomously rebase its own PR branch even after extra trusted commits. Includes positive/negative marker contracts; no new GitHub API mutation, token, workflow trigger, permission, required-check reduction, or ruleset bypass."
+    },
+    {
       "baseBomSha256": "ac29bb25fca4d5945a407c9d66b902514821c11843263ed32c16f32f93930fa0",
       "candidateBomSha256": "32a494c4933c6e385b0fe90e49502513ee1d50c880dd0372a44d3d3abd197e51",
       "expansionSha256": "3fd9b5ea9566d3b8fe72c0eadcf71c7e231a16a73ee3cdb2e9413877916478d8",
