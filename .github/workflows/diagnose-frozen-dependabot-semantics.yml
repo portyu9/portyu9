@@ -1,0 +1,75 @@
+name: Read-only Dependabot semantic rejection diagnosis
+on:
+  pull_request:
+    types: [opened, synchronize]
+permissions:
+  contents: read
+env:
+  PYTHON_VERSION: "3.13.16"
+jobs:
+  diagnose:
+    name: accepted-main-frozen-candidate-readonly
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout accepted trusted evaluator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up reviewed Python interpreter
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.16"
+      - name: Compile frozen untrusted candidate trees as data only
+        env:
+          FROZEN_MAIN: 1746358e887cc5e37df9c249353a495d7b708d02
+          CANDIDATE_UPLOAD: 36503cefe71624555a1f7868626a6bec937bdc65
+          TREE_UPLOAD: 38d3a1171060704dcf1c67acb005e500d6aa40ad
+          CANDIDATE_DOWNLOAD: db39b2452f9bde700f499aaeedf164f0de1e2db9
+          TREE_DOWNLOAD: 64237197aff84a40b61c08897106ee1508fb885f
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$FROZEN_MAIN"
+          python3 scripts/verify-python-runtime.py
+          for lane in UPLOAD DOWNLOAD; do
+            if [ "$lane" = "UPLOAD" ]; then
+              candidate="$CANDIDATE_UPLOAD"; tree="$TREE_UPLOAD"
+            else
+              candidate="$CANDIDATE_DOWNLOAD"; tree="$TREE_DOWNLOAD"
+            fi
+            git fetch --no-tags --depth=1 origin "$candidate"
+            test "$(git rev-parse "${candidate}^{tree}")" = "$tree"
+            target="$RUNNER_TEMP/reconciled-${lane,,}"
+            mkdir -p "$target"
+            git archive "$candidate" | tar -x -C "$target"
+            echo "Verified frozen candidate $lane: commit=$candidate tree=$tree"
+            CANDIDATE_ROOT="$target" CANDIDATE_TREE="$tree" CANDIDATE_LANE="$lane" PYTHONDONTWRITEBYTECODE=1 python3 -B - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, str(Path("scripts").resolve()))
+          import workflow_capability_admission
+          from workflow_capability_bom import canonical_json
+          diff = workflow_capability_admission.measure(
+              Path(os.environ["CANDIDATE_ROOT"]),
+              candidate_tree_sha=os.environ["CANDIDATE_TREE"],
+          )
+          def sanitize(entry):
+              result = {k: entry.get(k) for k in ("direction", "category", "workflow", "key")}
+              for side in ("before","after"):
+                  obj = entry.get(side)
+                  if isinstance(obj,dict):
+                      result[side+"Action"] = obj.get("repository")
+                      result[side+"Ref"] = obj.get("ref")
+                  else:
+                      result[side+"Action"] = None
+                      result[side+"Ref"] = None
+              return result
+          print(canonical_json({"lane":os.environ["CANDIDATE_LANE"],"baseBomSha256":diff["baseBomSha256"],"candidateBomSha256":diff["candidateBomSha256"],"expansionSha256":diff["expansionSha256"],"expansions":[sanitize(x) for x in diff["expansions"]],"reductions":[sanitize(x) for x in diff["reductions"]]}))
+          PY
+          done
