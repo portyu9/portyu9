@@ -81,6 +81,34 @@ def _validate_semantic_bounds(
             "Dependabot delegated capability diff is malformed")
     require(expansions, "Dependabot delegated admission requires an actual capability expansion")
 
+    # The native workflow files have already been proven to be ONLY atomic
+    # release-pin edits by dependabot_controller.admit(), and the exact
+    # changed-file closure is re-proved by validate_reconciled_candidate().
+    # They must remain eligible trusted-control-source identities alongside
+    # the deterministic derivative outputs, but no other candidate path can
+    # become authorized merely because it appeared in the pull request.
+    if repository in artifact_reconciliation.REPOSITORIES:
+        native_paths = proof.get("files")
+        require(
+            isinstance(native_paths, list)
+            and bool(native_paths)
+            and native_paths == sorted(set(native_paths))
+            and all(
+                isinstance(path, str)
+                and path.startswith(".github/workflows/")
+                and path.endswith((".yml", ".yaml"))
+                for path in native_paths
+            ),
+            "delegated artifact admission requires canonical proven native workflow paths",
+        )
+        require(
+            isinstance(derived_paths, set) and BASE_BOM_PATH in derived_paths,
+            "delegated artifact admission requires exact trusted derivative provenance",
+        )
+        expected_source_paths = derived_paths | set(native_paths)
+    else:
+        expected_source_paths = {BASE_BOM_PATH}
+
     action_expansions = []
     source_expansions = []
     expanded_actions: set[str] = set()
@@ -97,9 +125,7 @@ def _validate_semantic_bounds(
             expanded_actions.add(name)
             action_expansions.append(entry)
         elif category == "trusted-control-source":
-            expected_paths = (derived_paths if repository in artifact_reconciliation.REPOSITORIES
-                              else {BASE_BOM_PATH})
-            require(entry.get("key") in expected_paths,
+            require(entry.get("key") in expected_source_paths,
                     "delegated Dependabot admission changed an unapproved trusted-control source")
             source_expansions.append(entry)
         else:
@@ -215,6 +241,74 @@ def self_test() -> None:
         pass
     else:
         raise ValueError("Dependabot delegated admission self-test accepted an unproved Action SHA")
+
+    native_workflow = ".github/workflows/dependabot-controller.yml"
+    native_peer = ".github/workflows/ruleset-reconciler.yml"
+    derived_validator = "scripts/workflow_capability_bom.py"
+    artifact_proof = {
+        **proof,
+        "dependencyRepository": "actions/upload-artifact",
+        "actions": ["actions/upload-artifact"],
+        "files": [native_workflow, native_peer],
+    }
+    artifact_diff = {
+        "expansions": [
+            {"category": "action", "after": {
+                "repository": "actions/upload-artifact", "path": "", "ref": "b" * 40}},
+            {"category": "trusted-control-source", "key": BASE_BOM_PATH},
+            {"category": "trusted-control-source", "key": native_workflow},
+            {"category": "trusted-control-source", "key": native_peer},
+            {"category": "trusted-control-source", "key": derived_validator},
+        ],
+        "reductions": [
+            {"category": "action", "before": {
+                "repository": "actions/upload-artifact", "path": "", "ref": "a" * 40}},
+        ],
+    }
+    approved_derivatives = {BASE_BOM_PATH, derived_validator}
+    _validate_semantic_bounds(artifact_diff, artifact_proof, approved_derivatives)
+
+    # Changes must be restricted to the exact native proof + reproducible
+    # derivative sets. Explicitly reject every attempt to expand this scope.
+    for source in (
+        ".github/workflows/capability-admission.yml",
+        "scripts/dependabot_capability_admission.py",
+        "scripts/workflow_capability_tcb.py",
+    ):
+        unauthorized = json.loads(json.dumps(artifact_diff))
+        unauthorized["expansions"].append(
+            {"category": "trusted-control-source", "key": source})
+        try:
+            _validate_semantic_bounds(unauthorized, artifact_proof, approved_derivatives)
+        except ValueError as exc:
+            require("unapproved trusted-control source" in str(exc),
+                    "artifact source-bound regression failed at wrong trust boundary")
+        else:
+            raise ValueError("artifact source-bound regression admitted a non-proven source")
+
+    for malformed_files in (
+        [], [native_workflow, native_workflow],
+        [native_peer, native_workflow],
+        [native_workflow, "scripts/dependabot_capability_admission.py"],
+    ):
+        malformed = {**artifact_proof, "files": malformed_files}
+        try:
+            _validate_semantic_bounds(artifact_diff, malformed, approved_derivatives)
+        except ValueError as exc:
+            require("canonical proven native workflow paths" in str(exc),
+                    "artifact forged native path regression failed at wrong trust boundary")
+        else:
+            raise ValueError("artifact source-bound regression admitted forged native paths")
+
+    bad_release = json.loads(json.dumps(artifact_diff))
+    bad_release["expansions"][0]["after"]["ref"] = "c" * 40
+    try:
+        _validate_semantic_bounds(bad_release, artifact_proof, approved_derivatives)
+    except ValueError as exc:
+        require("unproved Action SHA" in str(exc),
+                "artifact unproved pin regression failed at wrong trust boundary")
+    else:
+        raise ValueError("artifact source-bound regression admitted an unproved Action SHA")
 
 
 def parser() -> argparse.ArgumentParser:
