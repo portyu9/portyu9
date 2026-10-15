@@ -6,6 +6,8 @@ on:
     types: [synchronize]
 permissions:
   contents: read
+env:
+  PYTHON_VERSION: "3.13.16"
 jobs:
   measure:
     name: read-only-accepted-main-measure
