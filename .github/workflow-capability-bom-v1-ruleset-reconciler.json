@@ -26,7 +26,7 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download exact reconciliation receipt"
             }
@@ -208,14 +208,14 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download exact recovery-open receipt"
             },
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download exact recovery-restoration receipt"
             }
@@ -693,7 +693,7 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download watchdog restoration receipt"
             }

@@ -230,7 +230,7 @@ jobs:
         id: action_provenance_witness_download
         if: steps.action_provenance_witness_discovery.outcome == 'success'
         continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: action-provenance-witness-v1
           path: action-provenance-witness-consumer
@@ -380,7 +380,7 @@ jobs:
         id: profile_generator_witness_download
         if: steps.profile_generator_witness_discovery.outcome == 'success'
         continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: profile-generator-compatibility-witness-v1
           path: profile-generator-compatibility-witness-consumer
@@ -571,7 +571,7 @@ jobs:
 
       - name: Download Signal Field review artifacts
         if: github.event_name == 'pull_request'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ steps.signal_field_review_upload.outputs.artifact-id }}
           github-token: ${{ github.token }}
