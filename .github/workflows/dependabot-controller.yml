@@ -137,8 +137,8 @@ jobs:
             (.head.ref | test("^dependabot/github_actions/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$"))
           )] | sort_by(.number)' <<<"$PRS")"
           # A PR workflow_run wakes only its own immutable candidate lane.
-          # Never let an older #1658 completion trigger writes to #1657 merely
-          # because #1657 sorts first; scheduled/main wakes retain recovery order.
+          # Avoid routing a completed wake to a different native bot PR merely
+          # because another candidate sorts first; main/schedule keep recovery order.
           if [ "$EVENT_NAME" = "workflow_run" ] && [ "$WAKE_HEAD_BRANCH" != "main" ]; then
             MATCHES="$(jq -c --arg ref "$WAKE_HEAD_BRANCH" '[.[] | select(.head.ref == $ref)]' <<<"$MATCHES")"
           fi
