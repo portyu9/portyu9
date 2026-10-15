@@ -943,7 +943,7 @@
       "candidateBomSha256": "6a250cd84991554f22c105201c27ae15220ab99edbfc4c409a5d3d5c347cf4a4",
       "expansionSha256": "574bcdfbd3dd0d5db421020114e5331bb184d03f5f78092800848046d19205c5",
       "id": "cap-dependabot-profile-pre-review-liveness-v1",
-      "rationale": "Prior-authorize frozen #1697 tree 99bdfb0b68c3018d208ee5c8fb5d47e98e20a548, independently measured by accepted-main read-only run 38784543629: one protected controller-source expansion, zero reductions, identical semantic BOM. Treat canonical Profile Quality failure from pending exact owner review as transitional only; six exact-head pre-review gates, marker-bound owner approval, successful reviewer gate and protected merge remain mandatory. All other failed/cancelled canonical workflows fail closed. No new permission, trigger, API endpoint, mutation, secret, OIDC, bypass, direct-main authority or check reduction."
+      "rationale": "Prior-authorize frozen #1697 tree 99bdfb0b68c3018d208ee5c8fb5d47e98e20a548, read-only run 38784543629: one protected controller-source expansion, zero reductions, identical BOM. Expected pre-review Profile Quality failure does not grant clearance; six exact-head checks, owner review, successful review gate and protected merge remain mandatory. Other failures stay terminal. No new API, permission, token, bypass, mutation, or direct-main write."
     },
     {
       "id": "cap-dependabot-profile-stats-epoch-v1",
