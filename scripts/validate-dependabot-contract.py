@@ -297,7 +297,7 @@ def validate_controller_native_rebase_permission_defer_contract(text: str) -> No
         'gh api --include graphql',
         'updatePullRequestBranch(input:{pullRequestId:$prId, expectedHeadOid:$expectedHead, updateMethod:REBASE})',
         '-F prId="$REBASING_PR_NODE_ID"',
-        '-F expectedHead="$MAIN_SHA"',
+        '-F expectedHead="$PRE_UPDATE_HEAD_SHA"',
         '|| REBASE_EXIT="$?"',
         'if [ "$REBASE_EXIT" -ne 0 ]; then',
         "grep -Eq '^HTTP/[0-9.]+[[:space:]]+403([[:space:]]|$)' rebase-http-response.txt",
@@ -348,7 +348,9 @@ def self_test_controller_native_rebase_permission_defer_contract(text: str) -> N
     validate_controller_native_rebase_permission_defer_contract(text)
     for before, after in (
         ("updateMethod:REBASE", "updateMethod:MERGE"),
-        ('-F expectedHead="$MAIN_SHA"', '-F expectedHead="$HEAD_SHA"'),
+        ('-F expectedHead="$PRE_UPDATE_HEAD_SHA"', '-F expectedHead="$MAIN_SHA"'),
+        ('-F expectedHead="$PRE_UPDATE_HEAD_SHA"', '-F expectedHead="$MAIN_SHA"'),
+        ('-F expectedHead="$PRE_UPDATE_HEAD_SHA"', '-F expectedHead="$HEAD_SHA"'),
         ('-F prId="$REBASING_PR_NODE_ID"', '-F prId="$PR_NUMBER"'),
         ("grep -Eq '^HTTP/[0-9.]+[[:space:]]+403([[:space:]]|$)'",
          "grep -Eq '^HTTP/[0-9.]+[[:space:]]+4[0-9][0-9]([[:space:]]|$)'"),
@@ -1667,7 +1669,7 @@ def self_test_controller_update_branch_status_contract(text: str) -> None:
         ('[[ "$REBASE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
          '[[ "$REBASE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+202([[:space:]]|$) ]] || {'),
         ('--expected-main-sha "$MAIN_SHA"', '--expected-main-sha "$HEAD_SHA"'),
-        ('-F expectedHead="$MAIN_SHA"', '-F expectedHead="$HEAD_SHA"'),
+        ('-F expectedHead="$PRE_UPDATE_HEAD_SHA"', '-F expectedHead="$HEAD_SHA"'),
     ):
         require(before in text, "native rebase status negative fixture anchor missing")
         weakened = text.replace(before, after, 1)
