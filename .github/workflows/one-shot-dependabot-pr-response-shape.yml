@@ -1,0 +1,28 @@
+name: One-shot Dependabot PR REST field shape
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  shape:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Inspect public PR metadata types only
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "$REPO" = "portyu9/portyu9"
+          gh api "repos/${REPO}/pulls?state=open&base=main&per_page=100" > "$RUNNER_TEMP/pr-list.json"
+          jq -e 'type == "array" and all(.[]; type == "object")' "$RUNNER_TEMP/pr-list.json" >/dev/null
+          jq -r '.[] | select(.user.login == "dependabot[bot]" and (.head.ref | startswith("dependabot/github_actions/"))) | .number' "$RUNNER_TEMP/pr-list.json" | while IFS= read -r pr; do
+            [[ "$pr" =~ ^[1-9][0-9]*$ ]]
+            gh api "repos/${REPO}/pulls/${pr}" > "$RUNNER_TEMP/pr-detail.json"
+            jq -e --argjson n "$pr" '.number == $n and .user.login == "dependabot[bot]" and .head.repo.full_name == "portyu9/portyu9"' "$RUNNER_TEMP/pr-detail.json" >/dev/null
+            jq -c '{pr:.number, sha:.head.sha, propertyPresent:has("maintainer_can_modify"), propertyType:(.maintainer_can_modify|type), propertyValue:(if (.maintainer_can_modify|type) == "boolean" then .maintainer_can_modify else null end)}' "$RUNNER_TEMP/pr-detail.json"
+          done
