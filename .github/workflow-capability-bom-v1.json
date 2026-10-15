@@ -245,20 +245,6 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
-              "repository": "actions/download-artifact",
-              "step": "Download Signal Field review artifacts"
-            },
-            {
-              "kind": "remote",
-              "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
-              "repository": "actions/download-artifact",
-              "step": "Download exact fresh signed Profile Generator Compatibility Witness"
-            },
-            {
-              "kind": "remote",
-              "path": "",
               "ref": "49b5f7091182a45f3ef93923505b660c6da5f835",
               "repository": "shinpr/github-profile-stats",
               "step": "Generate actual pinned upstream Signal Field"
@@ -269,6 +255,20 @@
               "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
               "repository": "actions/setup-python",
               "step": "Set up Python"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
+              "repository": "actions/download-artifact",
+              "step": "Download Signal Field review artifacts"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
+              "repository": "actions/download-artifact",
+              "step": "Download exact fresh signed Profile Generator Compatibility Witness"
             }
           ],
           "apiSurfaces": [],
@@ -334,16 +334,16 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
-              "repository": "actions/download-artifact",
-              "step": "Download exact fresh signed Action provenance witness"
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
             },
             {
               "kind": "remote",
               "path": "",
-              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
-              "repository": "actions/setup-python",
-              "step": "Set up Python"
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
+              "repository": "actions/download-artifact",
+              "step": "Download exact fresh signed Action provenance witness"
             }
           ],
           "apiSurfaces": [
@@ -460,30 +460,30 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download validated Engineering Spotlight for attestation preparation"
             },
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download validated Portfolio Evidence Ledger for attestation preparation"
             },
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download validated Signal Field for attestation preparation"
-            },
-            {
-              "kind": "remote",
-              "path": "",
-              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
-              "repository": "actions/setup-python",
-              "step": "Set up Python"
             }
           ],
           "apiSurfaces": [],
@@ -549,28 +549,28 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download reviewed attestation predicate"
             },
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download validated Engineering Spotlight for terminal attestation"
             },
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download validated Portfolio Evidence Ledger for terminal attestation"
             },
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download validated Signal Field for terminal attestation"
             }
@@ -702,7 +702,7 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download exact Automation Decision Receipt artifact"
             }
@@ -976,7 +976,7 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download sealed generated publication candidate"
             }
@@ -1085,16 +1085,16 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
-              "repository": "actions/download-artifact",
-              "step": "Download reviewed profile evidence predicate for receipt"
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
             },
             {
               "kind": "remote",
               "path": "",
-              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
-              "repository": "actions/setup-python",
-              "step": "Set up Python"
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
+              "repository": "actions/download-artifact",
+              "step": "Download reviewed profile evidence predicate for receipt"
             }
           ],
           "apiSurfaces": [
@@ -1160,7 +1160,7 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download exact post-publication receipt predicate"
             }
@@ -1228,30 +1228,30 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download validated Engineering Spotlight for publication staging"
             },
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download validated Portfolio Evidence Ledger for publication staging"
             },
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download validated Signal Field for publication staging"
-            },
-            {
-              "kind": "remote",
-              "path": "",
-              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
-              "repository": "actions/setup-python",
-              "step": "Set up Python"
             }
           ],
           "apiSurfaces": [],
@@ -1630,7 +1630,7 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download exact merge authorization artifact"
             }
@@ -1790,7 +1790,7 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download exact Automation Decision Receipt artifact"
             }
@@ -1878,7 +1878,7 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download attested merge authorization artifact"
             }
@@ -2169,7 +2169,7 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download reviewed direct-link proposal"
             }

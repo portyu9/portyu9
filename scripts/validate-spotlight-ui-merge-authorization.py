@@ -9,7 +9,7 @@ import spotlight_ui_merge_authorization_item10_core as core
 
 COMPRESSED_DOWNLOAD_STEP = (
     "      - name: Download attested merge authorization artifact\n"
-    "        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1\n"
+    "        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2\n"
     "        with:\n"
     "          name: spotlight-merge-authorization-${{ needs.propose.outputs.head_sha }}\n"
     "          path: merge-authorization-input\n"
