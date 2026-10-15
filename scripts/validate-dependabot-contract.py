@@ -211,6 +211,72 @@ def validate_controller_wake_contract(text: str) -> None:
     )
 
 
+def validate_controller_wake_affinity_contract(text: str) -> None:
+    """An immutable Dependabot workflow-run wake must route only to its exact head.
+
+    A scheduled or main-headed wake retains ordered recovery, while a stale
+    native-PR wake cannot mutate a different head or relabel that stale proof.
+    """
+    candidate = 'MATCHES="$(jq -c --arg ref "$WAKE_HEAD_BRANCH" \'[.[] | select(.head.ref == $ref)]\' <<<"$MATCHES")"'
+    wake_guard = 'if [ "$EVENT_NAME" = "workflow_run" ] && [ "$WAKE_HEAD_BRANCH" != "main" ]; then'
+    stale_guard = (
+        'if [ "$EVENT_NAME" = "workflow_run" ] && [ "$WAKE_HEAD_BRANCH" != "main" ] '
+        '&& [ "$HEAD_SHA" != "$WAKE_HEAD_SHA" ]; then'
+    )
+    no_target = "Superseded Dependabot workflow-run wake for ${HEAD_REF}: event=${WAKE_HEAD_SHA}, current=${HEAD_SHA}. No mutation."
+    step = text.split('      - name: Bind current main and one native Dependabot candidate\n', 1)
+    require(len(step) == 2, "Dependabot candidate routing step identity changed")
+    step = step[1].split('      - name: Assemble exact candidate tree as data\n', 1)
+    require(len(step) == 2, "Dependabot candidate routing step end changed")
+    body = step[0]
+    for exact in (wake_guard, candidate, stale_guard, no_target):
+        require(body.count(exact) == 1,
+                "Dependabot wake-head routing or stale-head guard is missing or duplicated")
+    require(
+        body.index("MATCHES=\"$(jq -c '[.[] | select(") <
+        body.index(wake_guard) < body.index(candidate) <
+        body.index("COUNT=\"$(jq 'length' <<<\"$MATCHES\")\"") <
+        body.index('PR_NUMBER="$(jq -r \'.[0].number\' <<<"$MATCHES")"') <
+        body.index('HEAD_SHA="$(jq -r .headSha dependabot-pr-normalized.json)"') <
+        body.index(stale_guard) < body.index(no_target) <
+        body.index('REQUESTED="$(jq -r'),
+        "Dependabot immutable wake routing must precede candidate selection and mutations",
+    )
+    require(
+        "printf 'has_target=false\\n' >> \"$GITHUB_OUTPUT\"" in
+        body[body.index(stale_guard):body.index('REQUESTED="$(jq -r')],
+        "Dependabot stale wake must end with an explicit no-target result",
+    )
+    require(
+        "exit 0" in body[body.index(stale_guard):body.index('REQUESTED="$(jq -r')],
+        "Dependabot stale wake must exit before any mutation",
+    )
+
+
+def self_test_controller_wake_affinity_contract(text: str) -> None:
+    validate_controller_wake_affinity_contract(text)
+    for mutated in (
+        text.replace(
+            'MATCHES="$(jq -c --arg ref "$WAKE_HEAD_BRANCH" \'[.[] | select(.head.ref == $ref)]\' <<<"$MATCHES")"',
+            'MATCHES="$(jq -c \'[.[]]\' <<<"$MATCHES")"', 1,
+        ),
+        text.replace(
+            '&& [ "$HEAD_SHA" != "$WAKE_HEAD_SHA" ]; then',
+            '&& [ "$BASE_SHA" != "$WAKE_HEAD_SHA" ]; then', 1,
+        ),
+        text.replace(
+            'echo "Superseded Dependabot workflow-run wake for ${HEAD_REF}: event=${WAKE_HEAD_SHA}, current=${HEAD_SHA}. No mutation."',
+            'echo "Ignoring stale head."', 1,
+        ),
+    ):
+        try:
+            validate_controller_wake_affinity_contract(mutated)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("Dependabot wake-affinity regression admitted unsafe candidate routing")
+
+
 def validate_controller_read_ref_response_contract(text: str) -> None:
     require(
         text.count("python3 scripts/dependabot_controller.py git-ref-read-response") == 13,
@@ -2737,6 +2803,7 @@ def main() -> int:
         validate_all_workflow_pins()
         controller_text = CONTROLLER.read_text(encoding="utf-8")
         validate_controller_wake_contract(controller_text)
+        self_test_controller_wake_affinity_contract(controller_text)
         validate_trusted_reference_hydration(controller_text)
         self_test_native_dependabot_rebase_marker(controller_text)
         validate_controller_read_ref_response_contract(controller_text)
