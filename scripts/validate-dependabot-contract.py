@@ -2468,7 +2468,18 @@ def validate_controller_residual_read_transport_contract(text: str) -> None:
         if "gh api" in line
     ]
     require(raw_api_lines, "Dependabot controller unexpectedly lost all explicit mutation transports")
+    # gh api graphql is a POST-only mutation transport. Admit only the one
+    # separately provenance-bound updatePullRequestBranch REBASE call.
+    graphql_transport = "gh api --include graphql \\"
+    require(raw_api_lines.count(graphql_transport) == 1,
+            "Dependabot controller GraphQL mutation transport count changed")
+    require(
+        text.count("updatePullRequestBranch(input:{pullRequestId:$prId, expectedHeadOid:$expectedHead, updateMethod:REBASE})") == 1,
+        "Dependabot controller GraphQL transport lost exact bound rebase mutation",
+    )
     for line in raw_api_lines:
+        if line == graphql_transport:
+            continue
         require(
             re.search(r"--method (?:POST|PUT|PATCH|DELETE)\b", line) is not None,
             f"Dependabot controller direct gh api transport must be mutation-only: {line}",
