@@ -779,7 +779,7 @@ jobs:
             # artifact Action update. The admitted release is re-proved below.
             jq -r .content <<<"$BASE_GATE" | base64 --decode > "$RUNNER_TEMP/dependabot-profile-base.yml"
             jq -r .content <<<"$HEAD_GATE" | base64 --decode > "$RUNNER_TEMP/dependabot-profile-head.yml"
-            PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts" python3 - \
+            PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts" python3 -B - \
               "$RUNNER_TEMP/dependabot-profile-base.yml" "$RUNNER_TEMP/dependabot-profile-head.yml" <<'PY'
           from pathlib import Path
           import sys
