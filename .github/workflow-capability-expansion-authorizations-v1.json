@@ -862,6 +862,13 @@
       "rationale": "Prior-authorize frozen #1674 tree cfeaec393f2f334d7dbfeb9dca1ef89910e79bb8, measured in read-only run 38666264384. Add GitHub-documented [dependabot skip] to the accepted-main controller's exact deterministic governance-derivative commit message, enabling Dependabot to autonomously rebase its own PR branch even after extra trusted commits. Includes positive/negative marker contracts; no new GitHub API mutation, token, workflow trigger, permission, required-check reduction, or ruleset bypass."
     },
     {
+      "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "expansionSha256": "4726664f7ed999fc6509ea4efaf216ef6139fa12126564af8f969290d464421c",
+      "id": "cap-dependabot-native-rebase-workflow-403-defer-v1",
+      "rationale": "Prior-authorize frozen #1681 source tree f910ac562d6d46e8e3c1c2951e03704b32ff5047, independently measured by accepted-main read-only Actions run 38673870134. One protected controller-source expansion, zero reductions, unchanged semantic BOM. Select current-base Dependabot PRs before stale candidates; only exact HTTP-403 workflow-file permission errors defer to Dependabot-native rebasing, with no merge/check/approval bypass, new endpoint, trigger, permission, secret, token or unsafe fallback."
+    },
+    {
       "baseBomSha256": "ac29bb25fca4d5945a407c9d66b902514821c11843263ed32c16f32f93930fa0",
       "candidateBomSha256": "32a494c4933c6e385b0fe90e49502513ee1d50c880dd0372a44d3d3abd197e51",
       "expansionSha256": "3fd9b5ea9566d3b8fe72c0eadcf71c7e231a16a73ee3cdb2e9413877916478d8",
