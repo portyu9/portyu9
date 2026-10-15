@@ -7,6 +7,7 @@ comes from the checked-out reviewed test module and trusted compiler.
 from __future__ import annotations
 
 import copy
+import json
 from pathlib import Path
 import shutil
 import tempfile
@@ -69,6 +70,29 @@ def self_test() -> None:
                 (ROOT / reconciler.LOCK_PATH).read_text(encoding="utf-8"), proof,
             ) == derived[reconciler.LOCK_PATH],
                 "real Action fixture lock update is not reproducible")
+            require(reconciler.SOURCE_EPOCH_PATH in derived,
+                    "production Action update omitted the required Profile Stats source epoch")
+            epoch = json.loads(derived[reconciler.SOURCE_EPOCH_PATH])
+            accepted = json.loads((ROOT / reconciler.SOURCE_EPOCH_PATH).read_text(encoding="utf-8"))
+            require(epoch["version"] == accepted["version"] and
+                    epoch["algorithm"] == accepted["algorithm"] and
+                    epoch["file_count"] == accepted["file_count"] and
+                    epoch["closure_sha256"] != accepted["closure_sha256"],
+                    "production Action update did not advance only the correct source epoch")
+            base_workflows = {
+                path.relative_to(ROOT).as_posix(): path.read_text(encoding="utf-8")
+                for path in sorted((ROOT / ".github/workflows").glob("*.yml"))
+            }
+            candidate_workflows = {
+                path.relative_to(candidate).as_posix(): path.read_text(encoding="utf-8")
+                for path in sorted((candidate / ".github/workflows").glob("*.yml"))
+            }
+            projection = reconciler.update_profile_source_epoch(
+                trusted_root=ROOT, base_workflows=base_workflows,
+                candidate_workflows=candidate_workflows, derivatives=derived,
+            )
+            require(projection == derived[reconciler.SOURCE_EPOCH_PATH],
+                    "source epoch was not a deterministic projection of canonical workflow and script bytes")
             require(all(name != next(iter(changed)) for name in derived),
                     "real Action fixture overwrote native Dependabot workflow pins")
             require(derived == reconciler.derive(
