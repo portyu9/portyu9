@@ -7,6 +7,7 @@ comes from the checked-out reviewed test module and trusted compiler.
 from __future__ import annotations
 
 import copy
+from contextlib import chdir
 import json
 from pathlib import Path
 import shutil
@@ -98,6 +99,16 @@ def self_test() -> None:
             require(derived == reconciler.derive(
                 trusted_root=ROOT, candidate_root=candidate, proof=proof,
             ), "real Action fixture derivation was not deterministic")
+            # The production controller passes --base-root . from its checkout.
+            # Re-execute the complete trusted-only derivation in that exact shape
+            # for both upload and download releases; this must remain byte-identical
+            # to an absolute trusted checkout after each future source change.
+            with chdir(ROOT):
+                relative_derived = reconciler.derive(
+                    trusted_root=Path("."), candidate_root=candidate, proof=proof,
+                )
+            require(relative_derived == derived,
+                    "production relative trusted-root derivation diverged from absolute root")
             try:
                 reconciler.derive(
                     trusted_root=ROOT, candidate_root=candidate,
