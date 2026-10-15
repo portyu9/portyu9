@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import copy
 from contextlib import chdir
+import hashlib
 import json
 from pathlib import Path
+import re
 import shutil
 import tempfile
 
@@ -30,9 +32,22 @@ def self_test() -> None:
         action = repo
         before = dict(lock[action])
         after = dict(before)
-        after["sha"] = "b" * 40
-        after["tag"] = ("v7.0.2" if repo.endswith("upload-artifact") else "v8.0.2")
-        after["tagRefSha"] = "b" * 40
+        # Derive a forward-only synthetic release from the current canonical
+        # lock. The fixture must keep working after each genuine Dependabot
+        # release is accepted; never pin its future version to today's release.
+        current = re.fullmatch(r"v([0-9]+)\.([0-9]+)\.([0-9]+)", before["tag"])
+        require(current is not None,
+                f"{repo}: fixture requires a stable three-component lock release")
+        major, minor, patch = (int(part) for part in current.groups())
+        after["tag"] = f"v{major}.{minor}.{patch + 1}"
+        release_bytes = f"synthetic-artifact-release:{repo}:{after['tag']}".encode("utf-8")
+        candidate_sha = hashlib.sha1(release_bytes).hexdigest()
+        if candidate_sha == before["sha"]:
+            candidate_sha = hashlib.sha1(release_bytes + b":collision").hexdigest()
+        require(candidate_sha != before["sha"] and after["tag"] != before["tag"],
+                f"{repo}: synthetic release must advance version and immutable identity")
+        after["sha"] = candidate_sha
+        after["tagRefSha"] = candidate_sha
         after["releaseId"] = before["releaseId"] + 1
 
         with tempfile.TemporaryDirectory(prefix="artifact-admission-fixture-") as tmp:
