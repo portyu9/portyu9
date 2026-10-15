@@ -897,6 +897,13 @@
       "rationale": "Authorize frozen #1015 protected-TCB hardening that validates existing Dependabot singleton PR and update-branch responses before scalar consumption. Equal base/candidate BOM hashes prove no semantic capability expansion. Endpoints, methods, permissions, review/update behavior, retry budgets, protected checks, admission, merge/CodeQL dispatch authority, rulesets, direct-main writes and bypasses remain unchanged."
     },
     {
+      "id": "cap-dependabot-profile-stats-epoch-v1",
+      "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "expansionSha256": "04b6c178e55894e2f1dcfab14e3d444ff1db5512189149fc6b2e9cd3821043ae",
+      "rationale": "Prior-authorize frozen #1665 source tree a10ee74fdc4f00e59e88943b99c28e8d4a8ae5b8 measured in read-only run 38658874344. Adds the deterministic accepted-main-only Profile Stats source-epoch derivation to Action-release reconciliation and trusted candidate hydration. Preserves 63-file byte-exact closure, immutable release proof, required checks and fail-closed validation. No triggers, permissions, secrets, merge bypass or expanded mutation authority."
+    },
+    {
       "baseBomSha256": "88ffdb7cb971f6389ed68dd566eef42ffa4088a03d793518f5b533600b16c1d2",
       "candidateBomSha256": "88ffdb7cb971f6389ed68dd566eef42ffa4088a03d793518f5b533600b16c1d2",
       "expansionSha256": "42975105f4133ee24797048485278aecef3e7f074415b3b09ceed8fa1a40286a",
