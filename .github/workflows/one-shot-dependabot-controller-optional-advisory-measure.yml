@@ -1,0 +1,45 @@
+name: One-shot Dependabot controller optional advisory measurement
+on:
+  pull_request:
+    types: [opened, synchronize]
+permissions:
+  contents: read
+env:
+  PYTHON_VERSION: "3.13.16"
+jobs:
+  measure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout immutable accepted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: e493fa032120380dacd7cf0b15605fdb5eaf76dd
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up trusted Python runtime
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.16"
+      - name: Measure frozen controller source without authorization
+        env:
+          TRUSTED_BASE: e493fa032120380dacd7cf0b15605fdb5eaf76dd
+          FROZEN_HEAD: 1a3a9db6d5116bfd885ff32334c0714727eb5a26
+          FROZEN_TREE: 77c840cf6584c00abcf171c2a7a2d6b7a56a7701
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TRUSTED_BASE"
+          test "$(git rev-parse HEAD:scripts/workflow_capability_admission.py)" = "a832c73cc3be625a8af9b5997c815b73c3520dab"
+          python3 -B scripts/verify-python-runtime.py
+          git fetch --no-tags --depth=1 origin "$FROZEN_HEAD"
+          test "$(git rev-parse "$FROZEN_HEAD^{tree}")" = "$FROZEN_TREE"
+          mkdir -p "$RUNNER_TEMP/dependabot-controller-optional-advisory"
+          git archive "$FROZEN_HEAD" | tar -x -C "$RUNNER_TEMP/dependabot-controller-optional-advisory"
+          test -z "$(git status --porcelain)"
+          python3 -B scripts/workflow_capability_admission.py \
+            "$RUNNER_TEMP/dependabot-controller-optional-advisory" \
+            --candidate-tree-sha "$FROZEN_TREE" --measure
+          test -z "$(git status --porcelain)"
