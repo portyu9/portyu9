@@ -1820,7 +1820,7 @@ jobs:
           set -euo pipefail
           set +x
           umask 077
-          trap 'rm -f "$RUNNER_TEMP/workflow-rebase-key.pem" "$RUNNER_TEMP/workflow-rebase-token.json"' EXIT
+          trap 'rm -f "$RUNNER_TEMP/workflow-rebase-key.pem" "$RUNNER_TEMP/workflow-rebase-token.json" "$RUNNER_TEMP/workflow-rebase-token-http.txt"' EXIT
           test "$GITHUB_REF" = "refs/heads/main"
           test "$REPOSITORY" = "$GITHUB_REPOSITORY"
           [[ "$TRUSTED_MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
@@ -1884,10 +1884,19 @@ jobs:
               installation = json.load(stream)
           verify_app(installation, app_id=int(sys.argv[1]), installation_id=int(sys.argv[2]), owner=sys.argv[3].split("/", 1)[0])
           PY
-          GH_TOKEN="$APP_JWT" gh api --method POST "app/installations/${INSTALLATION_ID}/access_tokens" \
+          echo "::add-mask::$APP_JWT"
+          TOKEN_HTTP="$RUNNER_TEMP/workflow-rebase-token-http.txt"
+          GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" --include --method POST "app/installations/${INSTALLATION_ID}/access_tokens" \
             -f "repositories[]=${REPOSITORY#*/}" \
             -f 'permissions[contents]=write' -f 'permissions[pull_requests]=write' \
-            -f 'permissions[workflows]=write' > "$RUNNER_TEMP/workflow-rebase-token.json"
+            -f 'permissions[workflows]=write' > "$TOKEN_HTTP"
+          TOKEN_STATUS="$(head -n 1 "$TOKEN_HTTP" | tr -d '\r')"
+          [[ "$TOKEN_STATUS" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+            echo "::error::Isolated workflow App token mint returned unexpected HTTP status." >&2
+            exit 1
+          }
+          sed '1,/^[[:space:]]*$/d' "$TOKEN_HTTP" > "$RUNNER_TEMP/workflow-rebase-token.json"
+          rm -f "$TOKEN_HTTP"
           unset APP_JWT
           PYTHONPATH=scripts python3 - "$REPOSITORY" "$RUNNER_TEMP/workflow-rebase-token.json" <<'PY'
           import json, sys

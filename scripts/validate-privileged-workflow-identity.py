@@ -3335,7 +3335,12 @@ def validate_dependabot_residual_read_transport_identity(dependabot: str) -> Non
         and dependabot.count(trusted_rebase[4]) == 2
         and dependabot.count('GH_TOKEN="$WORKFLOW_TOKEN" gh api --include graphql \\') == 1
         and dependabot.count('-F prId="$NODE_ID" -F expectedHead="$HEAD_SHA"') == 1
-        and dependabot.count('GH_TOKEN="$APP_JWT" gh api --method POST "app/installations/${INSTALLATION_ID}/access_tokens"') == 1
+        and dependabot.count('GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" --include --method POST "app/installations/${INSTALLATION_ID}/access_tokens"') == 1
+        and dependabot.count('echo "::add-mask::$APP_JWT"') == 1
+        and dependabot.count('TOKEN_STATUS="$(head -n 1 "$TOKEN_HTTP" | tr -d \'\\r\')"') == 1
+        and dependabot.count('[[ "$TOKEN_STATUS" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]]') == 1
+        and dependabot.count('sed \'1,/^[[:space:]]*$/d\' "$TOKEN_HTTP" > "$RUNNER_TEMP/workflow-rebase-token.json"') == 1
+        and dependabot.count('rm -f "$TOKEN_HTTP"') == 1
         and dependabot.count('GH_TOKEN="$APP_JWT" python3 scripts/automation_github_ruleset_admin_read.py "app/installations/${INSTALLATION_ID}"') == 1
         and dependabot.count("-f 'permissions[administration]=write'") == 0
         and dependabot.count("-f 'permissions[workflows]=write'") == 1,
