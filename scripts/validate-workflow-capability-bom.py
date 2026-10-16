@@ -2,7 +2,12 @@
 """Recompile and validate the canonical Workflow Capability BOM snapshot."""
 from __future__ import annotations
 
+import json
+import os
+from pathlib import Path
+import subprocess
 import sys
+import tempfile
 from typing import Any
 
 import capability_admission_workflow_contract
@@ -79,9 +84,70 @@ def validate_snapshot() -> tuple[int, int]:
     return len(workflows), jobs
 
 
+
+def measure_frozen_spotlight_native_badge_pr() -> None:
+    """Disposable read-only diagnostic; never merge this instrumented file."""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+
+    base_sha = "c83f5f78d22521fa25d62c081cc24fa91c6b22bf"
+    source_sha = "49ad73cff0edf17e3fc3437ad239b6a45e5c2255"
+    expected_tree = "a41fc36dc24b84e46e4f0d962f226317bab886fc"
+    expected_blobs = {
+        "README.md": "f341a62f20d44903a519cfcc56ecfe09e0c99355",
+        "scripts/spotlight_profile_links.py": "b34e6cb9468e52951e3b58b3562d43e4f66e160a",
+        "scripts/validate-profile-v4.py": "43b192b1506d470b5ea0c68e3326d9c1336ba65e",
+    }
+
+    subprocess.run(["git", "fetch", "--no-tags", "--depth=128", "origin", base_sha, source_sha], check=True)
+    merge_base = subprocess.check_output(["git", "merge-base", base_sha, source_sha], text=True).strip()
+    require(merge_base == base_sha, "frozen source does not descend from the accepted main")
+    paths = subprocess.check_output(
+        ["git", "diff", "--name-only", base_sha, source_sha], text=True
+    ).splitlines()
+    require(paths == sorted(expected_blobs), f"frozen candidate path set changed: {paths!r}")
+    for path, expected_blob in expected_blobs.items():
+        actual = subprocess.check_output(
+            ["git", "rev-parse", f"{source_sha}:{path}"], text=True
+        ).strip()
+        require(actual == expected_blob, f"frozen candidate changed: {path}")
+    actual_tree = subprocess.check_output(
+        ["git", "rev-parse", f"{source_sha}^{{tree}}"], text=True
+    ).strip()
+    require(actual_tree == expected_tree, "frozen candidate tree changed")
+
+    with tempfile.TemporaryDirectory(prefix="spotlight-native-badge-measure-") as tmp:
+        root = Path(tmp)
+        trusted, candidate = root / "trusted", root / "candidate"
+        subprocess.run(["git", "worktree", "add", "--detach", str(trusted), base_sha], check=True)
+        subprocess.run(["git", "worktree", "add", "--detach", str(candidate), source_sha], check=True)
+        try:
+            measured = subprocess.run([
+                sys.executable,
+                str(trusted / "scripts/workflow_capability_admission.py"),
+                str(candidate),
+                "--candidate-tree-sha",
+                expected_tree,
+                "--measure",
+            ], text=True, capture_output=True)
+            if measured.stderr:
+                print(measured.stderr, file=sys.stderr, end="")
+            require(measured.returncode == 0, "accepted-main measurement failed")
+            payload = json.loads(measured.stdout)
+            require(set(payload) == {"measurement"} and
+                    isinstance(payload["measurement"], dict),
+                    "accepted-main measurement output shape changed")
+            print("SPOTLIGHT-NATIVE-BADGE-MEASUREMENT:" +
+                  json.dumps(payload, sort_keys=True, separators=(",", ":")), flush=True)
+        finally:
+            subprocess.run(["git", "worktree", "remove", "--force", str(candidate)], check=False)
+            subprocess.run(["git", "worktree", "remove", "--force", str(trusted)], check=False)
+
+
 def main() -> int:
     try:
         workflows, jobs = validate_snapshot()
+        measure_frozen_spotlight_native_badge_pr()
         print(
             f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
             "semantic diff, trusted alternate-tree compiler, exact expansion authorization, "
