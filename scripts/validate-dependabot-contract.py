@@ -521,7 +521,7 @@ def validate_controller_pr_response_contract(text: str) -> None:
         "Dependabot controller pull-request response boundary count changed",
     )
     require(
-        text.count("python3 scripts/dependabot_controller.py rebase-graphql-response") == 1,
+        text.count("python3 scripts/dependabot_controller.py rebase-graphql-response") == 2,
         "Dependabot controller GraphQL rebase response boundary count changed",
     )
     for forbidden in (
@@ -615,7 +615,11 @@ def validate_controller_pr_response_contract(text: str) -> None:
         (rebase_schema, "typed response validator"),
         (rebase_consume, "bound main acknowledgement"),
     ):
-        require(text.count(fragment) == 1,
+        # Both exact GraphQL transports are reviewed: legacy GitHub token and
+        # isolated installation token. The original transport must still retain
+        # its own single HTTP/status/schema/consume sequence.
+        expected_count = 2 if fragment == rebase_fetch else 1
+        require(text.count(fragment) == expected_count,
                 f"Dependabot GraphQL rebase {label} changed")
     require(
         'repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch' not in text,
