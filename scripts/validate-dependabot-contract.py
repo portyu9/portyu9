@@ -2892,6 +2892,46 @@ def validate_trusted_reference_hydration_single_controller(text: str) -> None:
     )
 
 
+def validate_isolated_rebase_main_push_wake_contract(text: str) -> None:
+    """Fail closed if the extra wake can be reached from PRs or stale/non-main CI."""
+    anchor = "  workflow_rebase:\n"
+    require(text.count(anchor) == 1, "isolated rebase job anchor changed")
+    section = text[text.index(anchor):]
+    guard = "github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_run' && github.ref == 'refs/heads/main' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_sha == github.sha && (github.event.workflow_run.name == 'Profile quality' || github.event.workflow_run.name == 'CodeQL'))"
+    line = f"    if: {guard}"
+    require(section.splitlines().count(line) == 1
+            and section.index(line) < section.index("    name: trusted-dependabot-workflow-rebase"),
+            "isolated rebase main-push wake must bind exact event/repo/sha/success")
+    require("    environment: ruleset-admin-identity\n" in section
+            and "    permissions:\n      contents: read\n      pull-requests: read\n" in section
+            and "      group: dependabot-codeql-controller\n" in section,
+            "isolated rebase lost existing environment, read-only job permissions or concurrency")
+
+
+def self_test_isolated_rebase_main_push_wake_contract(text: str) -> None:
+    validate_isolated_rebase_main_push_wake_contract(text)
+    start = text.index("  workflow_rebase:\n")
+    section = text[start:]
+    for marker in (
+        "github.ref == 'refs/heads/main'",
+        "github.event.workflow_run.event == 'push'",
+        "github.event.workflow_run.head_branch == 'main'",
+        "github.event.workflow_run.head_repository.full_name == github.repository",
+        "github.event.workflow_run.conclusion == 'success'",
+        "github.event.workflow_run.head_sha == github.sha",
+        "github.event.workflow_run.name == 'Profile quality'",
+        "github.event.workflow_run.name == 'CodeQL'",
+    ):
+        require(marker in section, f"isolated rebase negative fixture anchor missing: {marker}")
+        drift = text[:start] + section.replace(marker, "true", 1)
+        try:
+            validate_isolated_rebase_main_push_wake_contract(drift)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"isolated rebase accepted weakened workflow_run guard: {marker}")
+
+
 def validate_governance(text: str) -> None:
     for phrase in (
         "## Dependency update automation",
@@ -2984,6 +3024,7 @@ def main() -> int:
         validate_all_workflow_pins()
         controller_text = CONTROLLER.read_text(encoding="utf-8")
         validate_controller_wake_contract(controller_text)
+        self_test_isolated_rebase_main_push_wake_contract(controller_text)
         self_test_controller_wake_affinity_contract(controller_text)
         self_test_controller_native_rebase_permission_defer_contract(controller_text)
         validate_trusted_reference_hydration(controller_text)
