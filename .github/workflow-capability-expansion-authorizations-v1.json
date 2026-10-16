@@ -1016,6 +1016,13 @@
       "rationale": "Authorize frozen #1466 measured by closed #1467: after six exact-head pre-review gates are green, allow one candidate-bound dependabot-review-wake dispatch carrying immutable PR/base/head/ref/lane identity to the trusted main reviewer. Expansion: 3; reductions: 0. No generic fanout, candidate-branch secret execution, required-check reduction, merge/ruleset/direct-main bypass, blind mutation retry, or veto weakening."
     },
     {
+      "baseBomSha256": "cd0c976f708bf5545168bf7d6fbea4aa4be31e37878be2e572988211ba77eb0e",
+      "candidateBomSha256": "d25d34d36eeeb89f02bbe204a5dc38857e8964ebf01158bb68e160f5ed3ef201",
+      "expansionSha256": "e9dfeab4e2c1072a9e134ca17656dc79975f379897df3d4052d125e887fe02de",
+      "id": "cap-dependabot-ruleset-workflow-rebase-v1",
+      "rationale": "Prior-authorize exactly measured #1718 frozen head 6450466be04ed73c39f1f13b3efabfc2f9d7f2a3, tree 81baa14a423fe115adbec380902382396611e85f, via read-only closed #1721 run 38900923878. Six semantic/trusted-source expansions, zero reductions, candidate TCB SHA256 528abdd49d9a0f2d98897eff231a7540e7718dd09a7cdf63875d57fe42fd2b56. Isolated schedule/main-dispatch-only workflow may mint one repository-scoped existing Ruleset App token limited to Contents, Pull requests and Workflows write (no Administration), then request one immutable Dependabot PR/head-bound GraphQL REBASE. Separate existing controller retains CI, review, and protected merge; existing main ruleset and required checks remain. No forced bot ref write, ruleset mutation, bypass, new App, additional secrets, unbounded retry, or direct-main content write."
+    },
+    {
       "baseBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
       "candidateBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
       "expansionSha256": "842e3ef45027f32131d6cc0b8c07bb638b45acb24c44241df26ef7cf3cfa288f",
