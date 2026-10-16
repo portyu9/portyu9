@@ -132,6 +132,48 @@ jobs:
                 --repository "$TARGET_REPOSITORY"
               PR="$(jq -c '.pull_request' "$GITHUB_EVENT_PATH")"
               HEAD_REPOSITORY="$(jq -r '.head.repo.full_name' <<<"$PR")"
+              # The native Dependabot PR remains authored by dependabot[bot]
+              # after an approved Ruleset App GraphQL REBASE or governed
+              # reconciliation. The triggering actor changes; PR origin does not.
+              # Bind the live PR and exact event head before delegated admission.
+              if [ "$(jq -r '.user.login // ""' <<<"$PR")" = "dependabot[bot]" ]; then
+                case "$ACTOR" in
+                  'dependabot[bot]'|'portyu9-ruleset-admin[bot]'|'github-actions[bot]') ;;
+                  *)
+                    echo "ERROR: untrusted actor for native Dependabot PR admission." >&2
+                    exit 1
+                    ;;
+                esac
+                PR_NUMBER="$(jq -r '.number // 0' <<<"$PR")"
+                [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+                EVENT_NODE="$(jq -r '.node_id // ""' <<<"$PR")"
+                EVENT_HEAD="$(jq -r '.head.sha // ""' <<<"$PR")"
+                EVENT_BASE="$(jq -r '.base.sha // ""' <<<"$PR")"
+                EVENT_REF="$(jq -r '.head.ref // ""' <<<"$PR")"
+                [[ "$EVENT_HEAD" =~ ^[0-9a-f]{40}$ ]]
+                [[ "$EVENT_BASE" =~ ^[0-9a-f]{40}$ ]]
+                [[ "$EVENT_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
+                test "$HEAD_REPOSITORY" = "$TARGET_REPOSITORY"
+                test "$(jq -r '.base.ref // ""' <<<"$PR")" = "main"
+                test -n "$EVENT_NODE"
+                LIVE_PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+                validate_api_pr_object "$LIVE_PR" "$PR_NUMBER"
+                jq -e --arg repo "$TARGET_REPOSITORY" --arg node "$EVENT_NODE" \
+                  --arg head "$EVENT_HEAD" --arg base "$EVENT_BASE" \
+                  --arg ref "$EVENT_REF" '
+                  (.user.login == "dependabot[bot]") and
+                  (.node_id | type == "string" and . == $node) and
+                  (.draft == false) and
+                  (.base.ref == "main" and .base.sha == $base) and
+                  (.head.repo.full_name == $repo) and
+                  (.head.ref == $ref and .head.sha == $head)
+                ' <<<"$LIVE_PR" >/dev/null || {
+                  echo "ERROR: native Dependabot PR event and live identity diverged." >&2
+                  exit 1
+                }
+                PR="$LIVE_PR"
+                DEPENDABOT=true
+              fi
               ;;
             repository_dispatch)
               ACTION="$(jq -r '.action // ""' "$GITHUB_EVENT_PATH")"
