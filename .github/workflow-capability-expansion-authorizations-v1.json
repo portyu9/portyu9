@@ -1737,6 +1737,13 @@
       "rationale": "Authorize #1204 Spotlight merge-authorization governed-read migration: route existing read-only repository observations through the accepted authenticated bounded GET helper while preserving endpoints, schema/identity checks, retry-history proof, deterministic output, and read/write separation. Workflow capability is unchanged; no workflow, permission, trigger, mutation replay, secret/OIDC, required-check reduction, merge/ruleset authority, direct-main write, or bypass is added."
     },
     {
+      "baseBomSha256": "cd4e7d9e6f474fc73cdb94f6b9fd1e6ab3bf65c588bc85e91f2315a697629b29",
+      "candidateBomSha256": "cd4e7d9e6f474fc73cdb94f6b9fd1e6ab3bf65c588bc85e91f2315a697629b29",
+      "expansionSha256": "2038b6159a0dece96d1a5abd0b11b6242aaebcd69ac00fe0f578cc9581e6cf16",
+      "id": "cap-spotlight-native-workflow-badges-20261016",
+      "rationale": "Authorize frozen #1748, measured by closed diagnostic #1749: replace Shields token-pool-dependent Spotlight check badges with GitHub-hosted live main-branch workflow status badges while preserving trusted manifest-derived links, clickable workflow targets, exact SVG asset allowlist, six card variants, card geometry, CI gates and evidence ledger. One protected renderer source update, no permission/workflow/trigger/mutation changes, no reductions, no branch bypass."
+    },
+    {
       "baseBomSha256": "023edf4092ba15ff8e9777fe5501e64ab622e4bba1afa7fa7dac596bf64434a7",
       "candidateBomSha256": "d0b6bf53a561bcfb6c10218a5bb8e4660de5ec95e4a0e2182037caf4d30270ce",
       "expansionSha256": "a0e68a5a736628e479d6a2b7f56c626688fff407b1da29af522a80b8dbe310e4",
