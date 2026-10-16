@@ -1869,7 +1869,7 @@ jobs:
           APP_JWT="${UNSIGNED}.${SIGN}"
           rm -f "$KEY"
           unset APP_PRIVATE_KEY UNSIGNED SIGN HEADER PAYLOAD
-          GH_TOKEN="$APP_JWT" gh api "app/installations/${INSTALLATION_ID}" > "$RUNNER_TEMP/workflow-rebase-install.json"
+          GH_TOKEN="$APP_JWT" python3 scripts/automation_github_ruleset_admin_read.py "app/installations/${INSTALLATION_ID}" > "$RUNNER_TEMP/workflow-rebase-install.json"
           if jq -e '(.permissions | del(.metadata)) == {"administration":"write"} and (.permissions.metadata // "read") == "read"' "$RUNNER_TEMP/workflow-rebase-install.json" >/dev/null; then
             echo "Awaiting existing Ruleset App Workflows permission grant; no mutation."
             exit 0
