@@ -1,0 +1,45 @@
+name: One-shot Ruleset App shared-permissions immutable measurement
+on:
+  pull_request:
+    types: [opened, synchronize]
+permissions:
+  contents: read
+env:
+  PYTHON_VERSION: "3.13.16"
+jobs:
+  measure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout immutable accepted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 69a93b8c501b4b3a66040b96e6ea4ca56314ae77
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up trusted Python runtime
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.16"
+      - name: Measure exact frozen Ruleset App permission transition (no writes)
+        env:
+          TRUSTED_BASE: 69a93b8c501b4b3a66040b96e6ea4ca56314ae77
+          FROZEN_HEAD: bf23732a679dae4481d2e1de59bf0b84c146675b
+          FROZEN_TREE: 306d96cde8d9065d8a065734c4b83655d655d86a
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TRUSTED_BASE"
+          test "$(git rev-parse HEAD:scripts/workflow_capability_admission.py)" = "a832c73cc3be625a8af9b5997c815b73c3520dab"
+          python3 -B scripts/verify-python-runtime.py
+          git fetch --no-tags --depth=1 origin "$FROZEN_HEAD"
+          test "$(git rev-parse "$FROZEN_HEAD^{tree}")" = "$FROZEN_TREE"
+          mkdir -p "$RUNNER_TEMP/frozen-ruleset-app-candidate"
+          git archive "$FROZEN_HEAD" | tar -x -C "$RUNNER_TEMP/frozen-ruleset-app-candidate"
+          test -z "$(git status --porcelain)"
+          python3 -B scripts/workflow_capability_admission.py \
+            "$RUNNER_TEMP/frozen-ruleset-app-candidate" \
+            --candidate-tree-sha "$FROZEN_TREE" --measure
+          test -z "$(git status --porcelain)"
