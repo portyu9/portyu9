@@ -10,7 +10,7 @@ import automation_pr_closing_directive_guard
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
 CLOSING_GUARD = ROOT / "scripts/automation_pr_closing_directive_guard.py"
-EXPECTED_GIT_BLOB = "fa931a90cc92e74e32502c1707c9ad4959055356"
+EXPECTED_GIT_BLOB = "3870132bd4ef19b0c096e2b6bf03aa1a2e69268b"
 EXPECTED_CLOSING_GUARD_GIT_BLOB = "f006aba7f00e860039b1c0f5f5372ab69eb06406"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
@@ -155,8 +155,8 @@ def validate_text(text: str) -> None:
     bind_end = text.index("- name: Verify exact trusted base checkout", bind_pos)
     bind_step = text[bind_pos:bind_end]
     require(
-        bind_step.count("python3 scripts/automation_github_read.py") == 10,
-        "trusted Capability Admission candidate binding must use exactly ten governed singleton GitHub reads",
+        bind_step.count("python3 scripts/automation_github_read.py") == 11,
+        "trusted Capability Admission candidate binding must use exactly eleven governed singleton GitHub reads",
     )
     preserved_pagination = (
         'python3 scripts/automation_github_paginated_read.py '
@@ -1214,7 +1214,7 @@ def self_test() -> None:
         text,
         'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
         'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
-        "must use exactly ten governed singleton GitHub reads",
+        "must use exactly eleven governed singleton GitHub reads",
     )
     expect_failure(
         text,

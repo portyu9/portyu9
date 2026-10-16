@@ -2321,8 +2321,8 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "admission",
         "Bind exact candidate context",
     )
-    require(capability_bind_step.count("python3 scripts/automation_github_read.py") == 10,
-            "Capability Admission candidate binding must use exactly ten governed singleton GitHub reads")
+    require(capability_bind_step.count("python3 scripts/automation_github_read.py") == 11,
+            "Capability Admission candidate binding must use exactly eleven governed singleton GitHub reads")
     capability_paginated_prs = (
         'python3 scripts/automation_github_paginated_read.py '
         '"repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100"'
@@ -2766,7 +2766,7 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
     expect_failure(
         copy.deepcopy(policy),
         capability_transport_drift,
-        "must use exactly ten governed singleton GitHub reads",
+        "must use exactly eleven governed singleton GitHub reads",
     )
 
     capability_source_transport_drift = dict(texts)
