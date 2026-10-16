@@ -2568,17 +2568,23 @@ def validate_controller_residual_read_transport_contract(text: str) -> None:
         if "gh api" in line
     ]
     require(raw_api_lines, "Dependabot controller unexpectedly lost all explicit mutation transports")
-    # gh api graphql is a POST-only mutation transport. Admit only the one
-    # separately provenance-bound updatePullRequestBranch REBASE call.
+    # Both GraphQL mutation transport identities are reviewed independently.
+    # Only the isolated App-scoped one is allowed to carry workflow write.
     graphql_transport = "gh api --include graphql \\"
-    require(raw_api_lines.count(graphql_transport) == 1,
-            "Dependabot controller GraphQL mutation transport count changed")
+    scoped_graphql_transport = 'GH_TOKEN="$WORKFLOW_TOKEN" gh api --include graphql \\'
     require(
-        text.count("updatePullRequestBranch(input:{pullRequestId:$prId, expectedHeadOid:$expectedHead, updateMethod:REBASE})") == 1,
+        raw_api_lines.count(graphql_transport) == 1
+        and raw_api_lines.count(scoped_graphql_transport) == 1,
+        "Dependabot controller GraphQL mutation transport count changed",
+    )
+    require(
+        text.count("updatePullRequestBranch(input:{pullRequestId:$prId, expectedHeadOid:$expectedHead, updateMethod:REBASE})") == 2
+        and text.count('-F prId="$REBASING_PR_NODE_ID"') == 1
+        and text.count('-F prId="$NODE_ID" -F expectedHead="$HEAD_SHA"') == 1,
         "Dependabot controller GraphQL transport lost exact bound rebase mutation",
     )
     for line in raw_api_lines:
-        if line == graphql_transport:
+        if line in (graphql_transport, scoped_graphql_transport):
             continue
         require(
             re.search(r"--method (?:POST|PUT|PATCH|DELETE)\b", line) is not None,
