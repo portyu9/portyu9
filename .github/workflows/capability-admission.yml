@@ -171,6 +171,8 @@ jobs:
                   echo "ERROR: native Dependabot PR event and live identity diverged." >&2
                   exit 1
                 }
+                printf '%s\n' "$LIVE_PR" > "$RUNNER_TEMP/dependabot-pr.json"
+                test -s "$RUNNER_TEMP/dependabot-pr.json"
                 PR="$LIVE_PR"
                 DEPENDABOT=true
               fi
