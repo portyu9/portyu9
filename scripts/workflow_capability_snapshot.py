@@ -342,7 +342,7 @@ def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
     ):
         require(fragment in source,
                 f"ruleset reconciler least-authority installation proof changed: {fragment}")
-    require(source.count('((.permissions | del(.metadata)) == {"administration":"write"} or (.permissions | del(.metadata)) == {"administration":"write","contents":"write","pull_requests":"write","workflows":"write"}) and') == 2,
+    require(source.count('((.permissions | del(.metadata)) == {"administration":"write"} or (.permissions | del(.metadata)) == {"administration":"write","contents":"write","pull_requests":"write","workflows":"write"})') == 2,
             "ruleset reconciler must admit exactly two narrowly enumerated App permission configurations")
     for fragment in (
         '[[ "$ADMIN_APP_ID" =~ ^[1-9][0-9]*$ ]]',
