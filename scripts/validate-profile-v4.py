@@ -123,6 +123,39 @@ def require(condition: bool, message: str) -> None:
         legacy.fail(message)
 
 
+def spotlight_native_badge_references(readme: str) -> set[str]:
+    """Approve only six GitHub-owned badges tied to the three active Spotlight cards.
+
+    The allowlist is derived from the already selected card repositories, not
+    a second hardcoded catalog. A badge must remain in its exact workflow link
+    and named slot; a visually plausible off-host SVG remains forbidden.
+    """
+    start = "<!-- spotlight-direct-links:start -->"
+    end = "<!-- spotlight-direct-links:end -->"
+    require(readme.count(start) == readme.count(end) == 1,
+            "Spotlight badge policy requires one guarded block")
+    block = readme.split(start, 1)[1].split(end, 1)[0]
+    repositories = re.findall(
+        r'<a href="https://github\.com/(portyu9/[A-Za-z0-9_.-]+)"><picture><source',
+        block,
+    )
+    require(len(repositories) == 3 and len(set(repositories)) == 3,
+            "Spotlight badges must bind to exactly three distinct card repositories")
+    approved: set[str] = set()
+    for slot, repository in enumerate(repositories, start=1):
+        for workflow, label in (("ci", "CI"), ("security", "security")):
+            target = f"https://github.com/{repository}/actions/workflows/{workflow}.yml"
+            image = target + "/badge.svg?branch=main"
+            markup = (f'<a href="{target}"><img alt="Spotlight slot {slot} {label}" '
+                      f'height="24" src="{image}"></a>')
+            require(block.count(markup) == 1,
+                    f"Spotlight slot {slot} {workflow} must use its own GitHub workflow badge")
+            approved.add(image.split("?", 1)[0])
+    require(len(approved) == 6 and block.count("/badge.svg?branch=main") == 6,
+            "Spotlight native status badge inventory changed")
+    return approved
+
+
 def validate_references(readme: str) -> None:
     pattern = re.compile(
         r'''(?:<img\b[^>]*\bsrc=["']([^"']+\.svg(?:[?#][^"']*)?)["']|<source\b[^>]*\bsrcset=["']([^"']+\.svg(?:[?#][^"']*)?)["']|!\[[^\]]*\]\(([^)]+\.svg(?:[?#][^)]*)?)\))''',
@@ -141,7 +174,8 @@ def validate_references(readme: str) -> None:
     selected_banner = approved_banners.validate_readme_state(readme, approved_banners.load_catalog())
     allowed = (set(legacy.IDENTITY_AND_PRINCIPLE_SVGS) | set(DESKTOP_PRINCIPLE_SVGS) |
                set(THESIS_HEADER_REFS) | set(legacy.GENERATED_SVG_REFERENCES) | set(FLAGSHIP_SVGS) |
-               set(selected_banner.values()) | {ANIMATED_HERO_SVG})
+               set(selected_banner.values()) | {ANIMATED_HERO_SVG} |
+               spotlight_native_badge_references(readme))
     unexpected=sorted(set(references)-allowed); missing=sorted(allowed-set(references))
     require(not unexpected, "README contains unapproved SVG references: " + ", ".join(unexpected))
     require(not missing, "README is missing approved SVG references: " + ", ".join(missing))
