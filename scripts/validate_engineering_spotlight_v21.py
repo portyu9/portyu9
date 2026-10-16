@@ -308,8 +308,15 @@ def validate_svgs(root: Path, slot_by_number: dict[int, dict[str, Any]]) -> None
         require(mobile.count('data-mobile-corner-decoration="topology-restored-v1"') == 1 and
                 mobile.count("<circle") >= 5 and mobile.count("<path") >= 3,
                 f"Spotlight mobile topology paths/nodes are missing: {name}")
-        require('font-size="22"' in content and 'font-size="21"' in content and 'font-size="18"' in content,
-                f"Spotlight status, freshness and run metadata must be legible at phone scale: {name}")
+        require('font-size="21"' in mobile and 'font-size="18"' in mobile,
+                f"Spotlight freshness and run metadata must remain legible at phone scale: {name}")
+        mobile_group = next(group for group in ET.fromstring(content)
+                            if group.get("class") == "mobile-card")
+        mobile_visible_text = tuple(
+            "".join(node.itertext())
+            for node in mobile_group.iter()
+            if node.tag == "{http://www.w3.org/2000/svg}text"
+        )
         require('data-status-presentation="external-clickable-only"' in content, f"Spotlight visible status presentation regressed: {name}")
         require(f'data-evidence-semantics="{EVIDENCE_SEMANTICS}"' in content, f"Spotlight evidence semantics missing: {name}")
         require('width="620" height="198" viewBox="0 0 620 198"' in content, f"Spotlight reviewed geometry changed: {name}")
@@ -359,8 +366,8 @@ def validate_svgs(root: Path, slot_by_number: dict[int, dict[str, Any]]) -> None
         require(attr_value(content, "data-evidence-freshness") == expected_dimension_attr(records, "freshness"), f"SVG freshness projection diverged: {name}")
         for record in records:
             require(f"{record['label']} result {record['result']}" in content, f"Execution result missing from accessible evidence description: {name}: {record['label']}")
-            require(f"{record['label']} {record['result']}" in content,
-                    f"Mobile Spotlight result label must be derived from source evidence: {name}: {record['label']}")
+            require(not any(f"{record['label']} {record['result']}" in text for text in mobile_visible_text),
+                    f"Mobile Spotlight must not duplicate external CI/security badge status: {name}: {record['label']}")
             require(f"{record['workflow']}#{record['run_id']}" in content, f"Exact workflow/run provenance missing from {name}: {record['label']}")
             require(f"binding {record['binding']}" in content, f"Subject binding missing from SVG description: {name}")
             require(f"freshness {record['freshness']}" in content, f"Freshness state missing from SVG description: {name}")
