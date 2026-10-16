@@ -1303,6 +1303,13 @@
       "rationale": "Authorize #1149 cancellation-domain narrowing: same-PR reviewer wakes may supersede each other; no-PR/recovery wakes are run-scoped. Spotlight push planning retains latest-main supersession while recovery planning is run-scoped. Terminal Spotlight mutations remain non-cancellable and serialized. No permission, trigger, mutation, lease, required-check, review/merge authority, direct-main write, or bypass expansion."
     },
     {
+      "baseBomSha256": "d25d34d36eeeb89f02bbe204a5dc38857e8964ebf01158bb68e160f5ed3ef201",
+      "candidateBomSha256": "d25d34d36eeeb89f02bbe204a5dc38857e8964ebf01158bb68e160f5ed3ef201",
+      "expansionSha256": "6fedfd9c2e2c5e8938e267f0f71bbebd14aa7147911396dc546b0a255d05acf7",
+      "id": "cap-native-dependabot-app-rebase-admission-v1",
+      "rationale": "Prior-authorize frozen #1735 head 42e84465fdcbd0baa936f6d435bd1d2691bb3ba0, tree c2c4e872371c78dd6c1509eabec5916272f37f36, read-only #1736 run 38917498642: two trusted-source expansions, zero reductions, candidate TCB SHA256 75317eb88a46784c867655acc472a4e1dc21ca8151b4001be4dd342559ab75bd. Native Dependabot PR authored by dependabot after trusted App rebase binds GitHub event actor/repo/ref/base/head/node to exact live PR before delegated provenance evaluation. No new mutation, token or bypass."
+    },
+    {
       "baseBomSha256": "f55151c433289e0c7bf72e8fe81073ebc554fd00854c736626aa68b64680f841",
       "candidateBomSha256": "9e16845b486ef11310d35d934f75cffa348dc42c136a68111fa5ded904116f01",
       "expansionSha256": "5552c484daa2a1faf522cfc7d0899d37c66affcc3679b4a36bd9fc329d2dc3b3",
