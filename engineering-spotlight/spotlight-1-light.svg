@@ -28,8 +28,7 @@
     <text x="38" y="28" fill="#57606A" font-family="ui-sans-serif,system-ui,sans-serif" font-size="20" font-weight="700">EVIDENCE SPOTLIGHT · 01</text>
     <text x="38" y="66" fill="#C32DE1" font-family="ui-sans-serif,system-ui,sans-serif" font-size="29" font-weight="800">APPIUM MOBILE QE</text>
     <text x="38" y="96" fill="#1F2328" font-family="ui-sans-serif,system-ui,sans-serif" font-size="19" font-weight="600">MOBILE · APPIUM + WEBDRIVERIO</text>
-    <text x="38" y="128" fill="#1F2328" font-family="ui-sans-serif,system-ui,sans-serif" font-size="22" font-weight="700">CI PASSING · SECURITY PASSING</text>
-    <text x="38" y="156" fill="#92400E" font-family="ui-sans-serif,system-ui,sans-serif" font-size="21" font-weight="800">FRESHNESS AGED · 3d UTC · CURRENT MAIN</text>
-    <text x="38" y="185" fill="#57606A" font-family="ui-sans-serif,system-ui,sans-serif" font-size="18" font-weight="600">MAIN 954e16c92e07 · RUNS CI#38443948295 / SECURITY#38443951532</text>
+    <text x="38" y="139" fill="#92400E" font-family="ui-sans-serif,system-ui,sans-serif" font-size="21" font-weight="800">FRESHNESS AGED · 3d UTC · CURRENT MAIN</text>
+    <text x="38" y="175" fill="#57606A" font-family="ui-sans-serif,system-ui,sans-serif" font-size="18" font-weight="600">MAIN 954e16c92e07 · RUNS CI#38443948295 / SECURITY#38443951532</text>
   </g>
 </svg>

@@ -28,8 +28,7 @@
     <text x="38" y="28" fill="#57606A" font-family="ui-sans-serif,system-ui,sans-serif" font-size="20" font-weight="700">EVIDENCE SPOTLIGHT · 02</text>
     <text x="38" y="66" fill="#1F7AD6" font-family="ui-sans-serif,system-ui,sans-serif" font-size="29" font-weight="800">PYTHON + PYTEST QE</text>
     <text x="38" y="96" fill="#1F2328" font-family="ui-sans-serif,system-ui,sans-serif" font-size="19" font-weight="600">LAYERED QE · PYTEST</text>
-    <text x="38" y="128" fill="#1F2328" font-family="ui-sans-serif,system-ui,sans-serif" font-size="22" font-weight="700">CI PASSING · SECURITY PASSING</text>
-    <text x="38" y="156" fill="#92400E" font-family="ui-sans-serif,system-ui,sans-serif" font-size="21" font-weight="800">FRESHNESS AGED · 3d UTC · CURRENT MAIN</text>
-    <text x="38" y="185" fill="#57606A" font-family="ui-sans-serif,system-ui,sans-serif" font-size="18" font-weight="600">MAIN 8ef8e29dd2e7 · RUNS CI#38407114215 / SECURITY#38407121815</text>
+    <text x="38" y="139" fill="#92400E" font-family="ui-sans-serif,system-ui,sans-serif" font-size="21" font-weight="800">FRESHNESS AGED · 3d UTC · CURRENT MAIN</text>
+    <text x="38" y="175" fill="#57606A" font-family="ui-sans-serif,system-ui,sans-serif" font-size="18" font-weight="600">MAIN 8ef8e29dd2e7 · RUNS CI#38407114215 / SECURITY#38407121815</text>
   </g>
 </svg>

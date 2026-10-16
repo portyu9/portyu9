@@ -28,8 +28,7 @@
     <text x="38" y="28" fill="#8B949E" font-family="ui-sans-serif,system-ui,sans-serif" font-size="20" font-weight="700">EVIDENCE SPOTLIGHT · 03</text>
     <text x="38" y="66" fill="#7963E9" font-family="ui-sans-serif,system-ui,sans-serif" font-size="29" font-weight="800">K6 PERFORMANCE QE</text>
     <text x="38" y="96" fill="#F0F6FC" font-family="ui-sans-serif,system-ui,sans-serif" font-size="19" font-weight="600">PERFORMANCE · K6</text>
-    <text x="38" y="128" fill="#F0F6FC" font-family="ui-sans-serif,system-ui,sans-serif" font-size="22" font-weight="700">CI PASSING · SECURITY PASSING</text>
-    <text x="38" y="156" fill="#FBBF24" font-family="ui-sans-serif,system-ui,sans-serif" font-size="21" font-weight="800">FRESHNESS AGED · 3d UTC · CURRENT MAIN</text>
-    <text x="38" y="185" fill="#8B949E" font-family="ui-sans-serif,system-ui,sans-serif" font-size="18" font-weight="600">MAIN eff7c767a8ff · RUNS CI#38446399675 / SECURITY#38446399692</text>
+    <text x="38" y="139" fill="#FBBF24" font-family="ui-sans-serif,system-ui,sans-serif" font-size="21" font-weight="800">FRESHNESS AGED · 3d UTC · CURRENT MAIN</text>
+    <text x="38" y="175" fill="#8B949E" font-family="ui-sans-serif,system-ui,sans-serif" font-size="18" font-weight="600">MAIN eff7c767a8ff · RUNS CI#38446399675 / SECURITY#38446399692</text>
   </g>
 </svg>
