@@ -231,7 +231,7 @@ jobs:
             (.repository_selection | type == "string" and . == "selected") and
             (.permissions | type == "object") and
             (.permissions.administration | type == "string" and . == "write") and
-            ((.permissions | keys - ["administration", "metadata"]) | length == 0) and
+            ((.permissions | del(.metadata)) == {"administration":"write"} or (.permissions | del(.metadata)) == {"administration":"write","contents":"write","pull_requests":"write","workflows":"write"}) and
             (((.permissions.metadata // "read") | type) == "string") and
             ((.permissions.metadata // "read") == "read")
           ' installation.json >/dev/null
@@ -1178,7 +1178,8 @@ jobs:
             .id == $installation and .app_id == $app and .account.id == 35150859 and
             .account.login == "portyu9" and .repository_selection == "selected" and
             .permissions.administration == "write" and
-            ((.permissions | keys - ["administration","metadata"]) | length == 0)
+            ((.permissions.metadata // "read") == "read") and
+            ((.permissions | del(.metadata)) == {"administration":"write"} or (.permissions | del(.metadata)) == {"administration":"write","contents":"write","pull_requests":"write","workflows":"write"})
           ' recovery-open-installation.json >/dev/null
 
           TOKEN_RESPONSE="$RUNNER_TEMP/recovery-open-token-response.txt"
