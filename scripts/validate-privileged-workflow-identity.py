@@ -5171,6 +5171,70 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         ):
             require(fragment in workflow, f"{label} manual portyu9 veto contract is missing: {fragment}")
 
+def validate_native_dependabot_app_rebase_admission(capability: str) -> None:
+    """A trusted App's REBASE must not erase immutable Dependabot PR identity."""
+    start = '              # The native Dependabot PR remains authored by dependabot[bot]\n'
+    end = '                DEPENDABOT=true\n              fi\n'
+    require(capability.count(start) == 1 and capability.count(end) == 1,
+            "native Dependabot App rebase classification boundaries changed")
+    start_idx = capability.index(start)
+    end_idx = capability.index(end, start_idx) + len(end)
+    case = capability[start_idx:end_idx]
+    required = (
+        'if [ "$(jq -r \'\x2euser.login // ""\' <<<"$PR")" = "dependabot[bot]" ]; then',
+        "'dependabot[bot]'|'portyu9-ruleset-admin[bot]'|'github-actions[bot]') ;;",
+        'PR_NUMBER="$(jq -r \'.number // 0\' <<<"$PR")"',
+        'EVENT_NODE="$(jq -r \'.node_id // ""\' <<<"$PR")"',
+        'EVENT_HEAD="$(jq -r \'.head.sha // ""\' <<<"$PR")"',
+        'EVENT_BASE="$(jq -r \'.base.sha // ""\' <<<"$PR")"',
+        'EVENT_REF="$(jq -r \'.head.ref // ""\' <<<"$PR")"',
+        '[[ "$EVENT_HEAD" =~ ^[0-9a-f]{40}$ ]]',
+        '[[ "$EVENT_BASE" =~ ^[0-9a-f]{40}$ ]]',
+        '[[ "$EVENT_REF" =~ ^dependabot/github_actions/',
+        'test "$HEAD_REPOSITORY" = "$TARGET_REPOSITORY"',
+        'test "$(jq -r \'.base.ref // ""\' <<<"$PR")" = "main"',
+        'test -n "$EVENT_NODE"',
+        'LIVE_PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"',
+        'validate_api_pr_object "$LIVE_PR" "$PR_NUMBER"',
+        '(.user.login == "dependabot[bot]") and',
+        '(.node_id | type == "string" and . == $node) and',
+        '(.draft == false) and',
+        '(.base.ref == "main" and .base.sha == $base) and',
+        '(.head.repo.full_name == $repo) and',
+        '(.head.ref == $ref and .head.sha == $head)',
+        'PR="$LIVE_PR"',
+        'DEPENDABOT=true',
+    )
+    for marker in required:
+        require(case.count(marker) == 1,
+                f"native App-rebased Dependabot admission missing identity bound: {marker}")
+    require(case.index('validate_api_pr_object "$LIVE_PR" "$PR_NUMBER"')
+            < case.index('(.user.login == "dependabot[bot]") and')
+            < case.index('PR="$LIVE_PR"')
+            < case.index('DEPENDABOT=true'),
+            "native App-rebased Dependabot classification occurred before identity proof")
+
+
+def self_test_native_dependabot_app_rebase_admission(capability: str) -> None:
+    validate_native_dependabot_app_rebase_admission(capability)
+    for marker in (
+        "'portyu9-ruleset-admin[bot]'",
+        '(.node_id | type == "string" and . == $node) and',
+        '(.head.repo.full_name == $repo) and',
+        '(.head.ref == $ref and .head.sha == $head)',
+        'test "$HEAD_REPOSITORY" = "$TARGET_REPOSITORY"',
+        'validate_api_pr_object "$LIVE_PR" "$PR_NUMBER"',
+    ):
+        weakened = capability.replace(marker, "true", 1)
+        require(weakened != capability, "native App rebase negative fixture missing")
+        try:
+            validate_native_dependabot_app_rebase_admission(weakened)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"native App rebase guard accepted weakened identity: {marker}")
+
+
 def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
     capability_fragments = (
         "workflow_dispatch:",
@@ -7721,6 +7785,7 @@ def main() -> int:
         validate_codeql_autofix_read_singleton_evidence(autofix)
         validate_codeql_autofix_approval_comment_evidence(autofix)
         validate_bot_review_liveness(bot_review, dependabot, autofix, spotlight)
+        self_test_native_dependabot_app_rebase_admission(capability)
         validate_spotlight_event_admission(spotlight, capability)
         validate_spotlight_terminal_required_check_collection(spotlight)
         validate_spotlight_terminal_protected_run_evidence(spotlight)
