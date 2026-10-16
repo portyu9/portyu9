@@ -155,8 +155,8 @@ def validate_text(text: str) -> None:
     bind_end = text.index("- name: Verify exact trusted base checkout", bind_pos)
     bind_step = text[bind_pos:bind_end]
     require(
-        bind_step.count("python3 scripts/automation_github_read.py") == 10,
-        "trusted Capability Admission candidate binding must use exactly ten governed singleton GitHub reads",
+        bind_step.count("python3 scripts/automation_github_read.py") == 11,
+        "trusted Capability Admission candidate binding must use exactly eleven governed singleton GitHub reads",
     )
     preserved_pagination = (
         'python3 scripts/automation_github_paginated_read.py '
@@ -1214,7 +1214,7 @@ def self_test() -> None:
         text,
         'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
         'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
-        "must use exactly ten governed singleton GitHub reads",
+        "must use exactly eleven governed singleton GitHub reads",
     )
     expect_failure(
         text,
