@@ -1590,6 +1590,13 @@
       "rationale": "Authorize #687's exact Ruleset recovery YAML-guard correction. The existing signer keeps identical permissions, actions, subject, API reads and artifact authority; the job guard is YAML-quoted and rebound only to #687's merge push while exact receipt hash/field and live-successor proofs remain. No trigger, secret, endpoint, method, ruleset mutation, signer, attestation target, required-check reduction, merge capability or bypass is added."
     },
     {
+      "baseBomSha256": "cd0c976f708bf5545168bf7d6fbea4aa4be31e37878be2e572988211ba77eb0e",
+      "candidateBomSha256": "cd0c976f708bf5545168bf7d6fbea4aa4be31e37878be2e572988211ba77eb0e",
+      "expansionSha256": "b78ee48935503a1f817fcbc1e1cc5f84fede6ae66ee742fb04d3409817e886cb",
+      "id": "cap-ruleset-shared-workflow-app-permissions-v1",
+      "rationale": "Authorize frozen #1713 at head e71b6c18db59f877b3f521526d0e845680859811, tree 97d20eb18a4db990a7c93aba3bbb0dfbb3c61a9a, measured by #1714 run 38831948696. Three trusted-source expansions; zero reductions; TCB SHA256 d20bf49570646c6be97c08d81d08e409a45e2fc614ba88ce48e0ea86b20b449f. Explicit old/new App installation permissions only; ruleset token stays administration-only and rebase token remains administration-free. No new mutation, secret, required-check reduction, bypass or direct-main write."
+    },
+    {
       "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
       "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
       "expansionSha256": "df9d96f5397051e0922b56443d08b777d70439d0a745c2aa88b40f36f0dcd663",
