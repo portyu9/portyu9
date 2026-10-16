@@ -334,6 +334,7 @@ def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
         '(.account.login | type == "string" and . == "portyu9") and',
         '(.repository_selection | type == "string" and . == "selected") and',
         '(.permissions.administration | type == "string" and . == "write") and',
+        '((.permissions | del(.metadata)) == {"administration":"write"} or (.permissions | del(.metadata)) == {"administration":"write","contents":"write","pull_requests":"write","workflows":"write"}) and',
         '((.permissions | keys - ["administration", "metadata"]) | length == 0) and',
         "-f 'permissions[administration]=write' > \"$INSTALLATION_TOKEN_HTTP_RESPONSE\"",
         '(.total_count | type == "number" and floor == . and . == 1) and',
@@ -341,6 +342,8 @@ def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
     ):
         require(fragment in source,
                 f"ruleset reconciler least-authority installation proof changed: {fragment}")
+    require(source.count('((.permissions | del(.metadata)) == {"administration":"write"} or (.permissions | del(.metadata)) == {"administration":"write","contents":"write","pull_requests":"write","workflows":"write"}) and') == 2,
+            "ruleset reconciler must admit exactly two narrowly enumerated App permission configurations")
     for fragment in (
         '[[ "$ADMIN_APP_ID" =~ ^[1-9][0-9]*$ ]]',
         '[[ "$ADMIN_INSTALLATION_ID" =~ ^[1-9][0-9]*$ ]]',

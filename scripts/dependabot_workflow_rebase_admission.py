@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed evidence checks for a separately provisioned workflow-rebase App.
+"""Fail-closed evidence checks for shared Ruleset App with isolated workflow tokens.
 
 No network calls, credentials, or GitHub mutations are performed here.
 """
@@ -10,6 +10,7 @@ import re
 
 PERMISSIONS = {"metadata": "read", "contents": "write",
                "pull_requests": "write", "workflows": "write"}
+APP_PERMISSIONS = {**PERMISSIONS, "administration": "write"}
 SHA = re.compile(r"[0-9a-f]{40}")
 NODE = re.compile(r"PR_[A-Za-z0-9_-]{8,128}")
 REF = re.compile(r"dependabot/github_actions/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*")
@@ -70,7 +71,7 @@ def verify_app(install: Any, *, app_id: int, installation_id: int, owner: str) -
             and install.get("repository_selection") == "selected"
             and isinstance(install.get("account"), Mapping)
             and install["account"].get("login") == owner
-            and install.get("permissions") == PERMISSIONS,
+            and install.get("permissions") == APP_PERMISSIONS,
             "App identity, selected-repository scope, or least privilege differs")
 
 
@@ -117,10 +118,11 @@ def self_test() -> None:
         else:
             raise ValueError("bad PR accepted")
     app = {"id": 2, "app_id": 1, "repository_selection": "selected",
-           "account": {"login": "x"}, "permissions": dict(PERMISSIONS)}
+           "account": {"login": "x"}, "permissions": dict(APP_PERMISSIONS)}
     verify_app(app, app_id=1, installation_id=2, owner="x")
     for bad in ({**app, "repository_selection": "all"},
-                {**app, "permissions": {**PERMISSIONS, "administration": "write"}}):
+                {**app, "permissions": dict(PERMISSIONS)},
+                {**app, "permissions": {**APP_PERMISSIONS, "issues": "write"}}):
         try:
             verify_app(bad, app_id=1, installation_id=2, owner="x")
         except ValueError:
@@ -133,6 +135,7 @@ def self_test() -> None:
              "repositories": [{"full_name": "x/y"}], "expires_at": "2026-10-15T01:00:00Z"}
     verify_token(token, repository="x/y", observed_at=now)
     for bad in ({**token, "expires_at": "2026-10-16T00:00:00Z"},
+                {**token, "permissions": dict(APP_PERMISSIONS)},
                 {**token, "repositories": [{"full_name": "x/z"}]}):
         try:
             verify_token(bad, repository="x/y", observed_at=now)
