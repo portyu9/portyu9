@@ -1777,3 +1777,151 @@ jobs:
           }
           echo "Dispatched CodeQL only after exact read-only Dependabot validation succeeded."
 
+  workflow_rebase:
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    name: trusted-dependabot-workflow-rebase
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    concurrency:
+      group: dependabot-codeql-controller
+      cancel-in-progress: false
+    environment: ruleset-admin-identity
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout exact main for isolated App authority
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 scripts/verify-python-runtime.py
+
+      - name: Rebase one native stale workflow PR with scoped Ruleset App token
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TRUSTED_MAIN_SHA: ${{ github.sha }}
+          APP_ID: ${{ secrets.PORTYU9_RULESET_ADMIN_APP_ID }}
+          INSTALLATION_ID: ${{ secrets.PORTYU9_RULESET_ADMIN_INSTALLATION_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.PORTYU9_RULESET_ADMIN_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          set +x
+          umask 077
+          trap 'rm -f "$RUNNER_TEMP/workflow-rebase-key.pem" "$RUNNER_TEMP/workflow-rebase-token.json"' EXIT
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$REPOSITORY" = "$GITHUB_REPOSITORY"
+          [[ "$TRUSTED_MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$TRUSTED_MAIN_SHA"
+          test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
+          python3 scripts/automation_github_read.py "repos/${REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/workflow-rebase-main.json"
+          jq -e --arg sha "$TRUSTED_MAIN_SHA" '.ref == "refs/heads/main" and .object.type == "commit" and .object.sha == $sha' "$RUNNER_TEMP/workflow-rebase-main.json" >/dev/null
+          python3 scripts/automation_github_read.py "repos/${REPOSITORY}/pulls?state=open&per_page=100" > "$RUNNER_TEMP/workflow-rebase-open-prs.json"
+          PYTHONPATH=scripts python3 - "$REPOSITORY" "$TRUSTED_MAIN_SHA" "$RUNNER_TEMP/workflow-rebase-open-prs.json" > "$RUNNER_TEMP/workflow-rebase-choice.json" <<'PY'
+          import json, sys
+          from dependabot_workflow_rebase_admission import select_stale_native_pr
+          with open(sys.argv[3], encoding="utf-8") as stream:
+              prs = json.load(stream)
+          print(json.dumps(select_stale_native_pr(prs, sys.argv[1], sys.argv[2]) or {}, sort_keys=True))
+          PY
+          if jq -e 'length == 0' "$RUNNER_TEMP/workflow-rebase-choice.json" >/dev/null; then
+            echo "No stale native Dependabot candidate; issued no App token."
+            exit 0
+          fi
+          PR_NUMBER="$(jq -er .number "$RUNNER_TEMP/workflow-rebase-choice.json")"
+          NODE_ID="$(jq -er .nodeId "$RUNNER_TEMP/workflow-rebase-choice.json")"
+          HEAD_SHA="$(jq -er .headSha "$RUNNER_TEMP/workflow-rebase-choice.json")"
+          HEAD_REF="$(jq -er .headRef "$RUNNER_TEMP/workflow-rebase-choice.json")"
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          [[ "$NODE_ID" =~ ^PR_[A-Za-z0-9_-]{8,128}$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
+          [[ "$APP_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$INSTALLATION_ID" =~ ^[1-9][0-9]*$ ]]
+          test -n "$APP_PRIVATE_KEY"
+
+          python3 scripts/automation_github_read.py "repos/${REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/workflow-rebase-pr.json"
+          jq -e --arg node "$NODE_ID" --arg sha "$HEAD_SHA" --arg ref "$HEAD_REF" --arg repo "$REPOSITORY" '
+            .node_id == $node and .head.sha == $sha and .head.ref == $ref and
+            .head.repo.full_name == $repo and .user.login == "dependabot[bot]" and
+            .state == "open" and .draft == false and .base.ref == "main"
+          ' "$RUNNER_TEMP/workflow-rebase-pr.json" >/dev/null
+          python3 scripts/automation_github_read.py "repos/${REPOSITORY}/git/ref/heads/${HEAD_REF}" > "$RUNNER_TEMP/workflow-rebase-head.json"
+          jq -e --arg sha "$HEAD_SHA" '.object.type == "commit" and .object.sha == $sha' "$RUNNER_TEMP/workflow-rebase-head.json" >/dev/null
+
+          KEY="$RUNNER_TEMP/workflow-rebase-key.pem"
+          printf '%s' "$APP_PRIVATE_KEY" > "$KEY"
+          openssl pkey -in "$KEY" -noout >/dev/null
+          ISSUED="$(date +%s)"
+          HEADER="$(printf '%s' '{"alg":"RS256","typ":"JWT"}' | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+          PAYLOAD="$(jq -cn --arg iss "$APP_ID" --argjson iat "$((ISSUED - 60))" --argjson exp "$((ISSUED + 540))" '{iss:$iss,iat:$iat,exp:$exp}' | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+          UNSIGNED="${HEADER}.${PAYLOAD}"
+          SIGN="$(printf '%s' "$UNSIGNED" | openssl dgst -binary -sha256 -sign "$KEY" | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+          APP_JWT="${UNSIGNED}.${SIGN}"
+          rm -f "$KEY"
+          unset APP_PRIVATE_KEY UNSIGNED SIGN HEADER PAYLOAD
+          GH_TOKEN="$APP_JWT" python3 scripts/automation_github_ruleset_admin_read.py "app/installations/${INSTALLATION_ID}" > "$RUNNER_TEMP/workflow-rebase-install.json"
+          if jq -e '(.permissions | del(.metadata)) == {"administration":"write"} and (.permissions.metadata // "read") == "read"' "$RUNNER_TEMP/workflow-rebase-install.json" >/dev/null; then
+            echo "Awaiting existing Ruleset App Workflows permission grant; no mutation."
+            exit 0
+          fi
+          PYTHONPATH=scripts python3 - "$APP_ID" "$INSTALLATION_ID" "$REPOSITORY" "$RUNNER_TEMP/workflow-rebase-install.json" <<'PY'
+          import json, sys
+          from dependabot_workflow_rebase_admission import verify_app
+          with open(sys.argv[4], encoding="utf-8") as stream:
+              installation = json.load(stream)
+          verify_app(installation, app_id=int(sys.argv[1]), installation_id=int(sys.argv[2]), owner=sys.argv[3].split("/", 1)[0])
+          PY
+          GH_TOKEN="$APP_JWT" gh api --method POST "app/installations/${INSTALLATION_ID}/access_tokens" \
+            -f "repositories[]=${REPOSITORY#*/}" \
+            -f 'permissions[contents]=write' -f 'permissions[pull_requests]=write' \
+            -f 'permissions[workflows]=write' > "$RUNNER_TEMP/workflow-rebase-token.json"
+          unset APP_JWT
+          PYTHONPATH=scripts python3 - "$REPOSITORY" "$RUNNER_TEMP/workflow-rebase-token.json" <<'PY'
+          import json, sys
+          from datetime import datetime, timezone
+          from dependabot_workflow_rebase_admission import verify_token
+          with open(sys.argv[2], encoding="utf-8") as stream:
+              result = json.load(stream)
+          verify_token(result, repository=sys.argv[1], observed_at=datetime.now(timezone.utc))
+          PY
+          WORKFLOW_TOKEN="$(jq -er .token "$RUNNER_TEMP/workflow-rebase-token.json")"
+          rm -f "$RUNNER_TEMP/workflow-rebase-token.json"
+          echo "::add-mask::$WORKFLOW_TOKEN"
+
+          python3 scripts/automation_github_read.py "repos/${REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/workflow-rebase-final-main.json"
+          jq -e --arg sha "$TRUSTED_MAIN_SHA" '.object.type == "commit" and .object.sha == $sha' "$RUNNER_TEMP/workflow-rebase-final-main.json" >/dev/null
+          python3 scripts/automation_github_read.py "repos/${REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/workflow-rebase-final-pr.json"
+          jq -e --arg node "$NODE_ID" --arg sha "$HEAD_SHA" --arg main "$TRUSTED_MAIN_SHA" '
+            .node_id == $node and .state == "open" and .user.login == "dependabot[bot]" and
+            .head.sha == $sha and .base.ref == "main" and .base.sha != $main
+          ' "$RUNNER_TEMP/workflow-rebase-final-pr.json" >/dev/null
+          RESPONSE="$RUNNER_TEMP/workflow-rebase-response-http.txt"
+          REBASE_EXIT=0
+          GH_TOKEN="$WORKFLOW_TOKEN" gh api --include graphql \
+            -f query='mutation($prId:ID!, $expectedHead:GitObjectID!) { updatePullRequestBranch(input:{pullRequestId:$prId, expectedHeadOid:$expectedHead, updateMethod:REBASE}) { pullRequest { id number headRefOid baseRefOid } } }' \
+            -F prId="$NODE_ID" -F expectedHead="$HEAD_SHA" > "$RESPONSE" || REBASE_EXIT="$?"
+          unset WORKFLOW_TOKEN
+          if [ "$REBASE_EXIT" -ne 0 ]; then
+            echo "ERROR: Native GraphQL REBASE returned an ambiguous or denied response; no retry in this run." >&2
+            exit 1
+          fi
+          STATUS="$(head -n 1 "$RESPONSE" | tr -d '\r')"
+          [[ "$STATUS" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]]
+          sed '1,/^[[:space:]]*$/d' "$RESPONSE" > "$RUNNER_TEMP/workflow-rebase-response.json"
+          python3 scripts/dependabot_controller.py rebase-graphql-response \
+            --response "$RUNNER_TEMP/workflow-rebase-response.json" \
+            --expected-pr-id "$NODE_ID" --expected-number "$PR_NUMBER" \
+            --expected-main-sha "$TRUSTED_MAIN_SHA" \
+            --out "$RUNNER_TEMP/workflow-rebase-normalized.json"
+          test "$(jq -r .nodeId "$RUNNER_TEMP/workflow-rebase-normalized.json")" = "$NODE_ID"
+          echo "One native head-bound REBASE accepted; existing governed controller will validate/merge independently."

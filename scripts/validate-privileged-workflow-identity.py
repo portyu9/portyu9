@@ -3325,12 +3325,24 @@ def validate_dependabot_residual_read_transport_identity(dependabot: str) -> Non
         '-F expectedHead="$PRE_UPDATE_HEAD_SHA"',
         'python3 scripts/dependabot_controller.py rebase-graphql-response',
     )
+    # Exactly two reviewed GraphQL transports: historical GitHub-token
+    # native rebase plus isolated installation-token rebase, never a third.
     require(
-        all(dependabot.count(fragment) == 1 for fragment in trusted_rebase),
-        "Dependabot exact-identity GraphQL rebase transport drifted",
+        dependabot.count(trusted_rebase[0]) == 2
+        and dependabot.count(trusted_rebase[1]) == 2
+        and dependabot.count(trusted_rebase[2]) == 1
+        and dependabot.count(trusted_rebase[3]) == 1
+        and dependabot.count(trusted_rebase[4]) == 2
+        and dependabot.count('GH_TOKEN="$WORKFLOW_TOKEN" gh api --include graphql \\') == 1
+        and dependabot.count('-F prId="$NODE_ID" -F expectedHead="$HEAD_SHA"') == 1
+        and dependabot.count('GH_TOKEN="$APP_JWT" gh api --method POST "app/installations/${INSTALLATION_ID}/access_tokens"') == 1
+        and dependabot.count('GH_TOKEN="$APP_JWT" python3 scripts/automation_github_ruleset_admin_read.py "app/installations/${INSTALLATION_ID}"') == 1
+        and dependabot.count("-f 'permissions[administration]=write'") == 0
+        and dependabot.count("-f 'permissions[workflows]=write'") == 1,
+        "Dependabot exact-identity dual GraphQL rebase transport drifted",
     )
     for line in direct_lines:
-        if line == trusted_rebase[0]:
+        if line in (trusted_rebase[0], 'GH_TOKEN="$WORKFLOW_TOKEN" gh api --include graphql \\'):
             continue
         require(
             any(
