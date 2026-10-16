@@ -43,10 +43,10 @@
     },
     "actions/upload-artifact": {
       "repositoryId": 192625955,
-      "releaseId": 307659762,
-      "sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-      "tag": "v7.0.1",
-      "tagRefSha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+      "releaseId": 405627178,
+      "sha": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+      "tag": "v7.0.2",
+      "tagRefSha": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
       "tagRefType": "commit"
     },
     "github/codeql-action/analyze": {

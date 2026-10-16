@@ -231,13 +231,6 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-              "repository": "actions/upload-artifact",
-              "step": "Upload Signal Field review artifacts"
-            },
-            {
-              "kind": "remote",
-              "path": "",
               "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
               "repository": "actions/checkout",
               "step": "Checkout"
@@ -269,6 +262,13 @@
               "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download exact fresh signed Profile Generator Compatibility Witness"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Upload Signal Field review artifacts"
             }
           ],
           "apiSurfaces": [],
@@ -439,13 +439,6 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-              "repository": "actions/upload-artifact",
-              "step": "Upload reviewed attestation predicate"
-            },
-            {
-              "kind": "remote",
-              "path": "",
               "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
               "repository": "actions/checkout",
               "step": "Checkout current generated evidence without credentials"
@@ -484,6 +477,13 @@
               "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download validated Signal Field for attestation preparation"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Upload reviewed attestation predicate"
             }
           ],
           "apiSurfaces": [],
@@ -637,13 +637,6 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-              "repository": "actions/upload-artifact",
-              "step": "Upload exact Automation Decision Receipt artifact"
-            },
-            {
-              "kind": "remote",
-              "path": "",
               "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
               "repository": "actions/checkout",
               "step": "Checkout trusted source without credentials"
@@ -654,6 +647,13 @@
               "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
               "repository": "actions/setup-python",
               "step": "Set up Python"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Upload exact Automation Decision Receipt artifact"
             }
           ],
           "apiSurfaces": [],
@@ -833,27 +833,6 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-              "repository": "actions/upload-artifact",
-              "step": "Upload immutable validated Engineering Spotlight"
-            },
-            {
-              "kind": "remote",
-              "path": "",
-              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-              "repository": "actions/upload-artifact",
-              "step": "Upload immutable validated Portfolio Evidence Ledger"
-            },
-            {
-              "kind": "remote",
-              "path": "",
-              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-              "repository": "actions/upload-artifact",
-              "step": "Upload immutable validated Signal Field"
-            },
-            {
-              "kind": "remote",
-              "path": "",
               "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
               "repository": "actions/checkout",
               "step": "Checkout trusted source"
@@ -871,6 +850,27 @@
               "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
               "repository": "actions/setup-python",
               "step": "Set up Python"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Upload immutable validated Engineering Spotlight"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Upload immutable validated Portfolio Evidence Ledger"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Upload immutable validated Signal Field"
             }
           ],
           "apiSurfaces": [],
@@ -1064,13 +1064,6 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-              "repository": "actions/upload-artifact",
-              "step": "Upload exact post-publication receipt predicate"
-            },
-            {
-              "kind": "remote",
-              "path": "",
               "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
               "repository": "actions/checkout",
               "step": "Checkout exact published generated commit without credentials"
@@ -1095,6 +1088,13 @@
               "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download reviewed profile evidence predicate for receipt"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Upload exact post-publication receipt predicate"
             }
           ],
           "apiSurfaces": [
@@ -1207,13 +1207,6 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-              "repository": "actions/upload-artifact",
-              "step": "Upload sealed generated publication candidate"
-            },
-            {
-              "kind": "remote",
-              "path": "",
               "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
               "repository": "actions/checkout",
               "step": "Checkout generated artifact branch without credentials"
@@ -1252,6 +1245,13 @@
               "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download validated Signal Field for publication staging"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Upload sealed generated publication candidate"
             }
           ],
           "apiSurfaces": [],
@@ -1559,13 +1559,6 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-              "repository": "actions/upload-artifact",
-              "step": "Upload exact merge authorization artifact"
-            },
-            {
-              "kind": "remote",
-              "path": "",
               "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
               "repository": "actions/checkout",
               "step": "Checkout trusted source without credentials"
@@ -1576,6 +1569,13 @@
               "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
               "repository": "actions/setup-python",
               "step": "Set up Python"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Upload exact merge authorization artifact"
             }
           ],
           "apiSurfaces": [],
@@ -1720,13 +1720,6 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-              "repository": "actions/upload-artifact",
-              "step": "Upload exact Automation Decision Receipt artifact"
-            },
-            {
-              "kind": "remote",
-              "path": "",
               "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
               "repository": "actions/checkout",
               "step": "Checkout trusted source without credentials"
@@ -1737,6 +1730,13 @@
               "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
               "repository": "actions/setup-python",
               "step": "Set up Python"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Upload exact Automation Decision Receipt artifact"
             }
           ],
           "apiSurfaces": [],
@@ -2110,13 +2110,6 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-              "repository": "actions/upload-artifact",
-              "step": "Upload reviewed direct-link proposal"
-            },
-            {
-              "kind": "remote",
-              "path": "",
               "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
               "repository": "actions/checkout",
               "step": "Checkout published evidence snapshot"
@@ -2134,6 +2127,13 @@
               "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
               "repository": "actions/setup-python",
               "step": "Set up Python"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Upload reviewed direct-link proposal"
             }
           ],
           "apiSurfaces": [],
