@@ -1303,6 +1303,13 @@
       "rationale": "Authorize #1149 cancellation-domain narrowing: same-PR reviewer wakes may supersede each other; no-PR/recovery wakes are run-scoped. Spotlight push planning retains latest-main supersession while recovery planning is run-scoped. Terminal Spotlight mutations remain non-cancellable and serialized. No permission, trigger, mutation, lease, required-check, review/merge authority, direct-main write, or bypass expansion."
     },
     {
+      "baseBomSha256": "cd4e7d9e6f474fc73cdb94f6b9fd1e6ab3bf65c588bc85e91f2315a697629b29",
+      "candidateBomSha256": "cd4e7d9e6f474fc73cdb94f6b9fd1e6ab3bf65c588bc85e91f2315a697629b29",
+      "expansionSha256": "a59a420e60725b0a5e716a8f6f2acb87d73f9952116ccff1f47d097dd129e19e",
+      "id": "cap-native-dependabot-app-rebase-admission-postrelease-v1",
+      "rationale": "Authorize frozen #1735 head a44a46fd48bcd078232b75bf9ba2c1bed03e2027, tree 475b334d7f85785e00891cd3bae362dc26bc2835, measured by closed read-only #1740 run 38922447044 after native #1657 merged: two trusted-source expansions, zero reductions, TCB SHA256 c69b2c3910243f9c5ffcfd0e83a9a0e8a39c02f3e87d12b9d84f243811a07daf. Native Dependabot author/App actor/head/base/ref/node live reproof before delegated admission. Later accepted #1739 touched only README. No new token, mutation or bypass."
+    },
+    {
       "baseBomSha256": "d25d34d36eeeb89f02bbe204a5dc38857e8964ebf01158bb68e160f5ed3ef201",
       "candidateBomSha256": "d25d34d36eeeb89f02bbe204a5dc38857e8964ebf01158bb68e160f5ed3ef201",
       "expansionSha256": "6fedfd9c2e2c5e8938e267f0f71bbebd14aa7147911396dc546b0a255d05acf7",
