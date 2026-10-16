@@ -52,10 +52,13 @@ def select_stale_native_pr(items: Any, repo: str, main_sha: str) -> dict[str, An
                 and type(pr.get("node_id")) is str
                 and NODE.fullmatch(pr["node_id"]) is not None,
                 "native PR immutable identity malformed")
-        require("maintainer_can_modify" in pr
-                and (pr["maintainer_can_modify"] is None
-                     or type(pr["maintainer_can_modify"]) is bool),
-                "native PR advisory permission field malformed")
+        # GitHub's open-PR list omits this advisory flag even though the
+        # individual GET /pulls/{number} supplies it. Never use absence as
+        # authorization; validate the type if it is actually furnished.
+        if "maintainer_can_modify" in pr:
+            require(pr["maintainer_can_modify"] is None
+                    or type(pr["maintainer_can_modify"]) is bool,
+                    "native PR advisory permission field malformed")
         if b["sha"] != main_sha:
             selected.append({"number": n, "nodeId": pr["node_id"],
                              "headRef": h["ref"], "headSha": h["sha"],
@@ -105,6 +108,10 @@ def self_test() -> None:
                    "sha": "b" * 40, "repo": {"full_name": "x/y"}},
           "base": {"ref": "main", "sha": "c" * 40}, "maintainer_can_modify": False}
     require(select_stale_native_pr([pr], "x/y", main)["number"] == 2, "selection failed")
+    omitted_advisory = dict(pr)
+    omitted_advisory.pop("maintainer_can_modify")
+    require(select_stale_native_pr([omitted_advisory], "x/y", main)["number"] == 2,
+            "native list without optional advisory flag was wrongly rejected")
     require(select_stale_native_pr([{**pr, "base": {"ref": "main", "sha": main}}],
                                    "x/y", main) is None, "fresh PR selected")
     for bad in ([pr, pr], [pr] * 100,
