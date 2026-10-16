@@ -1,11 +1,11 @@
 {
-  "as_of_date_utc": "2026-10-15",
+  "as_of_date_utc": "2026-10-16",
   "binding_summary": {
     "CURRENT_SUBJECT": 27
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:54b72a52749d4ff05cdb8462de22d2e045479e7143d43670d5abaeaffcd21c71",
-  "evidence_id": "PL2-54B72A52749D4FF0",
+  "evidence_digest": "sha256:addd5143f7c50781aabef36d9b7fb775b8984bdbefb0838c4c22a93ec1cbcc3f",
+  "evidence_id": "PL2-ADDD5143F7C50781",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
@@ -38,11 +38,11 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 1,
+      "evidence_max_age_days": 2,
       "repository": "portyu9/ai-qa-automation",
       "signals": [
         {
-          "age_days": 1,
+          "age_days": 2,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-14T19:41:28Z",
           "freshness": "AGED",
@@ -58,7 +58,7 @@
           "workflow": "ci.yml"
         },
         {
-          "age_days": 1,
+          "age_days": 2,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-14T19:37:42Z",
           "freshness": "AGED",
@@ -102,53 +102,53 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-10-15T22:03:48Z",
+          "completed_at_utc": "2026-10-16T00:33:11Z",
           "freshness": "SAME_DAY",
-          "head_sha": "76426ef66336a6272f341edffbe54863e3eefa23",
+          "head_sha": "8d5b2bd3a3ab7454daf919196ea0f3f3c00fdbd9",
           "label": "QUALITY+SEC",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 38813660296,
-          "run_number": 1976,
-          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/38813660296",
+          "run_id": 38829420729,
+          "run_number": 1980,
+          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/38829420729",
           "scope": "job-prefix:Quality / Python ;steps:Tests and trust-class coverage gates|Bandit|Dependency audit",
           "workflow": "ci.yml"
         },
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-10-15T22:03:48Z",
+          "completed_at_utc": "2026-10-16T00:33:11Z",
           "freshness": "SAME_DAY",
-          "head_sha": "76426ef66336a6272f341edffbe54863e3eefa23",
+          "head_sha": "8d5b2bd3a3ab7454daf919196ea0f3f3c00fdbd9",
           "label": "AGENT LABS",
           "offline": false,
           "ordinal": 2,
           "result": "PASSING",
-          "run_id": 38813660296,
-          "run_number": 1976,
-          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/38813660296",
+          "run_id": 38829420729,
+          "run_number": 1980,
+          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/38829420729",
           "scope": "jobs:OpenAI adapter / deterministic SDK|MCP fault lab / deterministic protocol|MCP remote auth / loopback HTTP|MCP OAuth flow / separated AS-RS|Package integrity",
           "workflow": "ci.yml"
         },
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-10-15T21:57:27Z",
+          "completed_at_utc": "2026-10-16T00:26:27Z",
           "freshness": "SAME_DAY",
-          "head_sha": "76426ef66336a6272f341edffbe54863e3eefa23",
+          "head_sha": "8d5b2bd3a3ab7454daf919196ea0f3f3c00fdbd9",
           "label": "SECURITY",
           "offline": false,
           "ordinal": 3,
           "result": "PASSING",
-          "run_id": 38813659953,
-          "run_number": 244,
-          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/38813659953",
+          "run_id": 38829420784,
+          "run_number": 248,
+          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/38829420784",
           "scope": "workflow",
           "workflow": "security.yml"
         }
       ],
-      "subject_revision": "76426ef66336a6272f341edffbe54863e3eefa23",
+      "subject_revision": "8d5b2bd3a3ab7454daf919196ea0f3f3c00fdbd9",
       "title": "AGENT EVALUATION + TEVV"
     },
     {
@@ -165,11 +165,11 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 2,
+      "evidence_max_age_days": 3,
       "repository": "portyu9/qa-automation-graphql",
       "signals": [
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T18:15:08Z",
           "freshness": "AGED",
@@ -185,7 +185,7 @@
           "workflow": "ci.yml"
         },
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T18:16:46Z",
           "freshness": "AGED",
@@ -218,11 +218,11 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 1,
+      "evidence_max_age_days": 2,
       "repository": "portyu9/qa-automation-visual-and-accessibility-playwright-axe",
       "signals": [
         {
-          "age_days": 1,
+          "age_days": 2,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-14T00:35:35Z",
           "freshness": "AGED",
@@ -238,7 +238,7 @@
           "workflow": "ci.yml"
         },
         {
-          "age_days": 1,
+          "age_days": 2,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-14T00:36:43Z",
           "freshness": "AGED",
@@ -271,11 +271,11 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 2,
+      "evidence_max_age_days": 3,
       "repository": "portyu9/qa-automation-dotnet-selenium",
       "signals": [
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T18:20:46Z",
           "freshness": "AGED",
@@ -291,7 +291,7 @@
           "workflow": "ci.yml"
         },
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T18:21:49Z",
           "freshness": "AGED",
@@ -324,11 +324,11 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 2,
+      "evidence_max_age_days": 3,
       "repository": "portyu9/qa-automation-api-postman-newman",
       "signals": [
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T18:16:04Z",
           "freshness": "AGED",
@@ -344,7 +344,7 @@
           "workflow": "ci.yml"
         },
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T18:17:37Z",
           "freshness": "AGED",
@@ -377,11 +377,11 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 2,
+      "evidence_max_age_days": 3,
       "repository": "portyu9/qa-automation-mobile-appium",
       "signals": [
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T18:06:44Z",
           "freshness": "AGED",
@@ -397,7 +397,7 @@
           "workflow": "ci.yml"
         },
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T18:07:37Z",
           "freshness": "AGED",
@@ -430,11 +430,11 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 2,
+      "evidence_max_age_days": 3,
       "repository": "portyu9/qa-automation-ui-cypress",
       "signals": [
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T18:14:06Z",
           "freshness": "AGED",
@@ -450,7 +450,7 @@
           "workflow": "ci.yml"
         },
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T18:15:21Z",
           "freshness": "AGED",
@@ -483,11 +483,11 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 2,
+      "evidence_max_age_days": 3,
       "repository": "portyu9/qa-automation-python-pytest",
       "signals": [
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T13:43:33Z",
           "freshness": "AGED",
@@ -503,7 +503,7 @@
           "workflow": "ci.yml"
         },
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T13:43:55Z",
           "freshness": "AGED",
@@ -536,11 +536,11 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 2,
+      "evidence_max_age_days": 3,
       "repository": "portyu9/qa-automation-node-supertest",
       "signals": [
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T18:14:06Z",
           "freshness": "AGED",
@@ -556,7 +556,7 @@
           "workflow": "ci.yml"
         },
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T18:15:20Z",
           "freshness": "AGED",
@@ -589,11 +589,11 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 2,
+      "evidence_max_age_days": 3,
       "repository": "portyu9/qa-automation-java-restassured",
       "signals": [
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T18:46:50Z",
           "freshness": "AGED",
@@ -609,7 +609,7 @@
           "workflow": "ci.yml"
         },
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T18:47:05Z",
           "freshness": "AGED",
@@ -642,11 +642,11 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 2,
+      "evidence_max_age_days": 3,
       "repository": "portyu9/qa-automation-node-playwright",
       "signals": [
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T18:15:54Z",
           "freshness": "AGED",
@@ -662,7 +662,7 @@
           "workflow": "ci.yml"
         },
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T18:16:24Z",
           "freshness": "AGED",
@@ -695,11 +695,11 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 2,
+      "evidence_max_age_days": 3,
       "repository": "portyu9/k6-performance-testing-framework",
       "signals": [
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T18:26:38Z",
           "freshness": "AGED",
@@ -715,7 +715,7 @@
           "workflow": "ci.yml"
         },
         {
-          "age_days": 2,
+          "age_days": 3,
           "binding": "CURRENT_SUBJECT",
           "completed_at_utc": "2026-10-13T18:25:54Z",
           "freshness": "AGED",
