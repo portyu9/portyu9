@@ -618,7 +618,7 @@ def validate_controller_pr_response_contract(text: str) -> None:
         # Both exact GraphQL transports are reviewed: legacy GitHub token and
         # isolated installation token. The original transport must still retain
         # its own single HTTP/status/schema/consume sequence.
-        expected_count = 2 if fragment == rebase_fetch else 1
+        expected_count = 2 if fragment in (rebase_fetch, rebase_schema) else 1
         require(text.count(fragment) == expected_count,
                 f"Dependabot GraphQL rebase {label} changed")
     require(
