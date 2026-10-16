@@ -736,6 +736,13 @@
       "rationale": "Authorize #543's main-completion wake hardening for the trusted Dependabot controller. Profile Quality or CodeQL completion on main may only wake default-branch code; every pass re-proves live main, native Dependabot PR identity, exact base/head, release provenance, and file closure before any update. No semantic BOM capability changes; this binds only the reviewed protected-source TCB digest. Exact-head merge gates remain unchanged."
     },
     {
+      "baseBomSha256": "cd4e7d9e6f474fc73cdb94f6b9fd1e6ab3bf65c588bc85e91f2315a697629b29",
+      "candidateBomSha256": "cd4e7d9e6f474fc73cdb94f6b9fd1e6ab3bf65c588bc85e91f2315a697629b29",
+      "expansionSha256": "d4f96bd352e5a721e0fe64c7e1287c017fb93f52600d5534ed1ee96f3490fe01",
+      "id": "cap-dependabot-controller-optional-advisory-v1",
+      "rationale": "Prior-authorize frozen #1742 head 1a3a9db6d5116bfd885ff32334c0714727eb5a26, tree 77c840cf6584c00abcf171c2a7a2d6b7a56a7701, measured by closed read-only #1743 run 38924872667: one trusted-source expansion, zero reductions, candidate TCB SHA256 e0c8233576ff6d1795352a71291e9a04c8e9b70fa91abb113a7160f8ba1e9098. Omitted/null maintainer advisory is never treated as permission; malformed values remain rejected; native Dependabot identity/provenance, owner approval and protected checks unchanged."
+    },
+    {
       "baseBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "candidateBomSha256": "9609fca59000d71da2464eae25f6856e1c566a0417ac7e35c9501ae75c416413",
       "expansionSha256": "a04b3ca890996277019a71eff785f36b623f9a52dff7be01599888a474014d41",
