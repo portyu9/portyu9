@@ -101,16 +101,16 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-              "repository": "actions/upload-artifact",
-              "step": "Preserve exact non-secret reconciliation receipt"
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted main"
             },
             {
               "kind": "remote",
               "path": "",
-              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
-              "repository": "actions/checkout",
-              "step": "Checkout exact trusted main"
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Preserve exact non-secret reconciliation receipt"
             }
           ],
           "apiSurfaces": [
@@ -462,16 +462,16 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-              "repository": "actions/upload-artifact",
-              "step": "Preserve recovery-open receipt"
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted main"
             },
             {
               "kind": "remote",
               "path": "",
-              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
-              "repository": "actions/checkout",
-              "step": "Checkout exact trusted main"
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Preserve recovery-open receipt"
             }
           ],
           "apiSurfaces": [
@@ -545,16 +545,16 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-              "repository": "actions/upload-artifact",
-              "step": "Preserve immutable recovery candidate evidence"
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted main"
             },
             {
               "kind": "remote",
               "path": "",
-              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
-              "repository": "actions/checkout",
-              "step": "Checkout exact trusted main"
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Preserve immutable recovery candidate evidence"
             }
           ],
           "apiSurfaces": [],
@@ -595,16 +595,16 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-              "repository": "actions/upload-artifact",
-              "step": "Preserve recovery-restoration receipt"
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted recovery source"
             },
             {
               "kind": "remote",
               "path": "",
-              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
-              "repository": "actions/checkout",
-              "step": "Checkout exact trusted recovery source"
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Preserve recovery-restoration receipt"
             }
           ],
           "apiSurfaces": [
@@ -767,16 +767,16 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-              "repository": "actions/upload-artifact",
-              "step": "Preserve watchdog-restoration receipt"
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted main"
             },
             {
               "kind": "remote",
               "path": "",
-              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
-              "repository": "actions/checkout",
-              "step": "Checkout exact trusted main"
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Preserve watchdog-restoration receipt"
             }
           ],
           "apiSurfaces": [
