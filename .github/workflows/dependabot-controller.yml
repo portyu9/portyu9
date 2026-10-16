@@ -1778,7 +1778,10 @@ jobs:
           echo "Dispatched CodeQL only after exact read-only Dependabot validation succeeded."
 
   workflow_rebase:
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    # GitHub schedule delivery may lag. Accept only an independently
+    # successful same-repository main push workflow, never a PR wake.
+    # Source/main/head are re-bound again before any App token issuance.
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_run' && github.ref == 'refs/heads/main' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_sha == github.sha && (github.event.workflow_run.name == 'Profile quality' || github.event.workflow_run.name == 'CodeQL'))
     name: trusted-dependabot-workflow-rebase
     runs-on: ubuntu-24.04
     timeout-minutes: 8
