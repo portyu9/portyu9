@@ -2413,7 +2413,7 @@ def validate_release_resolution_parity_contract(text: str) -> None:
     resolved_arg = "--resolved-release resolved-release.json"
 
     for fragment, expected_count in (
-        (helper_pin, 2),
+        (helper_pin, 3),
         (repository_root_pin, 2),
         (ls_remote, 2),
         (repository_get, 2),
