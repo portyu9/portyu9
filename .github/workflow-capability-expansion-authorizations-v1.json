@@ -829,6 +829,13 @@
     {
       "baseBomSha256": "d25d34d36eeeb89f02bbe204a5dc38857e8964ebf01158bb68e160f5ed3ef201",
       "candidateBomSha256": "d25d34d36eeeb89f02bbe204a5dc38857e8964ebf01158bb68e160f5ed3ef201",
+      "expansionSha256": "4688c965f7e199f07770bc4ef2f4bd614b60aaaf3522affa8ea879f5cc2f8ffb",
+      "id": "cap-dependabot-jwt-bearer-token-transport-v1",
+      "rationale": "Prior-authorize frozen #1732 head cc080d800b7db7ced0015c63ac2aedf3168f3692, tree 9714aa77d644e7d26a77a10f8fa1f6e73ae59d20, measured by closed read-only #1733 run 38908796990: one protected-source expansion, zero reductions; TCB SHA256 a497d83f5fe384f48ba3fd27a8be29db57f4cac9a7fc16bdc3c4aff54659efed. Repair observed App installation-token POST HTTP 401 using proven explicit Bearer JWT, typed HTTP 201 and temporary secret handling. No new permissions, mutation, bypass or token scope."
+    },
+    {
+      "baseBomSha256": "d25d34d36eeeb89f02bbe204a5dc38857e8964ebf01158bb68e160f5ed3ef201",
+      "candidateBomSha256": "d25d34d36eeeb89f02bbe204a5dc38857e8964ebf01158bb68e160f5ed3ef201",
       "expansionSha256": "1d9e3b4b73946be77287ef5f48aadc293463e5d7829781ce04a2a2f2acc56211",
       "id": "cap-dependabot-main-push-rebase-wake-v1",
       "rationale": "Prior-authorize frozen #1729 head 6c59f7f52e1fe7bde2229739383f919fc9cb517b, tree 0adadd24e2e061b1463beb8f0836f189b420eb4a, measured by closed read-only #1730 run 38906906142: one trusted-workflow source expansion, zero reductions; TCB SHA256 fc7445c2b98e50b32f6f74eec96819697bdcc1407a4f3bf4aa28ad89b52be50f. Only successful exact-main same-repository push CodeQL/Profile Quality workflow-run events wake existing isolated rebase; retains schedule, credential boundary and protected merge. No bypass."
