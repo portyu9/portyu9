@@ -981,6 +981,13 @@
       "rationale": "Authorize #765's exact Dependabot readiness evidence hardening. Existing read endpoints, permissions, protected contexts, dispatch target, and merge/review authority stay unchanged. Bounded run/check collections, strict identity/status/conclusion schemas, unique ids, and all-noncompleted activity now fail closed before readiness or redispatch. Semantic Workflow Capability is unchanged; no trigger, secret, mutation class, retry, ruleset, direct-main write, check reduction, or bypass is added."
     },
     {
+      "baseBomSha256": "d25d34d36eeeb89f02bbe204a5dc38857e8964ebf01158bb68e160f5ed3ef201",
+      "candidateBomSha256": "d25d34d36eeeb89f02bbe204a5dc38857e8964ebf01158bb68e160f5ed3ef201",
+      "expansionSha256": "006608f45caa5fbd516b19438ceeb06701f0948ff173f3d4102000ff60f492e8",
+      "id": "cap-dependabot-rebase-list-optional-advisory-v1",
+      "rationale": "Prior-authorize exact frozen #1726 head 5e51b9a864aa84d0e12bc893c46fc11ce4cc8479, tree abaacae86575b716789154effde48538a1db1ecd, measured by closed read-only #1727 (run 38904401764): one protected-source expansion, zero reductions, candidate TCB SHA256 53b21e8c484aee43a1b6a54f85d936f93fbb7a1b48047a9ec8ec0fdeb91a43b2. Accept absent optional PR-list advisory but retain malformed-value rejection and all immutable identity, token, rebase and merge gates. No new permissions or bypass."
+    },
+    {
       "baseBomSha256": "7f91352fc1f77fbb890b058b86e71592ff85012777b149fecff0deb378fd37c3",
       "candidateBomSha256": "7f91352fc1f77fbb890b058b86e71592ff85012777b149fecff0deb378fd37c3",
       "expansionSha256": "f9a4a499b5edd8d06b089674686ec437d2b427127bce61c340d8e0ebd53e6a6e",
