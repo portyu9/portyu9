@@ -90,7 +90,6 @@ def render_card(
     # Mobile layout is a distinct visual presentation of the exact same evidence.
     # Keep the desktop artwork untouched; the embedded SVG viewport is the switch.
     mobile_title_size = min(title_size + 5, 31)
-    mobile_result = html.escape(" · ".join(f"{item['label']} {item['signal']}" for item in evidence))
     mobile_run_ids = html.escape(" / ".join(f"{item['label']}#{item['run_id']}" for item in evidence))
     freshnesses = {str(item["freshness"]) for item in evidence}
     mobile_freshness = "AGED" if "AGED" in freshnesses else (
@@ -128,9 +127,8 @@ def render_card(
     <text x="38" y="28" fill="{p['muted']}" font-family="ui-sans-serif,system-ui,sans-serif" font-size="20" font-weight="700">EVIDENCE SPOTLIGHT · {slot:02d}</text>
     <text x="38" y="66" fill="{accent}" font-family="ui-sans-serif,system-ui,sans-serif" font-size="{mobile_title_size}" font-weight="800">{title}</text>
     <text x="38" y="96" fill="{p['ink']}" font-family="ui-sans-serif,system-ui,sans-serif" font-size="19" font-weight="600">{domain}</text>
-    <text x="38" y="128" fill="{p['ink']}" font-family="ui-sans-serif,system-ui,sans-serif" font-size="22" font-weight="700">{mobile_result}</text>
-    <text x="38" y="156" fill="{age_ink}" font-family="ui-sans-serif,system-ui,sans-serif" font-size="21" font-weight="800">FRESHNESS {mobile_freshness} · {max_age}d UTC · {mobile_binding}</text>
-    <text x="38" y="185" fill="{p['muted']}" font-family="ui-sans-serif,system-ui,sans-serif" font-size="18" font-weight="600">MAIN {subject[:12]} · RUNS {mobile_run_ids}</text>
+    <text x="38" y="139" fill="{age_ink}" font-family="ui-sans-serif,system-ui,sans-serif" font-size="21" font-weight="800">FRESHNESS {mobile_freshness} · {max_age}d UTC · {mobile_binding}</text>
+    <text x="38" y="175" fill="{p['muted']}" font-family="ui-sans-serif,system-ui,sans-serif" font-size="18" font-weight="600">MAIN {subject[:12]} · RUNS {mobile_run_ids}</text>
   </g>
 </svg>
 """
