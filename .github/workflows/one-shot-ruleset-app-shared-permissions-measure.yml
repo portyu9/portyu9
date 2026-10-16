@@ -26,8 +26,8 @@ jobs:
       - name: Measure exact frozen Ruleset App permission transition (no writes)
         env:
           TRUSTED_BASE: 69a93b8c501b4b3a66040b96e6ea4ca56314ae77
-          FROZEN_HEAD: bf23732a679dae4481d2e1de59bf0b84c146675b
-          FROZEN_TREE: 306d96cde8d9065d8a065734c4b83655d655d86a
+          FROZEN_HEAD: e71b6c18db59f877b3f521526d0e845680859811
+          FROZEN_TREE: 97d20eb18a4db990a7c93aba3bbb0dfbb3c61a9a
           PYTHONDONTWRITEBYTECODE: "1"
         run: |
           set -euo pipefail
