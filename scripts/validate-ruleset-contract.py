@@ -946,8 +946,8 @@ def validate_reconciler_admin_response_evidence(text: str) -> None:
     for fragment in fragments:
         require(fragment in text, f"Ruleset admin response schema fragment missing: {fragment}")
 
-    require(text.count('((.permissions | del(.metadata)) == {"administration":"write"} or (.permissions | del(.metadata)) == {"administration":"write","contents":"write","pull_requests":"write","workflows":"write"})') == 2,
-            "Ruleset App installation must have exactly old/new permission-set checks")
+    require(text.count('((.permissions | del(.metadata)) == {"administration":"write"} or (.permissions | del(.metadata)) == {"administration":"write","contents":"write","pull_requests":"write","workflows":"write"})') == 1,
+            "Historical Ruleset App installation must have exactly old/new permission-set checks")
     admin_read_pin = (
         'test "$(git rev-parse HEAD:scripts/automation_github_ruleset_admin_read.py)" = '
         '"ef7c2306ac7007494a4c6bd951b0160d55c502a2"'
