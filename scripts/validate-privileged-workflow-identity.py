@@ -5202,6 +5202,8 @@ def validate_native_dependabot_app_rebase_admission(capability: str) -> None:
         '(.base.ref == "main" and .base.sha == $base) and',
         '(.head.repo.full_name == $repo) and',
         '(.head.ref == $ref and .head.sha == $head)',
+        'printf \'%s\\n\' "$LIVE_PR" > "$RUNNER_TEMP/dependabot-pr.json"',
+        'test -s "$RUNNER_TEMP/dependabot-pr.json"',
         'PR="$LIVE_PR"',
         'DEPENDABOT=true',
     )
@@ -5210,6 +5212,7 @@ def validate_native_dependabot_app_rebase_admission(capability: str) -> None:
                 f"native App-rebased Dependabot admission missing identity bound: {marker}")
     require(case.index('validate_api_pr_object "$LIVE_PR" "$PR_NUMBER"')
             < case.index('(.user.login == "dependabot[bot]") and')
+            < case.index('printf \'%s\\n\' "$LIVE_PR" > "$RUNNER_TEMP/dependabot-pr.json"')
             < case.index('PR="$LIVE_PR"')
             < case.index('DEPENDABOT=true'),
             "native App-rebased Dependabot classification occurred before identity proof")
@@ -5224,6 +5227,7 @@ def self_test_native_dependabot_app_rebase_admission(capability: str) -> None:
         '(.head.ref == $ref and .head.sha == $head)',
         'test "$HEAD_REPOSITORY" = "$TARGET_REPOSITORY"',
         'validate_api_pr_object "$LIVE_PR" "$PR_NUMBER"',
+        'printf \'%s\\n\' "$LIVE_PR" > "$RUNNER_TEMP/dependabot-pr.json"',
     ):
         weakened = capability.replace(marker, "true", 1)
         require(weakened != capability, "native App rebase negative fixture missing")
