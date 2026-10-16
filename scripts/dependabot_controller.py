@@ -411,16 +411,16 @@ def validate_pull_request_response(
     require(value.get("state") == "open", "Dependabot pull-request response state changed")
     require(type(value.get("draft")) is bool and value.get("draft") is False,
             "Dependabot pull-request response draft flag changed")
-    # GitHub REST may return explicit null for this advisory maintainer flag.
-    # It must be present and typed; null means no observed permission, never
-    # inferred permission. Actual identity/authorization uses exact immutable
-    # Dependabot actor, repository, node ID, branch and head SHA evidence.
-    require(
-        "maintainer_can_modify" in value
-        and (value["maintainer_can_modify"] is None
-             or type(value["maintainer_can_modify"]) is bool),
-        "Dependabot pull-request response maintainer_can_modify must be boolean or explicit null",
-    )
+    # GitHub REST may omit this advisory flag or return explicit null.
+    # Missing/null is normalized to no observed permission, never inferred
+    # permission. Actual authorization is bound to immutable native Dependabot
+    # actor, repository, node ID, base/ref and exact head SHA evidence.
+    if "maintainer_can_modify" in value:
+        require(
+            value["maintainer_can_modify"] is None
+            or type(value["maintainer_can_modify"]) is bool,
+            "Dependabot pull-request response maintainer_can_modify must be boolean or explicit null",
+        )
     base = value.get("base")
     require(isinstance(base, Mapping), "Dependabot pull-request response base must be an object")
     require(base.get("ref") == "main", "Dependabot pull-request response base ref changed")
@@ -487,7 +487,7 @@ def validate_pull_request_response(
         "user": "dependabot[bot]",
         "state": "open",
         "draft": False,
-        "maintainerCanModify": value["maintainer_can_modify"] is True,
+        "maintainerCanModify": value.get("maintainer_can_modify") is True,
         "baseRef": "main",
         "baseSha": base_sha,
         "headRef": head_ref,
@@ -1300,10 +1300,26 @@ def self_test() -> None:
         and null_permission["nodeId"] == "PR_fixtureController123",
         "Dependabot nullable permission metadata was not conservatively disabled",
     )
-    for malformed in ({**pr_response_fixture, "maintainer_can_modify": "false"},
-                      {**pr_response_fixture, "maintainer_can_modify": 1},
-                      {key: value for key, value in pr_response_fixture.items()
-                       if key != "maintainer_can_modify"}):
+    absent_permission = validate_pull_request_response(
+        {key: value for key, value in pr_response_fixture.items()
+         if key != "maintainer_can_modify"},
+        expected_number=17,
+        expected_repository=REPOSITORY,
+    )
+    require(
+        absent_permission["maintainerCanModify"] is False
+        and absent_permission["headSha"] == commit_sha
+        and absent_permission["baseSha"] == parent_sha
+        and absent_permission["nodeId"] == "PR_fixtureController123"
+        and absent_permission["portyu9Requested"] is True,
+        "Dependabot omitted advisory metadata changed immutable PR identity",
+    )
+    for malformed in (
+        {**pr_response_fixture, "maintainer_can_modify": "false"},
+        {**pr_response_fixture, "maintainer_can_modify": 1},
+        {**pr_response_fixture, "maintainer_can_modify": []},
+        {**pr_response_fixture, "maintainer_can_modify": {"allowed": True}},
+    ):
         try:
             validate_pull_request_response(
                 malformed, expected_number=17, expected_repository=REPOSITORY
@@ -1312,7 +1328,7 @@ def self_test() -> None:
             require("boolean or explicit null" in str(exc),
                     "Dependabot nullable permission negative fixture failed at wrong guard")
         else:
-            raise ValueError("Dependabot nullable permission admitted malformed/missing field")
+            raise ValueError("Dependabot nullable permission admitted malformed typed field")
 
     safe_rebase = validate_rebase_graphql_response(
         {"data": {"updatePullRequestBranch": {"pullRequest": {
