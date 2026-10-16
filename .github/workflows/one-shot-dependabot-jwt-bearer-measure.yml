@@ -1,0 +1,45 @@
+name: One-shot Dependabot App JWT Bearer boundary immutable measurement
+on:
+  pull_request:
+    types: [opened, synchronize]
+permissions:
+  contents: read
+env:
+  PYTHON_VERSION: "3.13.16"
+jobs:
+  measure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout immutable accepted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 7a98c595f87febb64b193ae5c463c9cf59f23dfa
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up trusted Python runtime
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.16"
+      - name: Measure frozen App Bearer contract without authorization
+        env:
+          TRUSTED_BASE: 7a98c595f87febb64b193ae5c463c9cf59f23dfa
+          FROZEN_HEAD: cc080d800b7db7ced0015c63ac2aedf3168f3692
+          FROZEN_TREE: 9714aa77d644e7d26a77a10f8fa1f6e73ae59d20
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TRUSTED_BASE"
+          test "$(git rev-parse HEAD:scripts/workflow_capability_admission.py)" = "a832c73cc3be625a8af9b5997c815b73c3520dab"
+          python3 -B scripts/verify-python-runtime.py
+          git fetch --no-tags --depth=1 origin "$FROZEN_HEAD"
+          test "$(git rev-parse "$FROZEN_HEAD^{tree}")" = "$FROZEN_TREE"
+          mkdir -p "$RUNNER_TEMP/frozen-dependabot-jwt-bearer-candidate"
+          git archive "$FROZEN_HEAD" | tar -x -C "$RUNNER_TEMP/frozen-dependabot-jwt-bearer-candidate"
+          test -z "$(git status --porcelain)"
+          python3 -B scripts/workflow_capability_admission.py \
+            "$RUNNER_TEMP/frozen-dependabot-jwt-bearer-candidate" \
+            --candidate-tree-sha "$FROZEN_TREE" --measure
+          test -z "$(git status --porcelain)"
