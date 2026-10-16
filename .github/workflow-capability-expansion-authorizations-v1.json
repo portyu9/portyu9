@@ -827,6 +827,13 @@
       "rationale": "Authorize #556's exact incremental immutable workflow-run wake binding after the already-accepted duplicate-check convergence. The controller may GET the triggering Actions run by immutable run ID, then fail closed on workflow identity, event, repository, head repository, branch, and SHA before any bot-PR approval or merge logic runs. This adds one read-only trusted wake surface only; existing approval, required checks, provenance, and exact-head merge authority are unchanged."
     },
     {
+      "baseBomSha256": "d25d34d36eeeb89f02bbe204a5dc38857e8964ebf01158bb68e160f5ed3ef201",
+      "candidateBomSha256": "d25d34d36eeeb89f02bbe204a5dc38857e8964ebf01158bb68e160f5ed3ef201",
+      "expansionSha256": "1d9e3b4b73946be77287ef5f48aadc293463e5d7829781ce04a2a2f2acc56211",
+      "id": "cap-dependabot-main-push-rebase-wake-v1",
+      "rationale": "Prior-authorize frozen #1729 head 6c59f7f52e1fe7bde2229739383f919fc9cb517b, tree 0adadd24e2e061b1463beb8f0836f189b420eb4a, measured by closed read-only #1730 run 38906906142: one trusted-workflow source expansion, zero reductions; TCB SHA256 fc7445c2b98e50b32f6f74eec96819697bdcc1407a4f3bf4aa28ad89b52be50f. Only successful exact-main same-repository push CodeQL/Profile Quality workflow-run events wake existing isolated rebase; retains schedule, credential boundary and protected merge. No bypass."
+    },
+    {
       "baseBomSha256": "2a708bf17c664fcaa3b31808bbf66302b0c9d9239c87dd4d8fef87177d574093",
       "candidateBomSha256": "2a708bf17c664fcaa3b31808bbf66302b0c9d9239c87dd4d8fef87177d574093",
       "expansionSha256": "b66ee1499934f18bbdc84a41ff56f4409fe4a7ff9412d41038f21dd5b9ef7d5c",
