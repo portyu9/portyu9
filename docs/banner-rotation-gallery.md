@@ -1,3 +1,9 @@
+> **Production update (2026-10-17):** This is a historical experimental
+> eight-day gallery, not the active schedule. Production now rotates the three
+> approved original / Fractal Iris / Chronohedron triplets every UTC day.
+> Reserved slots 4–8 stay inactive; existing art is preserved. A protected,
+> monotonic v3-to-v4 README marker migration retains publication provenance.
+
 # Eight-day crown + evidence-horizon gallery (seven new themes plus the original)
 
 **Implementation branch:** `feature/seven-day-animated-banner-cycle-20261012` · **Source PR:** [#1632](https://github.com/portyu9/portyu9/pull/1632). This gallery is a permanently reviewable catalog; production selection is governed by the accepted main-branch Spotlight image publisher.
