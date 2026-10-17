@@ -1,7 +1,7 @@
 # Profile banner rotation — reviewed artwork gate (2026-10-13)
 
 This updates the historical October 13 **original-only suspension** to a
-content-addressed, explicitly approved **eight-slot** UTC rotation with three approved design triplets. The
+content-addressed, explicitly approved **three-day** active UTC rotation drawn from an eight-slot reviewed catalog. The
 original-only hold remains the fallback for unapproved work.
 
 ## Slot map and source of truth
@@ -16,14 +16,19 @@ README markers and any unapproved asset path.
 | --- | --- | --- |
 | 1 | Approved | Original Quantum Apex desktop/mobile and Evidence Horizon footer |
 | 2 | Approved | Fractal Iris desktop/mobile/closing horizon, **without under-iris shadow** |
-| 3 | Approved | Chronohedron: desktop/mobile/footer, with breathing four-phosphor crystalline edges |\n| 4–8 | Reserved | Original triplet only, until reviewed artwork is approved per slot |
+| 3 | Approved | Chronohedron: desktop/mobile/footer, with breathing four-phosphor crystalline edges |\n| 4–8 | Reserved | Not scheduled until separately approved; historical v3 used original fallback |
 
-Slot 1 begins **2026-10-12 UTC**, slot 2 is **2026-10-13 UTC**, and each
-subsequent UTC day advances one slot (modulo eight). This makes slot 2 a
-fixed, predictable eight-day recurrence. Reserved slots deliberately fall
-back to the original artwork and cannot use archived experimental themes.
+The three active designs follow **2026-10-12 UTC** original,
+**2026-10-13 UTC** Fractal Iris, **2026-10-14 UTC** Chronohedron, then repeat
+every **three UTC days** without reserved-slot gaps. The historical v3
+eight-day cycle remains valid for checking existing README markers. On the
+next guarded README update, the publisher replaces a validated v3 marker
+with a v4 marker. Entries 4–8 remain unapproved, unselected and preserved.
 
-The approved Chronohedron occupies slot 3 on the following UTC day (2026-10-14) and reappears every eight days; its three self-contained source assets are `assets/profile-banners/approved/03-chronohedron-{top,top-compact,bottom}.svg`. They are pinned individually by exact Git blob identities and preserve the user-approved original silhouette. The approved Fractal Iris is rendered as **three self-contained SVGs**
+The approved Chronohedron triplet is
+`assets/profile-banners/approved/03-chronohedron-{top,top-compact,bottom}.svg`.
+It retains the reviewed four-phosphor spectrum and immutable blob identities.
+The approved Fractal Iris is rendered as **three self-contained SVGs**
 under `assets/profile-banners/approved/`, each with the exact same real
 motion and light-response system, with viewports adapted to its destination:
 
@@ -40,8 +45,8 @@ archival validation tools and are **not production publishers**.
 ## Protected atomic publication
 
 The only production daily writer is the existing guarded Spotlight README
-automation. Its content-addressed source delegate now verifies the separate
-V3 helper and catalog as well as the archived V2 helper, then derives the
+automation. Its content-addressed source delegate now verifies the reviewed three-day selector, unchanged V3 approved-art catalog,
+and archived V2 helper, then derives the
 current calendar day in UTC, validates the current README marker and all
 three referenced images, and proposes exactly one monotonic, replay-safe
 `README.md` candidate with a matching day/slot/slug marker.
@@ -61,7 +66,7 @@ introduced.
 original and Fractal Iris blobs; `--self-test` checks slot continuity,
 archive fallback, leap/year boundaries, replay safety, and malicious
 unapproved asset rejection. `scripts/validate-profile-v4.py` executes both
-historical archive checks and the new approved-only checks.
+historical archive checks and the v3-to-v4 marker migration and the new approved-only three-day checks.
 
 Real GitHub rendering on desktop and mobile, image loading, footer crop and
 browser playback remain separate visual checks. The accepted Fractal Iris
