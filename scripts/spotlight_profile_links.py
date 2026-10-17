@@ -23,7 +23,7 @@ from typing import Any
 VERSION = "spotlight-profile-links-v1"
 BANNER_HELPER_GIT_BLOB = "03a7876b3daacc26583719bb560db26a493e3e8f"
 BANNER_CATALOG_GIT_BLOB = "bda417d339852145a42712375b6b5bc01b2b87a4"
-APPROVED_BANNER_HELPER_BLOB = "a863e416ce57fc744e1afbafe4c73f28e2145309"
+APPROVED_BANNER_HELPER_BLOB = "c0535eb08ae047d847c5e756adb5d5d42242b5aa"
 APPROVED_BANNER_CATALOG_BLOB = "616dd2beba7b49fe933c243c7c08d50e562861c2"
 
 
@@ -47,7 +47,7 @@ def reviewed_banner_helper():
     return banner_rotation
 
 def reviewed_approved_banner_helper():
-    """Approve only the content-addressed v3 selector and manifest."""
+    """Pin the reviewed three-day selector and unchanged approved-art manifest."""
     reviewed_banner_helper()  # Protect historical source and original triplet.
     source_dir = Path(__file__).resolve(strict=True).parent
     for relative, expected in (
@@ -234,10 +234,9 @@ def render_plan(
                     "same generated publication epoch must preserve exact commit and tree identity")
     block, targets = render_block(manifest, generated_sha, publication_sequence, generated_tree_sha)
     proposed = replace_block(readme, block)
-    # Authorized eight-slot UTC cycle: only original and Fractal Iris are
-    # approved. Slots three through eight fall back to untouched original art.
-    # A Spotlight change must reconcile the banner triplet atomically and may
-    # never publish one of the seven archived experimental daily themes.
+    # Three approved triplets rotate on successive UTC days; reserved slots
+    # remain inaccessible. Validate historical eight-slot v3 markers before
+    # atomic migration to v4 without promoting archived experimental art.
     banner_cycle = reviewed_approved_banner_helper()
     banner_slots = banner_cycle.load_catalog()
     banner_cycle.validate_readme_state(readme, banner_slots)
@@ -341,7 +340,7 @@ def self_test() -> None:
     today_selection = banner_cycle.chosen(datetime.now(timezone.utc).date(), slots)
     require(banner_cycle.referenced(proposed, slots) ==
             {surface: today_selection[surface] for surface in banner_cycle.SURFACES},
-            "Spotlight self-test failed to advance approved eight-slot artwork")
+            "Spotlight self-test failed to advance approved three-day artwork")
     corrupted = proposed.replace(today_selection["top"],
                                  "assets/profile-banners/daily/01-orbital-relay-top.svg", 1)
     require(corrupted != proposed, "approved-only fixture did not mutate banner")
