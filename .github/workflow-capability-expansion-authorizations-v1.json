@@ -47,7 +47,7 @@
       "candidateBomSha256": "cd4e7d9e6f474fc73cdb94f6b9fd1e6ab3bf65c588bc85e91f2315a697629b29",
       "expansionSha256": "e803fe4106f37a0277883276361ffbd142cdd2d0c3cead834b327a9f2c2fbf4f",
       "id": "cap-approved-banner-three-day-rotation-v1",
-      "rationale": "Prior authorization for frozen #1756 (candidate tree 5eb0c8538e1f96fa76e8a38a830587343d959c5a): exact protected Spotlight renderer pin of reviewed approved_banner_rotation.py, changing only its approved-asset calendar from eight slots with five reserved-day repeats to a continuous three-day UTC cycle. Original, Iris and Chronohedron SHA-pinned triplets remain untouched; legacy v3 markers are revalidated for v4 monotonic migration. No workflow permission, trigger, endpoint/method, mutation class, secret/OIDC, required-check reduction, direct-main write, merge/ruleset authority, unapproved design promotion, or bypass is added."
+      "rationale": "Authorize frozen PR #1756 exact protected Spotlight source pin, measured by closed diagnostic #1757. Change only approved profile banner selection from eight calendar slots (five reserved fallbacks) to three-day UTC cycling. Historical v3 README markers migrate safely to v4; approved artwork blobs and reserved assets remain unchanged. No workflow, permission, trigger, mutation, secret/OIDC, checks reduction, direct-main write, ruleset/merge authority, or bypass."
     },
     {
       "id": "cap-approved-iris-slot2-publisher-no-diagnostic-v1",
