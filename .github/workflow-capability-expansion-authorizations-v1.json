@@ -43,6 +43,13 @@
       "rationale": "Authorize #1230's exact one-file trusted TCB selector preparation measured on accepted post-recovery main. Capability Admission will protect the reviewed future AI QA owner-certifier manifest, BOM shard, workflow, and verifier script. Semantic Workflow Capability is unchanged; no permission, trigger, secret, mutation, required-check reduction, ruleset/merge authority, direct-main write, AWS authority, or bypass is added."
     },
     {
+      "baseBomSha256": "cd4e7d9e6f474fc73cdb94f6b9fd1e6ab3bf65c588bc85e91f2315a697629b29",
+      "candidateBomSha256": "cd4e7d9e6f474fc73cdb94f6b9fd1e6ab3bf65c588bc85e91f2315a697629b29",
+      "expansionSha256": "e803fe4106f37a0277883276361ffbd142cdd2d0c3cead834b327a9f2c2fbf4f",
+      "id": "cap-approved-banner-three-day-rotation-v1",
+      "rationale": "Prior authorization for frozen #1756 (candidate tree 5eb0c8538e1f96fa76e8a38a830587343d959c5a): exact protected Spotlight renderer pin of reviewed approved_banner_rotation.py, changing only its approved-asset calendar from eight slots with five reserved-day repeats to a continuous three-day UTC cycle. Original, Iris and Chronohedron SHA-pinned triplets remain untouched; legacy v3 markers are revalidated for v4 monotonic migration. No workflow permission, trigger, endpoint/method, mutation class, secret/OIDC, required-check reduction, direct-main write, merge/ruleset authority, unapproved design promotion, or bypass is added."
+    },
+    {
       "id": "cap-approved-iris-slot2-publisher-no-diagnostic-v1",
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
