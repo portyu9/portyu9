@@ -1,6 +1,6 @@
 <br>
 
-<!-- banner-rotation:v3 utc-day=2026-10-16 slot=5 slug=05-reserved -->
+<!-- banner-rotation:v3 utc-day=2026-10-17 slot=6 slug=06-reserved -->
 <p align="center">
 <picture>
   <source media="(max-width: 640px)" srcset="assets/profile-banners/quantum-apex-signal-crown-hero-compact.svg">
