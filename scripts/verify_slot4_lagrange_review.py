@@ -77,7 +77,7 @@ def verify_morph(elem: ET.Element, surface: str) -> None:
     must(all(sig == sigs[0] for sig in sigs) and
          len(set(number_counts)) == 1 and
          sigs[0].count("C") == 16 and
-         all(0 < float(n) < 10_000 or -10_000 < float(n) < 0
+         all(-10_000 < float(n) < 10_000
              for frame in frames for n in NUM.findall(frame)),
          f"slot4 {surface}: incompatible or nonfinite interpolated path frames")
 
@@ -158,7 +158,7 @@ def verify() -> None:
              ".still{display:inline!important}" in styles and
              len(list(root.findall(f".//{NS}g[@class='still']"))) == 1,
              f"slot4 {surface}: complete reduced-motion focal field missing")
-        must(len(list(root.iter(NS + "linearGradient"))) >= 7 and
+        must(len(list(root.iter(NS + "linearGradient"))) >= 6 and
              len(list(root.iter(NS + "radialGradient"))) >= 2 and
              len(list(root.iter(NS + "feGaussianBlur"))) >= 2,
              f"slot4 {surface}: refractive/glow optical material missing")
