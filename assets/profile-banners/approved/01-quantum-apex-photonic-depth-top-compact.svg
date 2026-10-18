@@ -1,0 +1,141 @@
+<svg data-review-art="quantum-apex-photonic-depth-v1" shape-rendering="geometricPrecision" text-rendering="geometricPrecision" xmlns="http://www.w3.org/2000/svg" width="1920" height="588" viewBox="0 0 640 196" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Quantum Apex Signal Crown compact</title>
+  <desc id="desc">Mobile-native Quantum Apex photonic prism with slow atmospheric grain, luminous faceted crystal, caustic pulses, flowing wavelength deformation and full reduced-motion fallback.</desc>
+  <defs>
+    <linearGradient id="tri" x1="0" y1="0" x2="640" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00E6FF"/><stop offset=".32" stop-color="#00FBCC"/><stop offset=".5" stop-color="#E328FC"/><stop offset=".68" stop-color="#00FBCC"/><stop offset="1" stop-color="#00E6FF"/>
+    </linearGradient>
+    <radialGradient id="field" cx="0" cy="0" r="1" gradientTransform="translate(320 98) rotate(90) scale(82 190)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E328FC" stop-opacity=".18"/><stop offset=".48" stop-color="#00E6FF" stop-opacity=".09"/><stop offset="1" stop-color="#00FBCC" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-40%" y="-60%" width="180%" height="220%"><feGaussianBlur stdDeviation="3.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <style>.motion{display:inline}.fine{opacity:.48}.ambient{opacity:.92}@media (prefers-color-scheme: light){.fine{opacity:.36}.ambient{opacity:.76}}@media (prefers-reduced-motion: reduce){.motion{display:none}.ambient{opacity:.82}}</style>
+  
+    <radialGradient id="qa-mini-nebula"><stop stop-color="#E328FC" stop-opacity=".4"/><stop offset=".33" stop-color="#00E6FF" stop-opacity=".2"/><stop offset=".7" stop-color="#00FBCC" stop-opacity=".055"/><stop offset="1" stop-color="#00E6FF" stop-opacity="0"/></radialGradient>
+    <radialGradient id="qa-mini-core"><stop stop-color="#FFFFFF" stop-opacity=".92"/><stop offset=".13" stop-color="#00E6FF" stop-opacity=".76"/><stop offset=".43" stop-color="#E328FC" stop-opacity=".35"/><stop offset="1" stop-color="#00FBCC" stop-opacity="0"/></radialGradient>
+    <linearGradient id="qa-mini-prism" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#00E6FF" stop-opacity=".12"/><stop offset=".2" stop-color="#FFFFFF" stop-opacity=".42"/><stop offset=".43" stop-color="#E328FC" stop-opacity=".24"/>
+      <stop offset=".65" stop-color="#00FBCC" stop-opacity=".42"/><stop offset="1" stop-color="#00E6FF" stop-opacity=".04"/>
+    </linearGradient>
+    <linearGradient id="qa-mini-wave" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#00FBCC" stop-opacity="0"/><stop offset=".3" stop-color="#00E6FF" stop-opacity=".21"/><stop offset=".58" stop-color="#E328FC" stop-opacity=".3"/><stop offset="1" stop-color="#00E6FF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="qa-mini-caustic" x1="0" y1="0" x2="1" y2="0" gradientUnits="objectBoundingBox">
+      <stop stop-color="#00FBCC" stop-opacity="0"/><stop offset=".41" stop-color="#00E6FF" stop-opacity=".18"/>
+      <stop offset=".495" stop-color="#FFFFFF" stop-opacity=".9"/><stop offset=".52" stop-color="#00FBCC" stop-opacity=".8"/><stop offset="1" stop-color="#E328FC" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="qa-mini-bloom" x="-80%" y="-180%" width="260%" height="460%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="5.1"/></filter>
+    <filter id="qa-mini-lens" x="-60%" y="-80%" width="220%" height="260%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="2.1" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="qa-mini-grain" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency=".09 .16" numOctaves="2" seed="17" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 .9  0 0 0 0 1  0 0 0 .09 0"/>
+    </filter>
+    <clipPath id="qa-mini-clip"><ellipse cx="320" cy="90" rx="246" ry="79"/></clipPath>
+    <style>
+      .qa-mini-live{display:inline}.qa-mini-atmo{opacity:.88}.qa-mini-facet{opacity:.89}
+      @media (prefers-color-scheme: light){.qa-mini-atmo{opacity:.58}.qa-mini-facet{opacity:.72}}
+      @media (prefers-reduced-motion: reduce){.qa-mini-live{display:none}.qa-mini-atmo{opacity:.74}}
+    </style>
+  </defs>
+
+  <g class="qa-mini-atmo">
+    <ellipse cx="320" cy="89" rx="284" ry="91" fill="url(#qa-mini-nebula)" opacity=".74"/>
+    <ellipse cx="320" cy="75" rx="126" ry="63" fill="url(#qa-mini-core)" opacity=".44" filter="url(#qa-mini-bloom)"/>
+    <g clip-path="url(#qa-mini-clip)">
+      <rect x="74" y="10" width="492" height="159" filter="url(#qa-mini-grain)" opacity=".42"/>
+      <path d="M42 125C144 55 238 134 316 65C396 132 506 69 598 117L598 150C487 105 404 164 316 112C241 166 136 97 42 156Z" fill="url(#qa-mini-wave)" opacity=".69"/>
+      <path d="M42 78C156 132 222 44 316 113C408 44 482 132 598 78L598 103C468 171 398 81 316 143C220 81 157 167 42 103Z" fill="url(#qa-mini-wave)" opacity=".46"/>
+    </g>
+    <g opacity=".72"><circle cx="310.96" cy="71.08" r="0.49" opacity="0.22" fill="#00E6FF"/><circle cx="506.33" cy="74.31" r="0.64" opacity="0.34" fill="#00FBCC"/><circle cx="541.80" cy="95.19" r="0.32" opacity="0.37" fill="#E328FC"/><circle cx="85.13" cy="171.30" r="0.45" opacity="0.33" fill="#00E6FF"/><circle cx="89.66" cy="54.72" r="0.34" opacity="0.39" fill="#00FBCC"/><circle cx="51.45" cy="51.26" r="0.37" opacity="0.18" fill="#E328FC"/><circle cx="479.96" cy="119.65" r="0.42" opacity="0.17" fill="#00E6FF"/><circle cx="375.26" cy="109.75" r="0.74" opacity="0.16" fill="#00FBCC"/><circle cx="572.80" cy="164.47" r="0.37" opacity="0.26" fill="#E328FC"/><circle cx="487.01" cy="43.06" r="0.41" opacity="0.18" fill="#00E6FF"/><circle cx="334.97" cy="13.06" r="0.72" opacity="0.27" fill="#00FBCC"/><circle cx="457.80" cy="170.10" r="0.53" opacity="0.27" fill="#E328FC"/><circle cx="261.22" cy="20.44" r="0.79" opacity="0.25" fill="#00E6FF"/><circle cx="143.17" cy="15.23" r="0.61" opacity="0.39" fill="#00FBCC"/><circle cx="433.04" cy="77.56" r="0.32" opacity="0.17" fill="#E328FC"/><circle cx="367.76" cy="146.39" r="0.33" opacity="0.41" fill="#00E6FF"/><circle cx="484.40" cy="53.22" r="0.72" opacity="0.26" fill="#00FBCC"/><circle cx="290.28" cy="63.18" r="0.82" opacity="0.21" fill="#E328FC"/><circle cx="222.04" cy="118.99" r="0.37" opacity="0.18" fill="#00E6FF"/><circle cx="28.25" cy="69.92" r="0.91" opacity="0.22" fill="#00FBCC"/><circle cx="26.05" cy="87.57" r="0.79" opacity="0.20" fill="#E328FC"/><circle cx="67.30" cy="139.85" r="0.88" opacity="0.39" fill="#00E6FF"/><circle cx="498.96" cy="131.79" r="0.58" opacity="0.21" fill="#00FBCC"/><circle cx="189.14" cy="137.23" r="0.79" opacity="0.22" fill="#E328FC"/><circle cx="285.58" cy="98.92" r="0.67" opacity="0.39" fill="#00E6FF"/><circle cx="285.29" cy="145.21" r="0.68" opacity="0.18" fill="#00FBCC"/><circle cx="134.18" cy="115.68" r="0.40" opacity="0.39" fill="#E328FC"/><circle cx="47.41" cy="114.22" r="0.66" opacity="0.17" fill="#00E6FF"/><circle cx="87.47" cy="144.43" r="0.73" opacity="0.26" fill="#00FBCC"/><circle cx="390.56" cy="68.44" r="0.44" opacity="0.18" fill="#E328FC"/><circle cx="527.96" cy="132.14" r="0.85" opacity="0.38" fill="#00E6FF"/><circle cx="61.81" cy="48.57" r="0.87" opacity="0.35" fill="#00FBCC"/><circle cx="301.63" cy="159.09" r="0.40" opacity="0.33" fill="#E328FC"/><circle cx="87.57" cy="79.80" r="0.89" opacity="0.30" fill="#00E6FF"/><circle cx="90.19" cy="49.80" r="0.55" opacity="0.12" fill="#00FBCC"/><circle cx="83.75" cy="113.10" r="0.77" opacity="0.30" fill="#E328FC"/><circle cx="120.48" cy="67.41" r="0.53" opacity="0.19" fill="#00E6FF"/><circle cx="26.46" cy="28.20" r="0.44" opacity="0.39" fill="#00FBCC"/><circle cx="600.00" cy="155.74" r="0.77" opacity="0.32" fill="#E328FC"/><circle cx="510.24" cy="66.03" r="0.46" opacity="0.28" fill="#00E6FF"/><circle cx="571.56" cy="55.02" r="0.79" opacity="0.17" fill="#00FBCC"/><circle cx="615.16" cy="26.11" r="0.76" opacity="0.24" fill="#E328FC"/><circle cx="265.51" cy="77.30" r="0.51" opacity="0.33" fill="#00E6FF"/><circle cx="421.66" cy="74.51" r="0.75" opacity="0.45" fill="#00FBCC"/><circle cx="316.23" cy="132.46" r="0.42" opacity="0.29" fill="#E328FC"/><circle cx="447.10" cy="159.44" r="0.41" opacity="0.19" fill="#00E6FF"/><circle cx="509.44" cy="95.10" r="0.55" opacity="0.40" fill="#00FBCC"/><circle cx="383.78" cy="141.29" r="0.46" opacity="0.21" fill="#E328FC"/><circle cx="214.74" cy="24.14" r="0.29" opacity="0.33" fill="#00E6FF"/><circle cx="239.61" cy="77.61" r="0.75" opacity="0.16" fill="#00FBCC"/><circle cx="235.18" cy="33.63" r="0.34" opacity="0.15" fill="#E328FC"/><circle cx="625.90" cy="84.43" r="0.37" opacity="0.46" fill="#00E6FF"/><circle cx="609.56" cy="114.37" r="0.52" opacity="0.21" fill="#00FBCC"/><circle cx="478.75" cy="143.66" r="0.41" opacity="0.31" fill="#E328FC"/><circle cx="108.24" cy="118.31" r="0.31" opacity="0.23" fill="#00E6FF"/><circle cx="510.79" cy="38.20" r="0.69" opacity="0.17" fill="#00FBCC"/><circle cx="236.81" cy="163.28" r="0.90" opacity="0.38" fill="#E328FC"/><circle cx="383.33" cy="50.08" r="0.43" opacity="0.30" fill="#00E6FF"/><circle cx="228.15" cy="167.80" r="0.50" opacity="0.28" fill="#00FBCC"/><circle cx="267.08" cy="63.15" r="0.58" opacity="0.25" fill="#E328FC"/><circle cx="565.12" cy="106.00" r="0.46" opacity="0.32" fill="#00E6FF"/><circle cx="279.42" cy="102.03" r="0.74" opacity="0.39" fill="#00FBCC"/><circle cx="36.56" cy="75.87" r="0.87" opacity="0.28" fill="#E328FC"/><circle cx="501.98" cy="63.74" r="0.34" opacity="0.47" fill="#00E6FF"/><circle cx="510.48" cy="62.03" r="0.83" opacity="0.13" fill="#00FBCC"/><circle cx="274.47" cy="162.15" r="0.40" opacity="0.18" fill="#E328FC"/><circle cx="442.19" cy="36.63" r="0.77" opacity="0.20" fill="#00E6FF"/><circle cx="269.07" cy="37.92" r="0.53" opacity="0.36" fill="#00FBCC"/><circle cx="158.45" cy="53.11" r="0.86" opacity="0.43" fill="#E328FC"/><circle cx="358.67" cy="158.00" r="0.38" opacity="0.42" fill="#00E6FF"/><circle cx="72.45" cy="172.09" r="0.33" opacity="0.32" fill="#00FBCC"/><circle cx="307.96" cy="167.81" r="0.65" opacity="0.37" fill="#E328FC"/><circle cx="121.98" cy="162.68" r="0.31" opacity="0.27" fill="#00E6FF"/></g>
+  </g>
+  <ellipse class="ambient" cx="320" cy="98" rx="188" ry="78" fill="url(#field)"/>
+  <path d="M320 14V182" stroke="url(#tri)" stroke-width="1.05" opacity=".34"/>
+  <g class="fine" fill="none" stroke-linecap="round">
+    <path d="M24 34H180L246 62H394L460 34H616" stroke="url(#tri)" stroke-width="1.15"/>
+    <path d="M0 132C86 132 127 97 196 97C256 97 281 120 312 120L320 110L328 120C359 120 384 97 444 97C513 97 554 132 640 132" stroke="url(#tri)" stroke-width="1.5"/>
+    <path d="M42 166C132 158 179 136 232 136C275 136 299 148 320 154C341 148 365 136 408 136C461 136 508 158 598 166" stroke="url(#tri)" stroke-width="1.05"/>
+  </g>
+  <g transform="translate(320 77)" fill="none">
+    <path d="M0-31 27-15 27 15 0 31-27 15-27-15Z" stroke="#E328FC" stroke-width="1.3" opacity=".7"/>
+    <ellipse rx="37" ry="11" stroke="#00E6FF" stroke-width="1.1" opacity=".55"/>
+    <circle r="4.2" fill="#00FBCC"/>
+  </g>
+
+  <g class="qa-mini-facet">
+    <ellipse cx="320" cy="77" rx="74" ry="49" fill="url(#qa-mini-nebula)" filter="url(#qa-mini-bloom)" opacity=".86"/>
+    <path d="M24 131C120 107 180 72 245 99C289 120 309 105 320 91C331 105 351 120 395 99C460 72 520 107 616 131" fill="none" stroke="url(#tri)" stroke-width="7.5" opacity=".32" filter="url(#qa-mini-bloom)"/>
+    <path d="M32 139C124 102 212 94 286 112C303 116 314 109 320 101C326 109 337 116 354 112C428 94 516 102 608 139" fill="none" stroke="url(#qa-mini-caustic)" stroke-width="1.5" opacity=".82"/>
+    <path d="M44 162C174 139 247 125 320 150C393 125 466 139 596 162" fill="none" stroke="#E328FC" stroke-width=".8" opacity=".52"/>
+    <g><polygon points="267,46 260,49 251,70 266,61" fill="url(#qa-mini-prism)" opacity=".19"/><polygon points="373,46 380,49 389,70 374,61" fill="url(#qa-mini-prism)" opacity=".19"/><polygon points="226,63 219,66 208,87 225,78" fill="url(#qa-mini-prism)" opacity=".19"/><polygon points="414,63 421,66 432,87 415,78" fill="url(#qa-mini-prism)" opacity=".19"/><polygon points="185,80 178,83 165,104 184,95" fill="url(#qa-mini-prism)" opacity=".19"/><polygon points="455,80 462,83 475,104 456,95" fill="url(#qa-mini-prism)" opacity=".19"/><polygon points="144,46 137,49 128,70 143,61" fill="url(#qa-mini-prism)" opacity=".19"/><polygon points="496,46 503,49 512,70 497,61" fill="url(#qa-mini-prism)" opacity=".19"/><polygon points="103,63 96,66 85,87 102,78" fill="url(#qa-mini-prism)" opacity=".19"/><polygon points="537,63 544,66 555,87 538,78" fill="url(#qa-mini-prism)" opacity=".19"/><polygon points="62,80 55,83 42,104 61,95" fill="url(#qa-mini-prism)" opacity=".19"/><polygon points="578,80 585,83 598,104 579,95" fill="url(#qa-mini-prism)" opacity=".19"/></g>
+    <g transform="translate(320 77) scale(-1 1)">
+       <path d="M0-39 13-25 34-13 32 10 0 35 6 3Z" fill="url(#qa-mini-prism)" opacity=".74"/>
+       <path d="M0-39 13-25 34-13 32 10 0 35" fill="none" stroke="#00E6FF" stroke-width=".85" opacity=".63"/>
+       <path d="M0-29 10-16 24-9 16 10 0 25Z" fill="url(#qa-mini-prism)" opacity=".49"/>
+       <path d="M0-39 6 3 32 10M13-25 10-16 24-9" fill="none" stroke="#E328FC" stroke-width=".55" opacity=".49"/>
+     </g><g transform="translate(320 77) scale(1 1)">
+       <path d="M0-39 13-25 34-13 32 10 0 35 6 3Z" fill="url(#qa-mini-prism)" opacity=".74"/>
+       <path d="M0-39 13-25 34-13 32 10 0 35" fill="none" stroke="#00E6FF" stroke-width=".85" opacity=".63"/>
+       <path d="M0-29 10-16 24-9 16 10 0 25Z" fill="url(#qa-mini-prism)" opacity=".49"/>
+       <path d="M0-39 6 3 32 10M13-25 10-16 24-9" fill="none" stroke="#E328FC" stroke-width=".55" opacity=".49"/>
+     </g>
+    <g transform="translate(320 77)">
+      <path d="M0-36 32-18 32 18 0 36-32 18-32-18Z" fill="none" stroke="url(#qa-mini-prism)" stroke-width="1.2"/>
+      <path d="M0-27 23-13 23 13 0 27-23 13-23-13Z" fill="url(#qa-mini-prism)" opacity=".49"/>
+      <path d="M-19-11 0-22 19-11 19 11 0 22-19 11Z" stroke="#00E6FF" fill="none" opacity=".51" stroke-width=".7"/>
+      <ellipse rx="45" ry="13" fill="none" stroke="url(#qa-mini-caustic)" stroke-width="1.1" opacity=".73"/>
+      <circle r="13.2" fill="url(#qa-mini-core)" opacity=".81"/>
+      <circle r="2.6" fill="#FFFFFF" opacity=".77"/>
+    </g>
+    <path d="M312 99Q320 111 328 99L325 131 320 141 315 131Z" fill="url(#qa-mini-prism)" opacity=".49"/>
+  </g>
+  <g class="motion">
+    <path d="M24 34H180L246 62H394L460 34H616" stroke="url(#tri)" stroke-width="1.4" stroke-dasharray="24 8 4 12" opacity=".78"><animate attributeName="stroke-dashoffset" values="0;-480" dur="13.3s" repeatCount="indefinite"/></path>
+    <path d="M0 132C86 132 127 97 196 97C256 97 281 120 312 120L320 110L328 120C359 120 384 97 444 97C513 97 554 132 640 132" stroke="url(#tri)" stroke-width="1.9" stroke-dasharray="32 12 4 8" opacity=".84"><animate attributeName="stroke-dashoffset" values="0;-560" dur="11.7s" repeatCount="indefinite"/></path>
+    <g transform="translate(320 77)" fill="none">
+      <g><path d="M0-31 27-15 27 15 0 31-27 15-27-15Z" stroke="url(#tri)" stroke-width="1.5" stroke-dasharray="9 7"/><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="19.7s" repeatCount="indefinite"/></g>
+      <g><ellipse rx="37" ry="11" stroke="#00E6FF" stroke-width="1.1" stroke-dasharray="3 9"/><ellipse rx="11" ry="37" stroke="#00FBCC" stroke-width="1.1" stroke-dasharray="3 9"/><animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="14.9s" repeatCount="indefinite"/></g>
+      <circle r="4.2" fill="#00FBCC"><animate attributeName="r" values="3.7;5.5;3.7" dur="3.9s" repeatCount="indefinite"/><animate attributeName="opacity" values=".6;1;.6" dur="3.9s" repeatCount="indefinite"/></circle>
+    </g>
+    <g>
+      <circle r="2.5" fill="#00E6FF"><animateMotion path="M32 34H180L246 62H300C310 62 316 68 320 77" dur="8.7s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;.07;.18;.82;.93;1" dur="8.7s" repeatCount="indefinite"/></circle>
+      <circle r="2.5" fill="#00FBCC"><animateMotion path="M608 34H460L394 62H340C330 62 324 68 320 77" dur="10.3s" begin="-4.6s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;.07;.18;.82;.93;1" dur="10.3s" begin="-4.6s" repeatCount="indefinite"/></circle>
+      <circle r="2.4" fill="#E328FC"><animateMotion path="M12 132C108 132 147 98 216 98C273 98 300 113 320 116" dur="9.5s" begin="-2.2s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;.06;.17;.83;.94;1" dur="9.5s" begin="-2.2s" repeatCount="indefinite"/></circle>
+      <circle r="2.4" fill="#00E6FF"><animateMotion path="M628 132C532 132 493 98 424 98C367 98 340 113 320 116" dur="11.1s" begin="-6.4s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;.06;.17;.83;.94;1" dur="11.1s" begin="-6.4s" repeatCount="indefinite"/></circle>
+    </g>
+  </g>
+
+  <g><path d="M52 32h8m-4-4v8" fill="none" stroke="#00E6FF" opacity=".37" stroke-width=".7"/><path d="M118 41h8m-4-4v8" fill="none" stroke="#00FBCC" opacity=".37" stroke-width=".7"/><path d="M184 50h8m-4-4v8" fill="none" stroke="#E328FC" opacity=".37" stroke-width=".7"/><path d="M250 32h8m-4-4v8" fill="none" stroke="#00E6FF" opacity=".37" stroke-width=".7"/><path d="M316 41h8m-4-4v8" fill="none" stroke="#00FBCC" opacity=".37" stroke-width=".7"/><path d="M382 50h8m-4-4v8" fill="none" stroke="#E328FC" opacity=".37" stroke-width=".7"/><path d="M448 32h8m-4-4v8" fill="none" stroke="#00E6FF" opacity=".37" stroke-width=".7"/><path d="M514 41h8m-4-4v8" fill="none" stroke="#00FBCC" opacity=".37" stroke-width=".7"/><path d="M580 50h8m-4-4v8" fill="none" stroke="#E328FC" opacity=".37" stroke-width=".7"/></g>
+  <g class="qa-mini-live">
+    <g transform="translate(320 77)">
+      <g>
+        <path d="M0-45 40-22 40 22 0 45-40 22-40-22Z" stroke="url(#qa-mini-caustic)" stroke-width="1.1" opacity=".75" fill="none"/>
+        <path d="M0-51 46-26 46 26 0 51-46 26-46-26Z" stroke="#00FBCC" stroke-width=".8" stroke-dasharray="19 9 3 12" opacity=".46" fill="none"/>
+        <animateTransform attributeName="transform" type="rotate" values="-9;9;-9" dur="15.4s" repeatCount="indefinite"/>
+      </g>
+      <g>
+        <ellipse rx="58" ry="17" stroke="url(#qa-mini-caustic)" stroke-width="1.6" fill="none" opacity=".64"/>
+        <ellipse rx="17" ry="54" stroke="#00E6FF" stroke-width=".7" fill="none" opacity=".57"/>
+        <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="24.8s" repeatCount="indefinite"/>
+      </g>
+      <g>
+        <path d="M0-24 21-12 21 12 0 24-21 12-21-12Z" fill="url(#qa-mini-prism)" opacity=".55"/>
+        <animateTransform attributeName="transform" type="scale" values="1 1;1.14 1.11;1 1" dur="5.6s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values=".25;.76;.25" dur="5.6s" repeatCount="indefinite"/>
+      </g>
+      <circle r="9.5" fill="url(#qa-mini-core)" opacity=".82">
+        <animate attributeName="r" values="7;14;7" dur="4.2s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+    <path d="M28 132C122 87 226 151 320 100C414 151 518 87 612 132" stroke="url(#tri)" stroke-width="2.2" fill="none" filter="url(#qa-mini-lens)" opacity=".7">
+      <animate attributeName="d" values="M28 132C122 87 226 151 320 100C414 151 518 87 612 132;M28 140C122 130 226 87 320 117C414 87 518 130 612 140;M28 132C122 87 226 151 320 100C414 151 518 87 612 132" dur="10.3s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values=".32;.8;.32" dur="10.3s" repeatCount="indefinite"/>
+    </path>
+    <ellipse cx="320" cy="75" rx="106" ry="40" fill="url(#qa-mini-nebula)" opacity=".1">
+      <animate attributeName="rx" values="94;160;94" dur="12.8s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values=".07;.29;.07" dur="12.8s" repeatCount="indefinite"/>
+    </ellipse>
+    <path d="M194 25Q320 9 446 25" stroke="url(#qa-mini-caustic)" stroke-width="1.6" opacity=".28" fill="none">
+      <animateTransform attributeName="transform" type="translate" values="-8 0;8 3;-8 0" dur="14.2s" repeatCount="indefinite"/>
+    </path>
+  </g>
+</svg>
