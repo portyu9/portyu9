@@ -1492,6 +1492,13 @@
       "rationale": "Authorize frozen #1432 measured by closed #1433: converge Capability Admission and Dependabot Controller from temporary 3.13.15 to canonical 3.13.16, restore the uniform eight-workflow runtime contract, and rederive only the Capability Admission byte lock. No setup-python identity, runner, trigger, permission, job topology, endpoint/method, mutation/retry, secret/OIDC, required check, ruleset, merge/direct-main authority, generated/profile content, or bypass behavior changes."
     },
     {
+      "baseBomSha256": "cd4e7d9e6f474fc73cdb94f6b9fd1e6ab3bf65c588bc85e91f2315a697629b29",
+      "candidateBomSha256": "cd4e7d9e6f474fc73cdb94f6b9fd1e6ab3bf65c588bc85e91f2315a697629b29",
+      "expansionSha256": "f6cb5d3cf276f611883fd6126c6527f95d6c007db6690d3db49f7d7e15972f1e",
+      "id": "cap-quantum-apex-photonic-v1-production-v1",
+      "rationale": "Authorize frozen production feature #1773 measured by closed read-only diagnostic #1774: evolve the strictly pinned Spotlight banner selector/catalog to publish the exact merged V1 Photonic Depth triplet on its three-day slot, preserving original blobs and prior v3/v4 markers. Semantic workflow BOM is unchanged; this is one exact protected source-boundary expansion. No new trigger, permission, API write, secret/OIDC, direct-main update, merge authority, bypass, or required-check reduction."
+    },
+    {
       "baseBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
       "candidateBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
       "expansionSha256": "946ea03935a3b53b5dfeceac5b26ae69f004f040bbef58d8541177f215a1535f",
