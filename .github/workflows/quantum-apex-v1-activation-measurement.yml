@@ -5,6 +5,8 @@ on:
       - ".github/workflows/quantum-apex-v1-activation-measurement.yml"
 permissions:
   contents: read
+env:
+  PYTHON_VERSION: "3.13.16"
 jobs:
   measure:
     name: measure-frozen-V1-production-activation
