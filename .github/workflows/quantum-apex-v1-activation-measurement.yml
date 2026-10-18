@@ -1,0 +1,40 @@
+name: Measure reviewed Quantum Apex V1 activation (read only)
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/quantum-apex-v1-activation-measurement.yml"
+permissions:
+  contents: read
+jobs:
+  measure:
+    name: measure-frozen-V1-production-activation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout immutable accepted main as trusted executable
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 22d5f47ea6dd6ed27452cfbf9e1c16d36a9d473e
+          path: trusted
+          persist-credentials: false
+      - name: Checkout exact production candidate strictly as inert data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: a6b189cd01906d2256684e130c35887333340e62
+          path: candidate
+          persist-credentials: false
+      - name: Set up reviewed Python interpreter
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.16"
+      - name: Prove exact commit/tree and emit sanitized prior authorization tuple
+        run: |
+          set -euo pipefail
+          test "$(git -C trusted rev-parse HEAD)" = "22d5f47ea6dd6ed27452cfbf9e1c16d36a9d473e"
+          test "$(git -C candidate rev-parse HEAD)" = "a6b189cd01906d2256684e130c35887333340e62"
+          TREE_SHA="$(git -C candidate rev-parse 'HEAD^{tree}')"
+          test "$TREE_SHA" = "dd6bef427da467c857a0b3de459438de0e99f2f4"
+          python3 trusted/scripts/verify-python-runtime.py
+          python3 trusted/scripts/workflow_capability_admission.py candidate --candidate-tree-sha "$TREE_SHA" --measure
