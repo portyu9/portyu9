@@ -4,8 +4,8 @@
 > responsive SVG files, **not fragments** and not replacements for the content-addressed production originals.
 > The existing three-day production rotation, manifest and original files remain unchanged.
 >
-> The black-background image previews below are transparent SVGs whose emitted light is designed to retain
-> the legacy Quantum Apex silhouette. GitHub's Markdown rendering may display a browser-specific still frame
+> These previews use transparent SVG canvases; their refractive light is designed to retain
+> the legacy Quantum Apex silhouette and reads best against a dark background. GitHub may show a still frame
 > rather than proving smooth animation; open the SVG files directly in Safari, Chrome, and Firefox/LibreWolf.
 
 ## Desktop crown — original vs living photonic candidate
