@@ -1,0 +1,150 @@
+<svg data-review-art="quantum-apex-photonic-depth-v1" shape-rendering="geometricPrecision" text-rendering="geometricPrecision" xmlns="http://www.w3.org/2000/svg" width="3840" height="450" viewBox="0 0 1280 150" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Animated evidence horizon</title>
+  <desc id="desc">An enhanced non-clickable evidence horizon with refractive plasma river, fine photon grain, mineral facets, breathing central convergence and travelling wavefront caustics. Stable still artwork remains for reduced motion.</desc>
+  <defs>
+    <linearGradient id="tri" x1="0" y1="0" x2="1280" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00E6FF"/><stop offset=".25" stop-color="#00FBCC"/><stop offset=".5" stop-color="#E328FC"/><stop offset=".75" stop-color="#00FBCC"/><stop offset="1" stop-color="#00E6FF"/>
+    </linearGradient>
+    <radialGradient id="pulse" cx="0" cy="0" r="1" gradientTransform="translate(640 87) rotate(90) scale(48 210)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00FBCC" stop-opacity=".24"/><stop offset=".42" stop-color="#E328FC" stop-opacity=".14"/><stop offset="1" stop-color="#00E6FF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <style>.motion{display:inline}.fine{opacity:.5}.ambient{opacity:.9}@media (prefers-color-scheme: light){.fine{opacity:.38}.ambient{opacity:.72}}@media (prefers-reduced-motion: reduce){.motion{display:none}.ambient{opacity:.82}}</style>
+  
+    <radialGradient id="qa-horizon-mist"><stop stop-color="#00FBCC" stop-opacity=".37"/><stop offset=".22" stop-color="#E328FC" stop-opacity=".24"/><stop offset=".49" stop-color="#00E6FF" stop-opacity=".12"/><stop offset="1" stop-color="#00E6FF" stop-opacity="0"/></radialGradient>
+    <radialGradient id="qa-horizon-heart"><stop stop-color="#FFFFFF" stop-opacity=".95"/><stop offset=".105" stop-color="#00FBCC" stop-opacity=".84"/><stop offset=".34" stop-color="#E328FC" stop-opacity=".44"/><stop offset="1" stop-color="#00E6FF" stop-opacity="0"/></radialGradient>
+    <linearGradient id="qa-horizon-glass" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#00E6FF" stop-opacity=".06"/><stop offset=".18" stop-color="#FFFFFF" stop-opacity=".38"/>
+      <stop offset=".44" stop-color="#E328FC" stop-opacity=".39"/><stop offset=".66" stop-color="#00FBCC" stop-opacity=".35"/><stop offset="1" stop-color="#00E6FF" stop-opacity=".07"/>
+    </linearGradient>
+    <linearGradient id="qa-horizon-stream" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#00E6FF" stop-opacity="0"/><stop offset=".16" stop-color="#00E6FF" stop-opacity=".12"/>
+      <stop offset=".46" stop-color="#E328FC" stop-opacity=".27"/><stop offset=".71" stop-color="#00FBCC" stop-opacity=".15"/>
+      <stop offset="1" stop-color="#00FBCC" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="qa-horizon-shine" x1="0" y1="0" x2="1" y2="0" gradientUnits="objectBoundingBox">
+      <stop stop-color="#00E6FF" stop-opacity="0"/><stop offset=".34" stop-color="#00E6FF" stop-opacity=".2"/>
+      <stop offset=".49" stop-color="#FFFFFF" stop-opacity=".93"/><stop offset=".52" stop-color="#00FBCC" stop-opacity=".84"/>
+      <stop offset=".76" stop-color="#E328FC" stop-opacity=".14"/><stop offset="1" stop-color="#E328FC" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="qa-horizon-bloom" x="-70%" y="-180%" width="240%" height="460%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="7"/></filter>
+    <filter id="qa-horizon-rim" x="-60%" y="-110%" width="220%" height="320%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="qa-horizon-grain" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency=".065 .15" numOctaves="2" seed="21" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 .8  0 0 0 0 1  0 0 0 .1 0"/>
+    </filter>
+    <clipPath id="qa-horizon-cloud-clip"><ellipse cx="640" cy="88" rx="437" ry="58"/></clipPath>
+    <style>
+      .qa-horizon-live{display:inline}.qa-horizon-atmosphere{opacity:.92}.qa-horizon-facets{opacity:.86}
+      @media (prefers-color-scheme: light){.qa-horizon-atmosphere{opacity:.61}.qa-horizon-facets{opacity:.65}}
+      @media (prefers-reduced-motion: reduce){.qa-horizon-live{display:none}.qa-horizon-atmosphere{opacity:.77}}
+    </style>
+  </defs>
+
+  <g class="qa-horizon-atmosphere">
+    <ellipse cx="640" cy="89" rx="484" ry="67" fill="url(#qa-horizon-mist)" opacity=".73"/>
+    <ellipse cx="640" cy="92" rx="158" ry="56" fill="url(#qa-horizon-heart)" opacity=".44" filter="url(#qa-horizon-bloom)"/>
+    <g clip-path="url(#qa-horizon-cloud-clip)">
+      <rect x="203" y="30" width="874" height="116" filter="url(#qa-horizon-grain)" opacity=".41"/>
+      <path d="M34 25C260 26 401 104 640 93C879 104 1020 26 1246 25L1246 73C1021 73 878 141 640 116C402 141 259 73 34 73Z" fill="url(#qa-horizon-stream)" opacity=".66"/>
+      <path d="M24 70C265 46 402 141 640 104C878 141 1015 46 1256 70L1256 109C1021 95 878 159 640 132C402 159 259 95 24 109Z" fill="url(#qa-horizon-stream)" opacity=".52"/>
+    </g>
+    <g opacity=".64"><circle cx="380.23" cy="84.61" r="0.97" opacity="0.15" fill="#00E6FF"/><circle cx="133.00" cy="27.93" r="0.53" opacity="0.29" fill="#00FBCC"/><circle cx="1130.77" cy="105.88" r="0.64" opacity="0.44" fill="#E328FC"/><circle cx="909.92" cy="30.65" r="0.42" opacity="0.41" fill="#00E6FF"/><circle cx="343.85" cy="47.80" r="0.77" opacity="0.35" fill="#00FBCC"/><circle cx="447.97" cy="82.68" r="0.90" opacity="0.12" fill="#E328FC"/><circle cx="820.42" cy="119.28" r="0.73" opacity="0.30" fill="#00E6FF"/><circle cx="245.22" cy="138.56" r="0.84" opacity="0.38" fill="#00FBCC"/><circle cx="595.64" cy="137.09" r="0.93" opacity="0.15" fill="#E328FC"/><circle cx="1034.51" cy="95.78" r="0.66" opacity="0.35" fill="#00E6FF"/><circle cx="53.39" cy="94.90" r="0.60" opacity="0.41" fill="#00FBCC"/><circle cx="1235.47" cy="83.60" r="0.33" opacity="0.33" fill="#E328FC"/><circle cx="942.03" cy="35.30" r="0.61" opacity="0.24" fill="#00E6FF"/><circle cx="1208.40" cy="100.20" r="0.73" opacity="0.38" fill="#00FBCC"/><circle cx="910.68" cy="75.71" r="1.00" opacity="0.22" fill="#E328FC"/><circle cx="81.36" cy="97.59" r="0.45" opacity="0.20" fill="#00E6FF"/><circle cx="541.78" cy="33.73" r="0.35" opacity="0.22" fill="#00FBCC"/><circle cx="453.45" cy="66.18" r="0.98" opacity="0.37" fill="#E328FC"/><circle cx="1138.81" cy="16.12" r="0.30" opacity="0.33" fill="#00E6FF"/><circle cx="180.68" cy="138.87" r="0.50" opacity="0.42" fill="#00FBCC"/><circle cx="184.36" cy="64.27" r="0.53" opacity="0.24" fill="#E328FC"/><circle cx="1101.05" cy="91.21" r="0.54" opacity="0.18" fill="#00E6FF"/><circle cx="201.90" cy="69.30" r="0.81" opacity="0.30" fill="#00FBCC"/><circle cx="1210.00" cy="106.49" r="0.72" opacity="0.22" fill="#E328FC"/><circle cx="366.49" cy="74.64" r="0.80" opacity="0.28" fill="#00E6FF"/><circle cx="457.94" cy="63.10" r="0.53" opacity="0.27" fill="#00FBCC"/><circle cx="139.43" cy="16.60" r="0.45" opacity="0.36" fill="#E328FC"/><circle cx="734.18" cy="104.28" r="0.51" opacity="0.14" fill="#00E6FF"/><circle cx="553.58" cy="103.95" r="0.82" opacity="0.20" fill="#00FBCC"/><circle cx="966.56" cy="84.90" r="0.98" opacity="0.18" fill="#E328FC"/><circle cx="699.64" cy="108.55" r="0.36" opacity="0.19" fill="#00E6FF"/><circle cx="1086.60" cy="52.03" r="0.92" opacity="0.33" fill="#00FBCC"/><circle cx="100.20" cy="106.67" r="0.95" opacity="0.36" fill="#E328FC"/><circle cx="1051.86" cy="55.20" r="0.70" opacity="0.34" fill="#00E6FF"/><circle cx="606.72" cy="58.05" r="0.88" opacity="0.41" fill="#00FBCC"/><circle cx="665.72" cy="56.23" r="0.30" opacity="0.41" fill="#E328FC"/><circle cx="697.15" cy="80.01" r="0.52" opacity="0.44" fill="#00E6FF"/><circle cx="344.70" cy="58.88" r="0.83" opacity="0.41" fill="#00FBCC"/><circle cx="832.30" cy="92.47" r="0.84" opacity="0.41" fill="#E328FC"/><circle cx="1157.55" cy="42.30" r="0.97" opacity="0.35" fill="#00E6FF"/><circle cx="761.85" cy="35.31" r="0.86" opacity="0.27" fill="#00FBCC"/><circle cx="695.61" cy="32.76" r="0.29" opacity="0.33" fill="#E328FC"/><circle cx="421.86" cy="97.03" r="1.01" opacity="0.36" fill="#00E6FF"/><circle cx="736.58" cy="24.74" r="0.69" opacity="0.29" fill="#00FBCC"/><circle cx="343.93" cy="52.60" r="0.63" opacity="0.11" fill="#E328FC"/><circle cx="334.74" cy="105.53" r="0.89" opacity="0.36" fill="#00E6FF"/><circle cx="1210.46" cy="77.76" r="0.31" opacity="0.41" fill="#00FBCC"/><circle cx="1041.00" cy="19.35" r="0.34" opacity="0.17" fill="#E328FC"/><circle cx="933.62" cy="69.29" r="0.42" opacity="0.31" fill="#00E6FF"/><circle cx="94.67" cy="36.13" r="0.46" opacity="0.11" fill="#00FBCC"/><circle cx="900.24" cy="44.93" r="0.71" opacity="0.21" fill="#E328FC"/><circle cx="526.39" cy="11.40" r="0.95" opacity="0.32" fill="#00E6FF"/><circle cx="424.34" cy="54.77" r="0.52" opacity="0.16" fill="#00FBCC"/><circle cx="1179.59" cy="117.17" r="0.79" opacity="0.18" fill="#E328FC"/><circle cx="1108.95" cy="118.39" r="0.50" opacity="0.14" fill="#00E6FF"/><circle cx="963.23" cy="33.25" r="0.35" opacity="0.31" fill="#00FBCC"/><circle cx="275.40" cy="30.28" r="0.99" opacity="0.30" fill="#E328FC"/><circle cx="1223.44" cy="116.03" r="0.39" opacity="0.36" fill="#00E6FF"/><circle cx="244.50" cy="118.75" r="0.56" opacity="0.14" fill="#00FBCC"/><circle cx="1031.63" cy="37.69" r="0.36" opacity="0.38" fill="#E328FC"/><circle cx="224.45" cy="134.28" r="0.99" opacity="0.29" fill="#00E6FF"/><circle cx="807.86" cy="26.81" r="0.63" opacity="0.43" fill="#00FBCC"/><circle cx="304.07" cy="107.39" r="0.48" opacity="0.41" fill="#E328FC"/><circle cx="43.22" cy="103.24" r="0.50" opacity="0.43" fill="#00E6FF"/><circle cx="662.88" cy="110.58" r="0.89" opacity="0.13" fill="#00FBCC"/><circle cx="1168.71" cy="22.97" r="0.91" opacity="0.38" fill="#E328FC"/><circle cx="422.62" cy="119.72" r="0.44" opacity="0.26" fill="#00E6FF"/><circle cx="978.77" cy="93.35" r="0.42" opacity="0.32" fill="#00FBCC"/><circle cx="196.15" cy="122.92" r="0.88" opacity="0.40" fill="#E328FC"/><circle cx="353.66" cy="97.00" r="0.83" opacity="0.35" fill="#00E6FF"/><circle cx="488.97" cy="47.64" r="0.52" opacity="0.36" fill="#00FBCC"/><circle cx="471.36" cy="108.22" r="0.97" opacity="0.33" fill="#E328FC"/><circle cx="289.89" cy="58.37" r="0.30" opacity="0.44" fill="#00E6FF"/><circle cx="279.39" cy="77.82" r="0.49" opacity="0.12" fill="#00FBCC"/><circle cx="156.49" cy="135.42" r="0.49" opacity="0.10" fill="#E328FC"/><circle cx="162.57" cy="49.79" r="0.53" opacity="0.43" fill="#00E6FF"/><circle cx="249.96" cy="123.85" r="0.44" opacity="0.20" fill="#00FBCC"/><circle cx="680.72" cy="67.00" r="0.93" opacity="0.20" fill="#E328FC"/><circle cx="407.11" cy="70.55" r="0.76" opacity="0.19" fill="#00E6FF"/><circle cx="239.42" cy="74.77" r="0.67" opacity="0.30" fill="#00FBCC"/><circle cx="367.01" cy="30.44" r="0.78" opacity="0.12" fill="#E328FC"/></g>
+  </g>
+  <ellipse class="ambient" cx="640" cy="87" rx="190" ry="44" fill="url(#pulse)"/>
+  <g class="fine" fill="none" stroke-linecap="round">
+    <path d="M0 31C194 31 286 47 402 69C500 88 554 96 640 96C726 96 780 88 878 69C994 47 1086 31 1280 31" stroke="url(#tri)" stroke-width="1"/>
+    <path d="M0 56C166 56 278 63 394 80C502 96 568 108 640 108C712 108 778 96 886 80C1002 63 1114 56 1280 56" stroke="url(#tri)" stroke-width="1.5"/>
+    <path d="M64 88C236 88 324 90 438 102C526 112 584 119 640 119C696 119 754 112 842 102C956 90 1044 88 1216 88" stroke="url(#tri)" stroke-width=".9"/>
+  </g>
+  <g transform="translate(640 93)" fill="none">
+    <path d="M0-29 25-14 25 14 0 29-25 14-25-14Z" stroke="#E328FC" stroke-width="1.3" opacity=".7"/>
+    <path d="M0-19 16-9 16 9 0 19-16 9-16-9Z" stroke="#00E6FF" stroke-width="1.1" opacity=".68"/>
+    <circle r="4.8" fill="#00FBCC"/>
+  </g>
+
+  <g class="qa-horizon-facets">
+    <path d="M0 43C216 28 380 97 640 103C900 97 1064 28 1280 43" stroke="url(#tri)" stroke-width="10" filter="url(#qa-horizon-bloom)" opacity=".31" fill="none"/>
+    <path d="M0 66C236 51 405 126 640 118C875 126 1044 51 1280 66" stroke="url(#tri)" stroke-width="8" filter="url(#qa-horizon-bloom)" opacity=".27" fill="none"/>
+    <path d="M12 43C218 24 396 101 640 97C884 101 1062 24 1268 43" stroke="url(#qa-horizon-shine)" stroke-width="1.8" opacity=".77" fill="none"/>
+    <path d="M28 72C242 47 412 119 640 110C868 119 1038 47 1252 72" stroke="url(#tri)" stroke-width="1.2" opacity=".58" fill="none"/>
+    <path d="M150 120C352 104 500 141 640 126C780 141 928 104 1130 120" stroke="url(#qa-horizon-shine)" stroke-width=".75" opacity=".53" fill="none"/>
+    <polygon points="578,44 567,47 555,68 574,62" fill="url(#qa-horizon-glass)" opacity="0.09"/><polygon points="702,44 713,47 725,68 706,62" fill="url(#qa-horizon-glass)" opacity="0.09"/><polygon points="531,56 520,59 505,80 527,74" fill="url(#qa-horizon-glass)" opacity="0.13"/><polygon points="749,56 760,59 775,80 753,74" fill="url(#qa-horizon-glass)" opacity="0.13"/><polygon points="484,68 473,71 455,92 480,86" fill="url(#qa-horizon-glass)" opacity="0.17"/><polygon points="796,68 807,71 825,92 800,86" fill="url(#qa-horizon-glass)" opacity="0.17"/><polygon points="437,44 426,47 405,68 433,62" fill="url(#qa-horizon-glass)" opacity="0.09"/><polygon points="843,44 854,47 875,68 847,62" fill="url(#qa-horizon-glass)" opacity="0.09"/><polygon points="390,56 379,59 367,80 386,74" fill="url(#qa-horizon-glass)" opacity="0.13"/><polygon points="890,56 901,59 913,80 894,74" fill="url(#qa-horizon-glass)" opacity="0.13"/><polygon points="343,68 332,71 317,92 339,86" fill="url(#qa-horizon-glass)" opacity="0.17"/><polygon points="937,68 948,71 963,92 941,86" fill="url(#qa-horizon-glass)" opacity="0.17"/><polygon points="296,44 285,47 267,68 292,62" fill="url(#qa-horizon-glass)" opacity="0.09"/><polygon points="984,44 995,47 1013,68 988,62" fill="url(#qa-horizon-glass)" opacity="0.09"/><polygon points="249,56 238,59 217,80 245,74" fill="url(#qa-horizon-glass)" opacity="0.13"/><polygon points="1031,56 1042,59 1063,80 1035,74" fill="url(#qa-horizon-glass)" opacity="0.13"/><polygon points="202,68 191,71 179,92 198,86" fill="url(#qa-horizon-glass)" opacity="0.17"/><polygon points="1078,68 1089,71 1101,92 1082,86" fill="url(#qa-horizon-glass)" opacity="0.17"/><polygon points="155,44 144,47 129,68 151,62" fill="url(#qa-horizon-glass)" opacity="0.09"/><polygon points="1125,44 1136,47 1151,68 1129,62" fill="url(#qa-horizon-glass)" opacity="0.09"/><polygon points="108,56 97,59 79,80 104,74" fill="url(#qa-horizon-glass)" opacity="0.13"/><polygon points="1172,56 1183,59 1201,80 1176,74" fill="url(#qa-horizon-glass)" opacity="0.13"/>
+    <ellipse cx="640" cy="93" rx="89" ry="45" fill="url(#qa-horizon-mist)" opacity=".8" filter="url(#qa-horizon-bloom)"/>
+    <g transform="translate(640 93) scale(-1 1)">
+       <path d="M0-38 19-25 35-9 30 18 0 38 7 2Z" fill="url(#qa-horizon-glass)" opacity=".7"/>
+       <path d="M0-38 19-25 35-9 30 18 0 38" fill="none" stroke="#00E6FF" stroke-width="1" opacity=".68"/>
+       <path d="M0-24 12-14 23-8 18 12 0 26Z" fill="url(#qa-horizon-glass)" opacity=".54"/>
+       <path d="M0-38 7 2 30 18M19-25 12-14 23-8" stroke="#E328FC" opacity=".51" stroke-width=".75" fill="none"/>
+     </g><g transform="translate(640 93) scale(1 1)">
+       <path d="M0-38 19-25 35-9 30 18 0 38 7 2Z" fill="url(#qa-horizon-glass)" opacity=".7"/>
+       <path d="M0-38 19-25 35-9 30 18 0 38" fill="none" stroke="#00E6FF" stroke-width="1" opacity=".68"/>
+       <path d="M0-24 12-14 23-8 18 12 0 26Z" fill="url(#qa-horizon-glass)" opacity=".54"/>
+       <path d="M0-38 7 2 30 18M19-25 12-14 23-8" stroke="#E328FC" opacity=".51" stroke-width=".75" fill="none"/>
+     </g>
+    <g transform="translate(640 93)">
+      <path d="M0-39 35-19 35 19 0 39-35 19-35-19Z" stroke="url(#qa-horizon-glass)" stroke-width="1.1" fill="none"/>
+      <path d="M0-26 23-13 23 13 0 26-23 13-23-13Z" fill="url(#qa-horizon-glass)" opacity=".5"/>
+      <path d="M-17-10 0-20 17-10 17 10 0 20-17 10Z" stroke="#00E6FF" stroke-width=".8" fill="none" opacity=".66"/>
+      <circle r="18" fill="url(#qa-horizon-heart)" opacity=".79"/>
+      <ellipse rx="49" ry="13" stroke="url(#qa-horizon-shine)" stroke-width="1.1" opacity=".72" fill="none"/>
+      <circle r="2.9" fill="#FFFFFF" opacity=".83"/>
+    </g>
+    <path d="M628 117Q640 130 652 117L647 144 640 148 633 144Z" fill="url(#qa-horizon-glass)" opacity=".6"/>
+  </g>
+  <g class="motion">
+    <g fill="none" stroke-linecap="round">
+      <path d="M0 31C194 31 286 47 402 69C500 88 554 96 640 96C726 96 780 88 878 69C994 47 1086 31 1280 31" stroke="url(#tri)" stroke-width="1.2" opacity=".38" stroke-dasharray="3 15"><animate attributeName="stroke-dashoffset" values="0;-360" dur="13.3s" repeatCount="indefinite"/></path>
+      <path d="M0 56C166 56 278 63 394 80C502 96 568 108 640 108C712 108 778 96 886 80C1002 63 1114 56 1280 56" stroke="url(#tri)" stroke-width="2" opacity=".82" stroke-dasharray="42 14 8 8"><animate attributeName="stroke-dashoffset" values="0;720" dur="11.7s" repeatCount="indefinite"/></path>
+      <path d="M64 88C236 88 324 90 438 102C526 112 584 119 640 119C696 119 754 112 842 102C956 90 1044 88 1216 88" stroke="url(#tri)" stroke-width="1.1" opacity=".5" stroke-dasharray="7 17"><animate attributeName="stroke-dashoffset" values="0;-480" dur="17.9s" repeatCount="indefinite"/></path>
+      <path d="M170 122C340 122 428 118 520 124C574 128 611 134 640 140C669 134 706 128 760 124C852 118 940 122 1110 122" stroke="url(#tri)" stroke-width="1" opacity=".28" stroke-dasharray="2 14"><animate attributeName="stroke-dashoffset" values="0;320" dur="23.3s" repeatCount="indefinite"/></path>
+    </g>
+    <g transform="translate(640 93)" fill="none">
+      <g><path d="M0-29 25-14 25 14 0 29-25 14-25-14Z" stroke="#E328FC" stroke-width="1.4" stroke-dasharray="7 8"/><path d="M0-19 16-9 16 9 0 19-16 9-16-9Z" stroke="#00E6FF" stroke-width="1.2"/><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="19.7s" repeatCount="indefinite"/></g>
+      <circle r="4.8" fill="#00FBCC"><animate attributeName="r" values="4;6.1;4" dur="3.9s" repeatCount="indefinite"/><animate attributeName="opacity" values=".58;1;.58" dur="3.9s" repeatCount="indefinite"/></circle>
+      <circle r="10" stroke="#00FBCC" stroke-width="1"><animate attributeName="r" values="8;25;8" dur="5.1s" repeatCount="indefinite"/><animate attributeName="opacity" values=".68;.04;.68" dur="5.1s" repeatCount="indefinite"/></circle>
+    </g>
+    <g>
+      <circle r="2.8" fill="#00E6FF"><animateMotion path="M42 55C240 55 340 70 470 90C550 102 600 108 640 108" dur="8.9s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;.07;.18;.82;.93;1" dur="8.9s" repeatCount="indefinite"/></circle>
+      <circle r="2.8" fill="#00E6FF"><animateMotion path="M1238 55C1040 55 940 70 810 90C730 102 680 108 640 108" dur="10.7s" begin="-4.8s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;.07;.18;.82;.93;1" dur="10.7s" begin="-4.8s" repeatCount="indefinite"/></circle>
+      <circle r="2.4" fill="#00FBCC"><animateMotion path="M108 88C290 88 390 94 492 107C562 116 606 119 640 119" dur="9.7s" begin="-2.1s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;.06;.17;.83;.94;1" dur="9.7s" begin="-2.1s" repeatCount="indefinite"/></circle>
+      <circle r="2.4" fill="#00FBCC"><animateMotion path="M1172 88C990 88 890 94 788 107C718 116 674 119 640 119" dur="11.3s" begin="-6.7s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;.06;.17;.83;.94;1" dur="11.3s" begin="-6.7s" repeatCount="indefinite"/></circle>
+    </g>
+  </g>
+
+  <g class="qa-horizon-live">
+    <g transform="translate(640 93)">
+      <g>
+        <path d="M0-44 39-22 39 22 0 44-39 22-39-22Z" stroke="url(#qa-horizon-shine)" stroke-width="1.45" opacity=".72" fill="none"/>
+        <path d="M0-52 47-27 47 27 0 52-47 27-47-27Z" stroke="#00FBCC" stroke-width=".75" stroke-dasharray="18 8 3 10" opacity=".43" fill="none"/>
+        <animateTransform attributeName="transform" type="rotate" values="-12;12;-12" dur="18.4s" repeatCount="indefinite"/>
+      </g>
+      <g>
+        <ellipse rx="66" ry="18" stroke="url(#qa-horizon-shine)" stroke-width="1.8" opacity=".75" fill="none"/>
+        <ellipse rx="18" ry="51" stroke="#00E6FF" stroke-width=".75" opacity=".57" fill="none"/>
+        <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="28.6s" repeatCount="indefinite"/>
+      </g>
+      <g>
+        <path d="M0-25 22-12 22 12 0 25-22 12-22-12Z" fill="url(#qa-horizon-glass)" opacity=".56"/>
+        <animateTransform attributeName="transform" type="scale" values="1 1;1.13 1.08;1 1" dur="5.3s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values=".25;.7;.25" dur="5.3s" repeatCount="indefinite"/>
+      </g>
+      <circle r="10" fill="url(#qa-horizon-heart)" opacity=".75">
+        <animate attributeName="r" values="8;17;8" dur="4.8s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+    <path d="M38 52C275 25 422 139 640 107C858 139 1005 25 1242 52" stroke="url(#tri)" stroke-width="2.6" opacity=".64" fill="none" filter="url(#qa-horizon-rim)">
+      <animate attributeName="d" values="M38 52C275 25 422 139 640 107C858 139 1005 25 1242 52;M38 62C275 68 422 73 640 122C858 73 1005 68 1242 62;M38 52C275 25 422 139 640 107C858 139 1005 25 1242 52" dur="12.1s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values=".36;.84;.36" dur="12.1s" repeatCount="indefinite"/>
+    </path>
+    <ellipse cx="640" cy="93" rx="148" ry="37" fill="url(#qa-horizon-mist)" opacity=".1">
+      <animate attributeName="rx" values="132;250;132" dur="14.1s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values=".06;.28;.06" dur="14.1s" repeatCount="indefinite"/>
+    </ellipse>
+    <path d="M292 17Q640 61 988 17" fill="none" stroke="url(#qa-horizon-shine)" stroke-width="1.4" opacity=".31">
+      <animateTransform attributeName="transform" type="translate" values="-12 0;12 4;-12 0" dur="16.2s" repeatCount="indefinite"/>
+    </path>
+  </g>
+</svg>
