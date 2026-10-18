@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Fail-closed three-day UTC rotation of reviewed profile banner triplets.
 
-Slots one (original), two (Fractal Iris), and three (Chronohedron) are approved.
-Slots 4-8 stay reserved; legacy eight-day README markers are validated for migration.
+Slot 1 now serves the exact accepted V1 Photonic Depth triplet; original art stays immutable.
+Slots 2 and 3 stay Fractal Iris and Chronohedron. Slots 4-8 stay reserved.
+Legacy v3 and v4 README markers retain their exact original art and provenance.
 CLI is read-only: it never directly pushes README or alters branches.
 """
 from __future__ import annotations
@@ -21,17 +22,28 @@ from xml.etree import ElementTree as ET
 import banner_rotation as historical
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST = ROOT / "scripts/approved-banner-rotation-v3.json"
+MANIFEST = ROOT / "scripts/approved-banner-rotation-v4.json"
+LEGACY_MANIFEST = ROOT / "scripts/approved-banner-rotation-v3.json"
+LEGACY_CATALOG_BLOB = "616dd2beba7b49fe933c243c7c08d50e562861c2"
+V1_ASSETS = {
+    surface: f"assets/profile-banners/approved/01-quantum-apex-photonic-depth-{surface}.svg"
+    for surface in ("top", "top-compact", "bottom")
+}
+V1_BLOBS = {
+    "top": "4d783a9f32cc747e50db36312f8ae6d1894403f2",
+    "top-compact": "39f6298bfece3ef19ec8496a907869b7cecb2f59",
+    "bottom": "47c5b6cfce89a0ae1497749f1c5ef129f58739d5",
+}
 EPOCH = date(2026, 10, 12)
 SURFACES = ("top", "top-compact", "bottom")
 MARKER = re.compile(
-    r"^<!-- banner-rotation:v([34]) utc-day=(\d{4}-\d{2}-\d{2}) "
+    r"^<!-- banner-rotation:v([345]) utc-day=(\d{4}-\d{2}-\d{2}) "
     r"slot=([1-8]) slug=(0[1-8]-[a-z-]+) -->$", re.MULTILINE,
 )
 PREFIX = "<!-- banner-rotation:"
 HEADER_ANCHOR = '<p align="center">\n<picture>\n  <source media="(max-width: 640px)" '
 EXPECTED_SLUGS = (
-    "01-original-quantum-apex", "02-fractal-iris", "03-chronohedron",
+    "01-photonic-depth", "02-fractal-iris", "03-chronohedron",
     "04-reserved", "05-reserved", "06-reserved", "07-reserved", "08-reserved",
 )
 
@@ -68,7 +80,7 @@ def load_catalog() -> list[dict[str, Any]]:
     require(isinstance(raw, dict) and set(raw) ==
             {"version", "epoch", "timezone", "period_seconds", "slots"},
             "approved banner catalog keys changed")
-    require(raw["version"] == "approved-profile-banners-v3" and
+    require(raw["version"] == "approved-profile-banners-v4" and
             raw["epoch"] == EPOCH.isoformat() and raw["timezone"] == "UTC" and
             type(raw["period_seconds"]) is int and raw["period_seconds"] == 86400,
             "UTC-day approved schedule changed")
@@ -86,14 +98,14 @@ def load_catalog() -> list[dict[str, Any]]:
                     isinstance(slot["blobs"], dict) and
                     set(slot["assets"]) == set(slot["blobs"]) == set(SURFACES),
                     f"slot {n}: incomplete responsive triplet")
-            expected = (historical.ORIGINAL if n == 1 else {
+            expected = (V1_ASSETS if n == 1 else {
                 key: f"assets/profile-banners/approved/{slot['slug']}-{key}.svg"
                 for key in SURFACES
             })
             require(slot["assets"] == expected, f"slot {n} assets not reviewed")
             if n == 1:
-                require(slot["blobs"] == historical.ORIGINAL_BLOBS,
-                        "original art blob identity changed")
+                require(slot["blobs"] == V1_BLOBS,
+                        "production V1 photonic art must match accepted immutable V1 review blobs")
             for surface in SURFACES:
                 require(bool(re.fullmatch(r"[0-9a-f]{40}", str(slot["blobs"][surface]))),
                         f"slot {n} missing content-addressed {surface}")
@@ -111,6 +123,40 @@ def validate_assets(slots: list[dict[str, Any]]) -> None:
             require(git_blob(data) == slot["blobs"][surface],
                     f"approved art blob changed: {path}")
             if slot["slot"] == 1:
+                # V1's original geometry is still verified by the immutable historical
+                # delegate; this deployment pins an additional, accepted triplet.
+                require(16000 <= len(data.encode("utf-8")) < 48000,
+                        f"reviewed V1 artwork unexpectedly sized: {path}")
+                root = ET.fromstring(data)
+                require(root.tag == historical.NS + "svg" and root.get("role") == "img"
+                        and root.get("aria-labelledby") == "title desc"
+                        and root.get("fill") == "none"
+                        and root.get("data-review-art") == "quantum-apex-photonic-depth-v1",
+                        f"reviewed V1 responsive metadata invalid: {path}")
+                expected_canvas = {
+                    "top": ("3840", "774", "0 0 1280 258"),
+                    "top-compact": ("1920", "588", "0 0 640 196"),
+                    "bottom": ("3840", "450", "0 0 1280 150"),
+                }[surface]
+                require((root.get("width"), root.get("height"), root.get("viewBox"))
+                        == expected_canvas, f"reviewed V1 canvas changed: {path}")
+                style = root.find(f".//{historical.NS}style")
+                require(style is not None and
+                        "prefers-reduced-motion: reduce" in
+                        " ".join((node.text or "") for node in root.iter(historical.NS + "style"))
+                        and len(list(root.iter(historical.NS + "animate"))) >= 6
+                        and len(list(root.iter(historical.NS + "feTurbulence"))) == 1,
+                        f"approved V1 texture, motion or static fallback missing: {path}")
+                ids = [node.get("id") for node in root.iter() if node.get("id")]
+                require(len(ids) == len(set(ids)) and
+                        set(re.findall(r"url\(#([^)]+)\)", data)) <= set(ids),
+                        f"approved V1 internal refs or IDs invalid: {path}")
+                checked = re.sub(r'\s+xmlns(?::[a-z]+)?="https?://www\.w3\.org/[^"]+"',
+                                 "", data.lower())
+                require(not any(v in checked for v in
+                                ("<script", "<image", "<foreignobject",
+                                 "javascript:", "data:image", "http://", "https://")),
+                        f"approved V1 external payload forbidden: {path}")
                 continue
             bounds = ((100000, 160000) if slot["slot"] == 2
                       else (150000, 200000))
@@ -175,13 +221,44 @@ def validate_assets(slots: list[dict[str, Any]]) -> None:
                         f"Chronohedron reduced-motion spectral rim missing: {path}")
 
 
+
+def load_legacy_catalog() -> list[dict[str, Any]]:
+    """Freeze the original approved catalog independently of the new V1 selection."""
+    raw = read_file(LEGACY_MANIFEST)
+    require(git_blob(raw) == LEGACY_CATALOG_BLOB,
+            "historical v3 approved catalog altered")
+    spec = json.loads(raw, object_pairs_hook=unique_keys)
+    require(spec["version"] == "approved-profile-banners-v3" and
+            len(spec["slots"]) == 8 and
+            spec["slots"][0]["assets"] == historical.ORIGINAL and
+            spec["slots"][0]["blobs"] == historical.ORIGINAL_BLOBS,
+            "historical v3 original triplet identity changed")
+    return spec["slots"]
+
+
+def legacy_v4_chosen(day: date, slots: list[dict[str, Any]]) -> dict[str, Any]:
+    """Validate the old v4 three-day marker against the old ORIGINAL for slot 1."""
+    require(type(day) is date and (day - EPOCH).days >= 0,
+            "legacy v4 UTC date invalid")
+    archived = load_legacy_catalog()[:3]
+    selected = archived[(day - EPOCH).days % 3]
+    require(selected["state"] == "approved", "legacy v4 slot was unapproved")
+    return {
+        "version": "v4", "utc_day": day.isoformat(),
+        "unix_day": (day - EPOCH).days,
+        "slot": selected["slot"], "slug": selected["slug"],
+        "active_slug": selected["slug"],
+        **dict(selected["assets"]),
+    }
+
 def legacy_chosen(day: date, slots: list[dict[str, Any]]) -> dict[str, Any]:
     """Validate existing v3 README markers against the old eight-slot schedule."""
     require(type(day) is date, "UTC selection requires a date")
     ordinal = (day - EPOCH).days
     require(ordinal >= 0, "approved rotation cannot predate epoch")
-    selected = slots[ordinal % 8]
-    applied = selected if selected["state"] == "approved" else slots[0]
+    archival = load_legacy_catalog()
+    selected = archival[ordinal % 8]
+    applied = selected if selected["state"] == "approved" else archival[0]
     return {
         "version": "v3", "utc_day": day.isoformat(), "unix_day": ordinal,
         "slot": selected["slot"], "slug": selected["slug"],
@@ -200,7 +277,7 @@ def chosen(day: date, slots: list[dict[str, Any]]) -> dict[str, Any]:
             "exactly three reviewed banner triplets required")
     selected = approved[ordinal % len(approved)]
     return {
-        "version": "v4", "utc_day": day.isoformat(), "unix_day": ordinal,
+        "version": "v5", "utc_day": day.isoformat(), "unix_day": ordinal,
         "slot": selected["slot"], "slug": selected["slug"],
         "active_slug": selected["slug"],
         **dict(selected["assets"]),
@@ -210,6 +287,10 @@ def chosen(day: date, slots: list[dict[str, Any]]) -> dict[str, Any]:
 def referenced(readme: str, slots: list[dict[str, Any]]) -> dict[str, str]:
     approved = {slot["assets"][surface]
                 for slot in slots[:3] for surface in SURFACES}
+    # Only permit the exact old image set while validating a legacy v3/v4
+    # publication; validate_readme_state then proves marker/art atomicity.
+    approved |= {slot["assets"][surface]
+                 for slot in load_legacy_catalog()[:3] for surface in SURFACES}
     observed: dict[str, str] = {}
     for surface, pattern in historical.BANNER_REFERENCE.items():
         found = pattern.findall(readme)
@@ -237,7 +318,9 @@ def validate_readme_state(readme: str, slots: list[dict[str, Any]]) -> dict[str,
         return observed
     version_text, date_text, slot_text, slug = marks[0].groups()
     day = date.fromisoformat(date_text)
-    expected = legacy_chosen(day, slots) if version_text == "3" else chosen(day, slots)
+    expected = (legacy_chosen(day, slots) if version_text == "3" else
+                legacy_v4_chosen(day, slots) if version_text == "4" else
+                chosen(day, slots))
     require(int(slot_text) == expected["slot"] and slug == expected["slug"],
             "profile banner slot/date marker does not match reviewed UTC schedule")
     require(observed == {surface: expected[surface] for surface in SURFACES},
@@ -248,12 +331,12 @@ def validate_readme_state(readme: str, slots: list[dict[str, Any]]) -> dict[str,
 def propose(readme: str, selection: dict[str, Any],
             slots: list[dict[str, Any]]) -> str:
     validate_readme_state(readme, slots)
-    require(selection["version"] == "v4", "v4 selection required")
+    require(selection["version"] == "v5", "v5 selection required")
     # Caller may not fabricate a slot or use an unsupported old UTC day.
     assert_selection = chosen(date.fromisoformat(selection["utc_day"]), slots)
     require(selection == assert_selection, "banner selector is not canonical")
     marks = list(MARKER.finditer(readme))
-    marker = (f"<!-- banner-rotation:v4 utc-day={selection['utc_day']} "
+    marker = (f"<!-- banner-rotation:v5 utc-day={selection['utc_day']} "
               f"slot={selection['slot']} slug={selection['slug']} -->")
     if marks:
         mark = marks[0]
@@ -314,12 +397,44 @@ def self_test(slots: list[dict[str, Any]]) -> None:
             validate_readme_state(legacy_readme, slots) == historical.ORIGINAL,
             "legacy original-triplet marker must validate")
     migrated = propose(legacy_readme, chosen(legacy_day, slots), slots)
-    require("<!-- banner-rotation:v4 utc-day=2026-10-17 slot=3 slug=03-chronohedron -->"
+    require("<!-- banner-rotation:v5 utc-day=2026-10-17 slot=3 slug=03-chronohedron -->"
             in migrated and
             validate_readme_state(migrated, slots)["top"] == slots[2]["assets"]["top"],
             "legacy v3 migration must publish complete approved third triplet")
     require(propose(migrated, chosen(legacy_day, slots), slots) == migrated,
-            "v4 migration replay must be idempotent")
+            "v5 migration replay must be idempotent")
+    # Acceptance regression: today's v4 original must migrate directly to the
+    # reviewed V1 triplet on the *same UTC day*, never break the original marker.
+    old_oct18 = legacy_v4_chosen(date(2026, 10, 18), slots)
+    require(old_oct18["slug"] == "01-original-quantum-apex" and
+            old_oct18["top"] == historical.ORIGINAL["top"],
+            "published 2026-10-18 v4 marker no longer resolves original")
+    v4_readme = initial.replace(
+        HEADER_ANCHOR,
+        "<!-- banner-rotation:v4 utc-day=2026-10-18 slot=1 slug=01-original-quantum-apex -->\n"
+        + HEADER_ANCHOR, 1,
+    )
+    require(validate_readme_state(v4_readme, slots) == historical.ORIGINAL,
+            "existing v4 main README original snapshot is not admissible")
+    today = chosen(date(2026, 10, 18), slots)
+    require(today["slot"] == 1 and today["slug"] == "01-photonic-depth" and
+            today["top"] == V1_ASSETS["top"] and today["bottom"] == V1_ASSETS["bottom"],
+            "approved V1 must replace slot 1 without changing the rotation")
+    activated = propose(v4_readme, today, slots)
+    require("<!-- banner-rotation:v5 utc-day=2026-10-18 slot=1 slug=01-photonic-depth -->"
+            in activated and
+            validate_readme_state(activated, slots) ==
+            {surface: V1_ASSETS[surface] for surface in SURFACES},
+            "v4 -> v5 V1 publication must update all surfaces atomically")
+    require(propose(activated, today, slots) == activated,
+            "V1 publication replay must be idempotent")
+    # The very next UTC day continues with unchanged Fractal Iris.
+    tomorrow = chosen(date(2026, 10, 19), slots)
+    require(tomorrow["slot"] == 2 and
+            tomorrow["top"] == slots[1]["assets"]["top"] and
+            validate_readme_state(propose(activated, tomorrow, slots), slots) ==
+            {surface: tomorrow[surface] for surface in SURFACES},
+            "V1 activation interrupted the deterministic existing daily cycle")
     cur = initial
     for v in orders[:9]:
         nxt = propose(cur, v, slots)
@@ -358,11 +473,11 @@ def main() -> int:
         slots = load_catalog()
         if args.check:
             validate_assets(slots)
-            print("Approved banner assets verified: original + Fractal Iris + Chronohedron, three-day active cycle")
+            print("Approved banner assets verified: V1 Photonic Depth + Fractal Iris + Chronohedron, three-day active cycle")
         elif args.self_test:
             validate_assets(slots)
             self_test(slots)
-            print("Approved 3-day UTC rotation: v3 migration, idempotent, fail-closed, responsive")
+            print("Approved 3-day UTC rotation: v3/v4 migration to v5, idempotent, fail-closed, responsive")
         else:
             day = date.fromisoformat(args.date) if args.date else datetime.now(timezone.utc).date()
             choice = chosen(day, slots)
