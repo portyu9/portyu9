@@ -68,8 +68,8 @@ def verify() -> None:
             "slot-one production provenance changed")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     gallery = GALLERY.read_text(encoding="utf-8")
-    require("DO NOT MERGE" not in gallery.upper() or "DO NOT MERGE" in gallery.upper(),
-            "review gallery encoding failure")
+    require("DO NOT MERGE" in gallery.upper() and "REVIEW" in gallery.upper(),
+            "review gallery must explicitly forbid merge")
     for surface, original_name, candidate_name, w, h, viewbox, sha, lo, hi, minimum_motion, kinetic in SPECS:
         original_path = ROOT / "assets/profile-banners" / original_name
         candidate_path = REVIEW_DIR / candidate_name
@@ -88,16 +88,11 @@ def verify() -> None:
         svg = candidate_bytes.decode("utf-8", errors="strict")
         require("<!DOCTYPE" not in svg and "<!ENTITY" not in svg,
                 f"forbidden XML prelude: {surface}")
-        require(not any(token in svg.lower() for token in (
+        inspected = svg.replace('xmlns="http://www.w3.org/2000/svg"', "", 1).lower()
+        require(not any(token in inspected for token in (
             "<script", "<foreignobject", "<image", "@import", "javascript:",
             "data:image", "base64,", "http://", "https://"
-        )) or svg.count("http://") == 1 and
-                "http://www.w3.org/2000/svg" in svg and
-                not any(token in svg.lower() for token in (
-                    "<script", "<foreignobject", "<image", "@import", "javascript:",
-                    "data:image", "base64,", "https://"
-                )),
-                f"external or executable SVG content: {surface}")
+        )), f"external or executable SVG content: {surface}")
         original_root = ET.fromstring(original_bytes)
         root = ET.fromstring(candidate_bytes)
         require(root.tag == NS + "svg" and root.get("role") == "img" and
