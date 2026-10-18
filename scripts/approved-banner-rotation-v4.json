@@ -1,0 +1,83 @@
+{
+  "version": "approved-profile-banners-v4",
+  "epoch": "2026-10-12",
+  "timezone": "UTC",
+  "period_seconds": 86400,
+  "slots": [
+    {
+      "slot": 1,
+      "slug": "01-photonic-depth",
+      "state": "approved",
+      "assets": {
+        "top": "assets/profile-banners/approved/01-quantum-apex-photonic-depth-top.svg",
+        "top-compact": "assets/profile-banners/approved/01-quantum-apex-photonic-depth-top-compact.svg",
+        "bottom": "assets/profile-banners/approved/01-quantum-apex-photonic-depth-bottom.svg"
+      },
+      "blobs": {
+        "top": "4d783a9f32cc747e50db36312f8ae6d1894403f2",
+        "top-compact": "39f6298bfece3ef19ec8496a907869b7cecb2f59",
+        "bottom": "47c5b6cfce89a0ae1497749f1c5ef129f58739d5"
+      }
+    },
+    {
+      "slot": 2,
+      "slug": "02-fractal-iris",
+      "state": "approved",
+      "assets": {
+        "top": "assets/profile-banners/approved/02-fractal-iris-top.svg",
+        "top-compact": "assets/profile-banners/approved/02-fractal-iris-top-compact.svg",
+        "bottom": "assets/profile-banners/approved/02-fractal-iris-bottom.svg"
+      },
+      "blobs": {
+        "top": "3aa2750a47287f6715699545dc9ea996da4ccf3e",
+        "top-compact": "8612b29e0e3638c23de296c0366fd06e622f9375",
+        "bottom": "ffb6b1202bdc6e8bed706ef8c2a77fd04e0bf130"
+      }
+    },
+    {
+      "slot": 3,
+      "slug": "03-chronohedron",
+      "state": "approved",
+      "assets": {
+        "top": "assets/profile-banners/approved/03-chronohedron-top.svg",
+        "top-compact": "assets/profile-banners/approved/03-chronohedron-top-compact.svg",
+        "bottom": "assets/profile-banners/approved/03-chronohedron-bottom.svg"
+      },
+      "blobs": {
+        "top": "947f3cf4057058163c689ff097286a2b3370e520",
+        "top-compact": "16012155edd7848bcea8c82fea65caeea0c85695",
+        "bottom": "54209231d92a65cbc56f01c652321e36aca6786b"
+      }
+    },
+    {
+      "slot": 4,
+      "slug": "04-reserved",
+      "state": "reserved",
+      "fallback_slot": 1
+    },
+    {
+      "slot": 5,
+      "slug": "05-reserved",
+      "state": "reserved",
+      "fallback_slot": 1
+    },
+    {
+      "slot": 6,
+      "slug": "06-reserved",
+      "state": "reserved",
+      "fallback_slot": 1
+    },
+    {
+      "slot": 7,
+      "slug": "07-reserved",
+      "state": "reserved",
+      "fallback_slot": 1
+    },
+    {
+      "slot": 8,
+      "slug": "08-reserved",
+      "state": "reserved",
+      "fallback_slot": 1
+    }
+  ]
+}
