@@ -1,0 +1,40 @@
+name: Measure inert latest Tides V3 promotion (read only)
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/measure-latest-tides-v3-promotion.yml"
+permissions:
+  contents: read
+jobs:
+  measure:
+    name: measure-inert-v3-promotion
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact accepted main to execute trusted interpreter
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: d6af2dc0201fe962c17a35931404f092a002fb3e
+          path: trusted
+          persist-credentials: false
+      - name: Checkout frozen candidate only as inert bytes
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 76913d3a550050500810e06560a1472536dd4d48
+          path: candidate
+          persist-credentials: false
+      - name: Set up exact Python runtime
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.16"
+      - name: Verify immutable source and emit admission fingerprint
+        run: |
+          set -euo pipefail
+          test "$(git -C trusted rev-parse HEAD)" = "d6af2dc0201fe962c17a35931404f092a002fb3e"
+          test "$(git -C candidate rev-parse HEAD)" = "76913d3a550050500810e06560a1472536dd4d48"
+          TREE_SHA="$(git -C candidate rev-parse 'HEAD^{tree}')"
+          test "$TREE_SHA" = "9018392d198d1c82b2b52272ddc1ca637d91cd19"
+          python3 trusted/scripts/verify-python-runtime.py
+          python3 trusted/scripts/workflow_capability_admission.py candidate --candidate-tree-sha "$TREE_SHA" --measure
