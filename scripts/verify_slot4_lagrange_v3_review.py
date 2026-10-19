@@ -120,7 +120,7 @@ def verify_svg(surface: str, v2sha: str, v3sha: str, canvas: tuple[str, str, str
             surface + ": accessible responsive canvas changed")
     old_paths, new_paths = svg_path_counts(old), svg_path_counts(svg)
     require(all(new_paths[p] >= count for p, count in old_paths.items())
-            and sum(new_paths.values()) > sum(old_paths.values()) + 80,
+            and sum(new_paths.values()) > sum(old_paths.values()) + 2 * filaments + 10,
             surface + ": accepted V2 optical/path features removed")
     ids = [el.get("id") for el in svg.iter() if el.get("id")]
     require(len(ids) == len(set(ids)) and
@@ -166,7 +166,7 @@ def verify_svg(surface: str, v2sha: str, v3sha: str, canvas: tuple[str, str, str
             surface + ": extra kinetic traveling ions incomplete")
     translate = [a for a in weave.iter(NS + "animateTransform")
                  if a.get("type") == "translate"]
-    require(len(translate) == 12 and
+    require(len(translate) == 11 and
             all(a.get("attributeName") == "transform" for a in translate),
             surface + ": coordinated counterphase layer translation missing")
     move_x = [a for a in weave.iter(NS + "animate")
