@@ -1,0 +1,42 @@
+name: Measure frozen V2 and Lagrange Tides 4-day promotion (read only)
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/quantum-v2-tides-four-slot-measurement.yml"
+permissions:
+  contents: read
+env:
+  PYTHON_VERSION: "3.13.16"
+jobs:
+  measure:
+    name: measure-exact-four-slot-candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout immutable accepted main executable source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 1e8944a416921562daca4e3d014562efc7a7f69f
+          path: trusted
+          persist-credentials: false
+      - name: Checkout frozen proposed feature STRICTLY as inert data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 2a12adfbd34ab6e54c209375b08cd6051e9ef99f
+          path: candidate
+          persist-credentials: false
+      - name: Set up pinned Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.16"
+      - name: Prove source/commit/tree and emit sanitary admission measurement
+        run: |
+          set -euo pipefail
+          test "$(git -C trusted rev-parse HEAD)" = "1e8944a416921562daca4e3d014562efc7a7f69f"
+          test "$(git -C candidate rev-parse HEAD)" = "2a12adfbd34ab6e54c209375b08cd6051e9ef99f"
+          TREE_SHA="$(git -C candidate rev-parse 'HEAD^{tree}')"
+          test "$TREE_SHA" = "8460e55fc1d6388e9a6bc64a84008bdbd92b0336"
+          python3 trusted/scripts/verify-python-runtime.py
+          python3 trusted/scripts/workflow_capability_admission.py candidate --candidate-tree-sha "$TREE_SHA" --measure
