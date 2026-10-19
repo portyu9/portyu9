@@ -169,7 +169,7 @@ def verify_svg(surface: str, v2sha: str, v3sha: str, canvas: tuple[str, str, str
     require(len(translate) == 11 and
             all(a.get("attributeName") == "transform" for a in translate),
             surface + ": coordinated counterphase layer translation missing")
-    move_x = [a for a in weave.iter(NS + "animate")
+    move_x = [a for a in svg.iter(NS + "animate")
               if a.get("attributeName") == "x"]
     require(len(move_x) == 2 * windows,
             surface + ": independently moving weave overlap windows missing")
