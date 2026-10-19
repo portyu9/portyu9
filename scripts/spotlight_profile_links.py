@@ -23,9 +23,10 @@ from typing import Any
 VERSION = "spotlight-profile-links-v1"
 BANNER_HELPER_GIT_BLOB = "03a7876b3daacc26583719bb560db26a493e3e8f"
 BANNER_CATALOG_GIT_BLOB = "bda417d339852145a42712375b6b5bc01b2b87a4"
-APPROVED_BANNER_HELPER_BLOB = "f2fd58098e23dba080b0308b7926b87d131c8f56"
+APPROVED_BANNER_HELPER_BLOB = "b56419a5445ac1b5ca195663a72bb58b40427ffc"
 APPROVED_BANNER_CATALOG_BLOB = "616dd2beba7b49fe933c243c7c08d50e562861c2"
 APPROVED_BANNER_ACTIVE_CATALOG_BLOB = "5bca6135bc963e1eafa97cd70360f4847de670aa"
+APPROVED_BANNER_FOUR_SLOT_CATALOG_BLOB = "c8853e05175d6a3ee99604d43f773325e49e2e3d"
 
 
 def reviewed_banner_helper():
@@ -48,13 +49,14 @@ def reviewed_banner_helper():
     return banner_rotation
 
 def reviewed_approved_banner_helper():
-    """Pin the V5 selector, immutable historical manifest and accepted V1 catalog."""
+    """Pin v6 four-slot selector and ALL immutable legacy catalogs before import."""
     reviewed_banner_helper()  # Protect historical source and original triplet.
     source_dir = Path(__file__).resolve(strict=True).parent
     for relative, expected in (
         ("approved_banner_rotation.py", APPROVED_BANNER_HELPER_BLOB),
         ("approved-banner-rotation-v3.json", APPROVED_BANNER_CATALOG_BLOB),
         ("approved-banner-rotation-v4.json", APPROVED_BANNER_ACTIVE_CATALOG_BLOB),
+        ("approved-banner-rotation-v5.json", APPROVED_BANNER_FOUR_SLOT_CATALOG_BLOB),
     ):
         path = source_dir / relative
         require(path.is_file() and not path.is_symlink() and
