@@ -5,6 +5,8 @@ on:
       - ".github/workflows/measure-latest-tides-v3-promotion.yml"
 permissions:
   contents: read
+env:
+  PYTHON_VERSION: '3.13.16'
 jobs:
   measure:
     name: measure-inert-v3-promotion
