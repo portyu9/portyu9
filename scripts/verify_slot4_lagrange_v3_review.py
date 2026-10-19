@@ -27,13 +27,13 @@ PALETTE = {
 }
 V3 = (
     ("top", "87507b866caf359a6c3edfc76c06ad97f539ddc5",
-     "b1c0b6ccc5449b497c54cafdaf2f2fbb0cf47c4e",
+     "ef87051144ccb9717e451045b4cb015e614e2360",
      ("3840", "774", "0 0 1280 258"), 290338, 15, 22, 7),
     ("top-compact", "e7234689af9d29767fc8f6f1b7c0b9cddb14f874",
-     "4c6b27abb8e7d9a5d0d93e35e1f3b9dc725d1a5a",
+     "d382ff8e113aaccda0c1a43a1ea729302d5a994c",
      ("1920", "588", "0 0 640 196"), 224811, 9, 13, 5),
     ("bottom", "57aae2dd4919fc9ffdf848dd85eb4d0bcc659bf4",
-     "5684296283fb7b51c32521388a8bc282de66c1d7",
+     "30ba13c09b9cae8dacd7d1a1543f8ce557341bc6",
      ("3840", "450", "0 0 1280 150"), 254733, 12, 17, 7),
 )
 ORIGINAL_V1 = {
@@ -152,6 +152,14 @@ def verify_svg(surface: str, v2sha: str, v3sha: str, canvas: tuple[str, str, str
     ):
         require(svg.find(f".//{NS}g[@data-motion='{topic}']") is not None,
                 surface + ": incomplete motion discipline " + topic)
+    # Background A + background B must be drawn BEFORE alternating foreground
+    # A/B masks, or the later stream permanently occludes the first.
+    layers = svg.find(f".//{NS}g[@data-motion='independent-translating-streams']")
+    require(layers is not None and
+            [child.get("clip-path") for child in list(layers)] ==
+            [None, None, "url(#v3-weave-front-a)",
+             "url(#v3-weave-front-b)", None, None],
+            surface + ": dynamic braid depth-compositing order regressed")
     morphs = [a for a in svg.iter(NS + "animate")
               if a.get("attributeName") == "d"]
     new_morphs = [a for a in weave.iter(NS + "animate")
