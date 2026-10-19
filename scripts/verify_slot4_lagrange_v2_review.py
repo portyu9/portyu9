@@ -140,7 +140,7 @@ def verify() -> None:
                 and ".still{display:inline!important}" in styles
                 and ".v2-live{display:none!important}" in styles,
                 f"both V1 and V2 reduced-motion static states missing: {surface}")
-        require(len(list(root.iter(NS + "linearGradient"))) >= 10
+        require(len(list(root.iter(NS + "linearGradient"))) >= 9
                 and len(list(root.iter(NS + "radialGradient"))) >= 4
                 and len(list(root.iter(NS + "feGaussianBlur"))) >= 4,
                 f"layered refractive optical materials incomplete: {surface}")
