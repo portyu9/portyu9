@@ -1478,6 +1478,13 @@
       "rationale": "Authorize #1183's exact trusted-parser prerequisite for #1181: accept current Profile Stats unchanged and one explicit future dispatch_plan shape with exact read-only planner authority and conditional lease contents-read/canonical-GET bootstrap. Semantic Workflow Capability is unchanged. No workflow, policy JSON, trigger, endpoint, mutation, runtime permission, secret/OIDC, required-check reduction, direct-main write, ruleset change, merge authority, or bypass is added."
     },
     {
+      "baseBomSha256": "cd4e7d9e6f474fc73cdb94f6b9fd1e6ab3bf65c588bc85e91f2315a697629b29",
+      "candidateBomSha256": "cd4e7d9e6f474fc73cdb94f6b9fd1e6ab3bf65c588bc85e91f2315a697629b29",
+      "expansionSha256": "f987b5a3513da8685145fedad56f53c468dfc3465061f5896fd7969e66766534",
+      "id": "cap-promote-lagrange-tides-v3-latest-v7-20261019",
+      "rationale": "Authorize frozen #1785 measured read-only by accepted main via closed #1786: advance protected Spotlight selector and pins to owner-approved Tides V3 in slot 4; add immutable v6 catalog and preserve v3-v6 marker replay. Four-day cycle unchanged. No new workflow, trigger, permissions, API, mutations, secrets, checks, direct-main, ruleset bypass, or reductions. README publication remains separate and governed."
+    },
+    {
       "baseBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "candidateBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "expansionSha256": "ecd46d0ed5524e089af775b01534b695c3b9b5f7bd3dd2fe2ec6e57d6b72f858",
