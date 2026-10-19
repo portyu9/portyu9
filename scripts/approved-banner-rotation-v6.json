@@ -1,0 +1,92 @@
+{
+  "version": "approved-profile-banners-v6",
+  "epoch": "2026-10-12",
+  "timezone": "UTC",
+  "period_seconds": 86400,
+  "slots": [
+    {
+      "slot": 1,
+      "slug": "01-luminous-singularity",
+      "state": "approved",
+      "assets": {
+        "top": "assets/profile-banners/approved/01-quantum-apex-luminous-singularity-v2-top.svg",
+        "top-compact": "assets/profile-banners/approved/01-quantum-apex-luminous-singularity-v2-top-compact.svg",
+        "bottom": "assets/profile-banners/approved/01-quantum-apex-luminous-singularity-v2-bottom.svg"
+      },
+      "blobs": {
+        "top": "f7cf024a8343f9904f63c314d5bc72f87e5049f7",
+        "top-compact": "256a5315728bc0778d941df24ba3b860f5a67f3a",
+        "bottom": "61419a4e18f055ca8843071402f37e9868812e5a"
+      }
+    },
+    {
+      "slot": 2,
+      "slug": "02-fractal-iris",
+      "state": "approved",
+      "assets": {
+        "top": "assets/profile-banners/approved/02-fractal-iris-top.svg",
+        "top-compact": "assets/profile-banners/approved/02-fractal-iris-top-compact.svg",
+        "bottom": "assets/profile-banners/approved/02-fractal-iris-bottom.svg"
+      },
+      "blobs": {
+        "top": "3aa2750a47287f6715699545dc9ea996da4ccf3e",
+        "top-compact": "8612b29e0e3638c23de296c0366fd06e622f9375",
+        "bottom": "ffb6b1202bdc6e8bed706ef8c2a77fd04e0bf130"
+      }
+    },
+    {
+      "slot": 3,
+      "slug": "03-chronohedron",
+      "state": "approved",
+      "assets": {
+        "top": "assets/profile-banners/approved/03-chronohedron-top.svg",
+        "top-compact": "assets/profile-banners/approved/03-chronohedron-top-compact.svg",
+        "bottom": "assets/profile-banners/approved/03-chronohedron-bottom.svg"
+      },
+      "blobs": {
+        "top": "947f3cf4057058163c689ff097286a2b3370e520",
+        "top-compact": "16012155edd7848bcea8c82fea65caeea0c85695",
+        "bottom": "54209231d92a65cbc56f01c652321e36aca6786b"
+      }
+    },
+    {
+      "slot": 4,
+      "slug": "04-lagrange-tides",
+      "state": "approved",
+      "assets": {
+        "top": "assets/profile-banners/approved/04-lagrange-tides-v3-kinetic-top.svg",
+        "top-compact": "assets/profile-banners/approved/04-lagrange-tides-v3-kinetic-top-compact.svg",
+        "bottom": "assets/profile-banners/approved/04-lagrange-tides-v3-kinetic-bottom.svg"
+      },
+      "blobs": {
+        "top": "ef87051144ccb9717e451045b4cb015e614e2360",
+        "top-compact": "d382ff8e113aaccda0c1a43a1ea729302d5a994c",
+        "bottom": "30ba13c09b9cae8dacd7d1a1543f8ce557341bc6"
+      }
+    },
+    {
+      "slot": 5,
+      "slug": "05-reserved",
+      "state": "reserved",
+      "fallback_slot": 1
+    },
+    {
+      "slot": 6,
+      "slug": "06-reserved",
+      "state": "reserved",
+      "fallback_slot": 1
+    },
+    {
+      "slot": 7,
+      "slug": "07-reserved",
+      "state": "reserved",
+      "fallback_slot": 1
+    },
+    {
+      "slot": 8,
+      "slug": "08-reserved",
+      "state": "reserved",
+      "fallback_slot": 1
+    }
+  ]
+}

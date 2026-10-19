@@ -23,10 +23,11 @@ from typing import Any
 VERSION = "spotlight-profile-links-v1"
 BANNER_HELPER_GIT_BLOB = "03a7876b3daacc26583719bb560db26a493e3e8f"
 BANNER_CATALOG_GIT_BLOB = "bda417d339852145a42712375b6b5bc01b2b87a4"
-APPROVED_BANNER_HELPER_BLOB = "b56419a5445ac1b5ca195663a72bb58b40427ffc"
+APPROVED_BANNER_HELPER_BLOB = "1147a3148d15c31f317ed1302905033c7f8268ef"
 APPROVED_BANNER_CATALOG_BLOB = "616dd2beba7b49fe933c243c7c08d50e562861c2"
 APPROVED_BANNER_ACTIVE_CATALOG_BLOB = "5bca6135bc963e1eafa97cd70360f4847de670aa"
 APPROVED_BANNER_FOUR_SLOT_CATALOG_BLOB = "c8853e05175d6a3ee99604d43f773325e49e2e3d"
+APPROVED_BANNER_LATEST_V3_CATALOG_BLOB = "cb48ddfeadbc76ad07b2a3a48f31b084816f43fa"
 
 
 def reviewed_banner_helper():
@@ -49,7 +50,7 @@ def reviewed_banner_helper():
     return banner_rotation
 
 def reviewed_approved_banner_helper():
-    """Pin v6 four-slot selector and ALL immutable legacy catalogs before import."""
+    """Pin v7 latest-V3 four-slot selector and all immutable historical catalogs."""
     reviewed_banner_helper()  # Protect historical source and original triplet.
     source_dir = Path(__file__).resolve(strict=True).parent
     for relative, expected in (
@@ -57,6 +58,7 @@ def reviewed_approved_banner_helper():
         ("approved-banner-rotation-v3.json", APPROVED_BANNER_CATALOG_BLOB),
         ("approved-banner-rotation-v4.json", APPROVED_BANNER_ACTIVE_CATALOG_BLOB),
         ("approved-banner-rotation-v5.json", APPROVED_BANNER_FOUR_SLOT_CATALOG_BLOB),
+        ("approved-banner-rotation-v6.json", APPROVED_BANNER_LATEST_V3_CATALOG_BLOB),
     ):
         path = source_dir / relative
         require(path.is_file() and not path.is_symlink() and
