@@ -1499,6 +1499,13 @@
       "rationale": "Authorize frozen production feature #1773 measured by closed read-only diagnostic #1774: evolve the strictly pinned Spotlight banner selector/catalog to publish the exact merged V1 Photonic Depth triplet on its three-day slot, preserving original blobs and prior v3/v4 markers. Semantic workflow BOM is unchanged; this is one exact protected source-boundary expansion. No new trigger, permission, API write, secret/OIDC, direct-main update, merge authority, bypass, or required-check reduction."
     },
     {
+      "baseBomSha256": "cd4e7d9e6f474fc73cdb94f6b9fd1e6ab3bf65c588bc85e91f2315a697629b29",
+      "candidateBomSha256": "cd4e7d9e6f474fc73cdb94f6b9fd1e6ab3bf65c588bc85e91f2315a697629b29",
+      "expansionSha256": "8c1cb3caed48e80cb5ae301e15bf2fece76814adb4714bbae453577f9a4e2d49",
+      "id": "cap-quantum-v2-lagrange-tides-four-slot-v1",
+      "rationale": "Authorize frozen PR #1779's exact reviewed four-day Spotlight selector/catalog pins after trusted-main read-only measurement #1780: Quantum Apex V2 replaces V1 in slot 1 and Lagrange Tides V1 activates slot 4, preserving old catalogs, original assets, and v3/v4/v5 markers. No new trigger, workflow permission, mutation endpoint, secret/OIDC, direct-main write, ruleset bypass, required-check reduction or separate branch write. Only protected source bytes change."
+    },
+    {
       "baseBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
       "candidateBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
       "expansionSha256": "946ea03935a3b53b5dfeceac5b26ae69f004f040bbef58d8541177f215a1535f",
