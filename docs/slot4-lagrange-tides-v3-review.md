@@ -54,7 +54,8 @@ may render a still image; the raw links contain live SMIL animations.*
 2. **Independent counter-translation:** each stream's deep-glass layer,
    foreground refraction layer and live caustic seam move in opposing
    horizontal/vertical phases, offset by different rhythmic periods.
-3. **True weave alternation:** independently moving `clipPath` windows allow
+3. **True weave alternation:** both full background ribbons are drawn first, *then*
+   complementary independently moving `clipPath` foreground apertures permit
    the two surfaces to *exchange foreground priority* along the estuary.
    The windows themselves glide horizontally to move the crossing highlights.
    Desktop and footer have seven windows **per stream**; mobile has five per
@@ -100,9 +101,9 @@ may render a still image; the raw links contain live SMIL animations.*
 
 | Surface | Accepted V2 input blob | New V3 Git blob | V3 bytes | Morphs total | New translations | New guided photons |
 | --- | --- | --- | ---: | ---: | ---: | ---: |
-| Desktop | `87507b866caf359a6c3edfc76c06ad97f539ddc5` | `b1c0b6ccc5449b497c54cafdaf2f2fbb0cf47c4e` | 290,338 | 16 | 11 | 15 |
-| Mobile | `e7234689af9d29767fc8f6f1b7c0b9cddb14f874` | `4c6b27abb8e7d9a5d0d93e35e1f3b9dc725d1a5a` | 224,811 | 16 | 11 | 9 |
-| Bottom | `57aae2dd4919fc9ffdf848dd85eb4d0bcc659bf4` | `5684296283fb7b51c32521388a8bc282de66c1d7` | 254,733 | 16 | 11 | 12 |
+| Desktop | `87507b866caf359a6c3edfc76c06ad97f539ddc5` | `ef87051144ccb9717e451045b4cb015e614e2360` | 290,338 | 16 | 11 | 15 |
+| Mobile | `e7234689af9d29767fc8f6f1b7c0b9cddb14f874` | `d382ff8e113aaccda0c1a43a1ea729302d5a994c` | 224,811 | 16 | 11 | 9 |
+| Bottom | `57aae2dd4919fc9ffdf848dd85eb4d0bcc659bf4` | `30ba13c09b9cae8dacd7d1a1543f8ce557341bc6` | 254,733 | 16 | 11 | 12 |
 
 Every V2 `<path d=...>` is retained verbatim. The V3 layer increases
 the SVG size because it adds actual Bézier geometry and timed animation
