@@ -1,0 +1,217 @@
+{
+  "automationPolicyId": "automation-policy-v1",
+  "bomId": "workflow-capability-bom-v1",
+  "repository": "portyu9/portyu9",
+  "schemaVersion": 1,
+  "workflows": [
+    {
+      "id": "approved-banner-rotation",
+      "jobs": [
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact accepted main"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up reviewed Python runtime"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Upload one exact banner-only candidate"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "if-no-files-found": "error",
+              "name": "reviewed-banner-readme",
+              "operation": "upload",
+              "path": "banner-ready/*",
+              "retention-days": "1",
+              "step": "Upload one exact banner-only candidate"
+            }
+          ],
+          "id": "plan",
+          "mutations": [],
+          "name": "propose-accepted-banner-triplet-read-only",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact reviewed main without retained credentials"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up reviewed Python runtime"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
+              "repository": "actions/download-artifact",
+              "step": "Download exact read-only banner plan"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/branches/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/branches/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BRANCH}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls",
+              "method": "POST",
+              "mutating": true,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=main&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "git",
+              "mutating": true,
+              "operation": "push",
+              "remote": "origin",
+              "step": "Re-prove plan and create only an immutable README PR",
+              "targets": [
+                ":refs/heads/$BRANCH"
+              ]
+            },
+            {
+              "client": "git",
+              "mutating": true,
+              "operation": "push",
+              "remote": "origin",
+              "step": "Re-prove plan and create only an immutable README PR",
+              "targets": [
+                "HEAD:refs/heads/$BRANCH"
+              ]
+            }
+          ],
+          "artifacts": [
+            {
+              "digest-mismatch": "error",
+              "name": "reviewed-banner-readme",
+              "operation": "download",
+              "path": "banner-candidate",
+              "step": "Download exact read-only banner plan"
+            }
+          ],
+          "id": "publish",
+          "mutations": [
+            {
+              "class": "git-ref-push",
+              "step": "Re-prove plan and create only an immutable README PR",
+              "target": "origin :refs/heads/$BRANCH"
+            },
+            {
+              "class": "git-ref-push",
+              "step": "Re-prove plan and create only an immutable README PR",
+              "target": "origin HEAD:refs/heads/$BRANCH"
+            },
+            {
+              "class": "pull-request",
+              "method": "POST",
+              "step": "Re-prove plan and create only an immutable README PR",
+              "target": "repos/${GITHUB_REPOSITORY}/pulls"
+            }
+          ],
+          "name": "open-protected-README-only-banner-PR",
+          "needs": [
+            "plan"
+          ],
+          "oidc": false,
+          "permissions": {
+            "contents": "write",
+            "pull-requests": "write"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        }
+      ],
+      "name": "Rotate approved profile banners independently",
+      "path": ".github/workflows/approved-banner-rotation.yml",
+      "references": {
+        "env": [
+          "PYTHON_VERSION"
+        ],
+        "githubToken": [
+          "github.token"
+        ],
+        "secrets": [],
+        "vars": []
+      },
+      "triggers": {
+        "schedule": {
+          "cron": [
+            "11 1 * * *"
+          ]
+        },
+        "workflow_dispatch": {}
+      },
+      "workflowPermissions": {
+        "contents": "read"
+      }
+    }
+  ]
+}
