@@ -232,7 +232,7 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: action-provenance-witness-v1
+          name: action-provenance-witness-v2
           path: action-provenance-witness-consumer
           github-token: ${{ github.token }}
           run-id: ${{ steps.action_provenance_witness_discovery.outputs.run_id }}
@@ -257,7 +257,7 @@ jobs:
           test -z "$(find action-provenance-witness-consumer -mindepth 1 -maxdepth 1 ! -type f -print -quit)"
           gh attestation verify "$SUBJECT" \
             --repo "$GITHUB_REPOSITORY" \
-            --predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/action-provenance-witness-v1.schema.json \
+            --predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/action-provenance-witness-v2.schema.json \
             --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/action-provenance-witness.yml" \
             --signer-digest "$SOURCE_SHA" \
             --source-digest "$SOURCE_SHA" \
