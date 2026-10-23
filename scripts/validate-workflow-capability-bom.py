@@ -59,7 +59,7 @@ def validate_snapshot() -> tuple[int, int]:
     compiled = compiler.compile_bom()
     activity = [item for item in compiled['workflows'] if item['path'] == '.github/workflows/activity-metrics.yml']
     if activity:
-        print('TEMP_ACTIVITY_CAPABILITY_ENTRY=' + compiler.canonical_json(activity[0]).strip(), flush=True)
+        print('TEMP_ACTIVITY_CAPABILITY_ENTRY=' + __import__('json').dumps(activity[0], sort_keys=True, separators=(',', ':')), flush=True)
     difference = first_difference(compiled, snapshot)
     if difference is not None:
         raise ValueError(f"Workflow Capability BOM snapshot differs from compiled source: {difference}")
