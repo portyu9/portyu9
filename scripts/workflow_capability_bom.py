@@ -90,12 +90,12 @@ REVIEWED_LONG_LIVED_AUTHORITY_RETENTION_DAYS: dict[tuple[str, str, str], int] = 
     (".github/workflows/codeql-autofix.yml", "controller", "Upload immutable controller provenance receipt"): 7,
 }
 REVIEWED_ARTIFACT_DOWNLOAD_BINDINGS: dict[tuple[str, str, str], dict[str, Any]] = {
-    (".github/workflows/action-provenance-witness.yml", "attest", "Download exact prepared witness bundle"): {"producer": (".github/workflows/action-provenance-witness.yml", "prepare", "Upload unsigned reviewed witness bundle"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "action-provenance-witness-v1"},
+    (".github/workflows/action-provenance-witness.yml", "attest", "Download exact prepared witness bundle"): {"producer": (".github/workflows/action-provenance-witness.yml", "prepare", "Upload unsigned reviewed witness bundle"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "action-provenance-witness-v2"},
     (".github/workflows/dependabot-controller.yml", "integration", "Download exact validation Signal Field"): {"producer": (".github/workflows/dependabot-controller.yml", "integration", "Upload exact validation Signal Field"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "dependabot-signal-field-${{ needs.validation_bind.outputs.head_sha }}"},
     (".github/workflows/profile-generator-compatibility-witness.yml", "attest", "Download exact prepared compatibility witness bundle"): {"producer": (".github/workflows/profile-generator-compatibility-witness.yml", "prepare", "Upload unsigned reviewed compatibility witness bundle"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "profile-generator-compatibility-witness-v1"},
     (".github/workflows/profile-quality.yml", "integration", "Download exact fresh signed Profile Generator Compatibility Witness"): {"producer": (".github/workflows/profile-generator-compatibility-witness.yml", "prepare", "Upload unsigned reviewed compatibility witness bundle"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "profile-generator-compatibility-witness-v1"},
     (".github/workflows/profile-quality.yml", "integration", "Download Signal Field review artifacts"): {"producer": (".github/workflows/profile-quality.yml", "integration", "Upload Signal Field review artifacts"), "selectorMode": "artifact-id-same-job", "selector": "artifactIds", "selectorValue": "${{ steps.signal_field_review_upload.outputs.artifact-id }}"},
-    (".github/workflows/profile-quality.yml", "validate", "Download exact fresh signed Action provenance witness"): {"producer": (".github/workflows/action-provenance-witness.yml", "prepare", "Upload unsigned reviewed witness bundle"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "action-provenance-witness-v1"},
+    (".github/workflows/profile-quality.yml", "validate", "Download exact fresh signed Action provenance witness"): {"producer": (".github/workflows/action-provenance-witness.yml", "prepare", "Upload unsigned reviewed witness bundle"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "action-provenance-witness-v2"},
     (".github/workflows/profile-stats.yml", "attest_publish", "Download reviewed attestation predicate"): {"producer": (".github/workflows/profile-stats.yml", "attest", "Upload reviewed attestation predicate"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "profile-evidence-attestation-predicate"},
     (".github/workflows/profile-stats.yml", "attest_publish", "Download validated Engineering Spotlight for terminal attestation"): {"producer": (".github/workflows/profile-stats.yml", "generate", "Upload immutable validated Engineering Spotlight"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "engineering-spotlight-svg"},
     (".github/workflows/profile-stats.yml", "attest_publish", "Download validated Portfolio Evidence Ledger for terminal attestation"): {"producer": (".github/workflows/profile-stats.yml", "generate", "Upload immutable validated Portfolio Evidence Ledger"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "portfolio-evidence-ledger"},
@@ -1174,7 +1174,7 @@ def _compile_artifact_retention_policy(
 
             if identity[0] == ".github/workflows/action-provenance-witness.yml":
                 source_path = ROOT / "scripts" / "action_provenance_witness.py"
-                schema_path = ROOT / ".github" / "attestation" / "action-provenance-witness-v1.schema.json"
+                schema_path = ROOT / ".github" / "attestation" / "action-provenance-witness-v2.schema.json"
                 source_fragments = (
                     "TTL_SECONDS = 21600",
                     'return validity["issuedAtEpoch"] <= now_epoch < validity["expiresAtEpoch"]',
@@ -1748,7 +1748,7 @@ def self_test() -> None:
     unbound_job["artifacts"].append({
         "operation": "download",
         "step": "Unreviewed artifact consumer",
-        "name": "action-provenance-witness-v1",
+        "name": "action-provenance-witness-v2",
         "path": "unreviewed",
         "digest-mismatch": "error",
     })
