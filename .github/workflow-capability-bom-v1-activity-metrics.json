@@ -243,10 +243,18 @@
         },
         "schedule": {
           "cron": [
-            "2/5 * * * *"
+            "*/5 * * * *"
           ]
         },
-        "workflow_dispatch": {}
+        "workflow_dispatch": {},
+        "workflow_run": {
+          "types": [
+            "completed"
+          ],
+          "workflows": [
+            "Capability admission"
+          ]
+        }
       },
       "workflowPermissions": {
         "contents": "read"
