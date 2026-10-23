@@ -57,16 +57,16 @@ SECTION_BREAK = "\n\n---\n\n"
 SIGNAL_FIELD_RESPONSIVE_BLOCK = (
     '<picture>\n'
     f'  <source media="(max-width: {SIGNAL_FIELD_COMPACT_MAX_WIDTH}px) and (prefers-color-scheme: dark)" '
-    f'srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/'
+    f'srcset="https://raw.githubusercontent.com/portyu9/portyu9/activity-metrics/profile-stats/profile/'
     f'signal-field-compact-dark.svg?v={SIGNAL_FIELD_TOKEN}">\n'
     f'  <source media="(max-width: {SIGNAL_FIELD_COMPACT_MAX_WIDTH}px)" '
-    f'srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/'
+    f'srcset="https://raw.githubusercontent.com/portyu9/portyu9/activity-metrics/profile-stats/profile/'
     f'signal-field-compact-light.svg?v={SIGNAL_FIELD_TOKEN}">\n'
     '  <source media="(prefers-color-scheme: dark)" '
-    f'srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/'
+    f'srcset="https://raw.githubusercontent.com/portyu9/portyu9/activity-metrics/profile-stats/profile/'
     f'signal-field-wide-dark.svg?v={SIGNAL_FIELD_TOKEN}">\n'
     '  <img alt="GitHub activity signal field" '
-    f'src="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/'
+    f'src="https://raw.githubusercontent.com/portyu9/portyu9/activity-metrics/profile-stats/profile/'
     f'signal-field-wide-light.svg?v={SIGNAL_FIELD_TOKEN}" width="100%">\n'
     '</picture>'
 )
@@ -80,7 +80,7 @@ MUTABLE_SPOTLIGHT = re.compile(
     r"spotlight-[123]-(?:light|dark)\.svg"
 )
 SIGNAL_FIELD = re.compile(
-    r"https://raw\.githubusercontent\.com/portyu9/portyu9/generated/profile-stats/profile/"
+    r"https://raw\.githubusercontent\.com/portyu9/portyu9/activity-metrics/profile-stats/profile/"
     r"signal-field-(?:wide|compact)-(?:light|dark)\.svg\?v=([^\"'> ]+)"
 )
 SVG_ROOT = re.compile(r"<svg\b([^>]*)>", re.I)
