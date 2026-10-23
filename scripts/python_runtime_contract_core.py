@@ -15,6 +15,7 @@ EXPECTED_VERSION = "3.13.17"
 EXPECTED_VERSION_INFO = tuple(int(part) for part in EXPECTED_VERSION.split("."))
 LEGACY_VERSION = "3.13.16"
 EXPECTED_WORKFLOW_VERSIONS = {
+    "approved-banner-rotation.yml": EXPECTED_VERSION,
     "action-provenance-witness.yml": EXPECTED_VERSION,
     "capability-admission.yml": LEGACY_VERSION,
     "codeql-autofix.yml": EXPECTED_VERSION,
@@ -29,6 +30,7 @@ TEMPORARY_LEGACY_WORKFLOWS = {
     name for name, version in EXPECTED_WORKFLOW_VERSIONS.items() if version == LEGACY_VERSION
 }
 VERIFY_COMMANDS = {
+    "approved-banner-rotation.yml": "python3 source/scripts/verify-python-runtime.py",
     "action-provenance-witness.yml": "python3 scripts/verify-python-runtime.py",
     "capability-admission.yml": "python3 scripts/verify-python-runtime.py",
     "codeql-autofix.yml": "python3 scripts/verify-python-runtime.py",
