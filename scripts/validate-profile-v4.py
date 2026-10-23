@@ -124,11 +124,12 @@ def require(condition: bool, message: str) -> None:
 
 
 def flagship_native_badge_references(readme: str) -> set[str]:
-    """Approve four paired, repository-bound GitHub Actions badges for the flagships.
+    """Validate custom lowercase workflow-status labels on the four flagships.
 
-    Derive subjects from the actual card anchors instead of maintaining an
-    independent list of badge URLs. Reject foreign hosts, missing workflows,
-    duplicate evidence, or badges not scoped to the named main branch.
+    Only the dynamic status image's label is customized via Shields.io;
+    the badge must remain pinned to its own main-branch workflow link.
+    The native GitHub workflow names and six Spotlight badges are unchanged.
+    Reject foreign subjects, duplicated badges and uppercase label aliases.
     """
     start = '<h2 align="center">◇ Selected Engineering Systems</h2>'
     end = '<h3 align="center">↻ Evidence Spotlight</h3>'
@@ -145,19 +146,24 @@ def flagship_native_badge_references(readme: str) -> set[str]:
     for repository in repositories:
         for workflow in ("ci", "security"):
             target = f"https://github.com/{repository}/actions/workflows/{workflow}.yml"
-            image = target + "/badge.svg?branch=main"
+            image = (f"https://img.shields.io/github/actions/workflow/status/"
+                     f"{repository}/{workflow}.yml?branch=main&amp;style=flat-square&amp;label={workflow}")
             markup = re.compile(
-                re.escape(f'<a href="{target}"><img ') +
-                r'alt="[^"]+" height="24" src="' + re.escape(image) + r'"></a>'
+                re.escape(f'<a href="{target}"><img ')
+                + r'alt="[^"]+" height="24" src="' + re.escape(image) + r'"></a>'
             )
             require(len(markup.findall(block)) == 1,
-                    f"{repository} flagship {workflow} must use its own native GitHub workflow badge")
+                    f"{repository} flagship {workflow} requires its own lowercase, main-scoped status")
             approved.add(image.split("?", 1)[0])
-    require(len(approved) == 8 and block.count("/badge.svg?branch=main") == 8,
-            "Flagship native GitHub badge inventory changed")
-    require("img.shields.io/github/actions/workflow/status/" not in block,
-            "Off-host flagship workflow status images are forbidden")
-    return approved
+    require(len(approved) == 8 and block.count("img.shields.io/github/actions/workflow/status/") == 8,
+            "Flagship lowercase status badge inventory changed")
+    require(block.count("label=ci") == 4 and block.count("label=security") == 4,
+            "Flagship workflow labels must be lowercase ci and security")
+    require("/badge.svg?branch=main" not in block,
+            "Flagship native badge must not silently override lowercase visible labels")
+    # These dynamic workflow-status endpoints do not end in .svg, so they are
+    # checked exhaustively above, not in the static SVG-reference inventory.
+    return set()
 
 
 def spotlight_native_badge_references(readme: str) -> set[str]:
