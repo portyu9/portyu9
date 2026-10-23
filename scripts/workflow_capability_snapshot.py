@@ -3,7 +3,7 @@
 
 The item-12 five-workflow snapshot remains a canonical historical partition. Later trusted
 workflow extensions are stored as one-workflow canonical snapshots. This module is the only
-assembly boundary: callers receive one ordinary thirteen-workflow BOM object whose semantic and
+assembly boundary: callers receive one ordinary fourteen-workflow BOM object whose semantic and
 canonical representation is compared with live trusted compilation.
 """
 from __future__ import annotations
@@ -17,6 +17,7 @@ import workflow_capability_bom as compiler
 ROOT = Path(__file__).resolve().parents[1]
 BASE_SNAPSHOT = ROOT / ".github/workflow-capability-bom-v1.json"
 ACTION_PROVENANCE_WITNESS_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-action-provenance-witness.json"
+APPROVED_BANNER_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-approved-banner-rotation.json"
 ADMISSION_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-capability-admission.json"
 AUTOFIX_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-codeql-autofix.json"
 DEPENDABOT_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-dependabot-controller.json"
@@ -68,6 +69,7 @@ def one_workflow(extension: dict[str, Any], *, identity: str, path: str, label: 
 def load_combined() -> dict[str, Any]:
     base = load_part(BASE_SNAPSHOT, "base Workflow Capability BOM snapshot")
     action_provenance_witness_extension = load_part(ACTION_PROVENANCE_WITNESS_EXTENSION, "Action provenance witness BOM extension")
+    approved_banner_extension = load_part(APPROVED_BANNER_EXTENSION, "Independent approved banner BOM extension")
     admission_extension = load_part(ADMISSION_EXTENSION, "Capability admission BOM extension")
     autofix_extension = load_part(AUTOFIX_EXTENSION, "CodeQL Autofix BOM extension")
     dependabot_extension = load_part(DEPENDABOT_EXTENSION, "Dependabot controller BOM extension")
@@ -77,6 +79,12 @@ def load_combined() -> dict[str, Any]:
     ruleset_reconciler_extension = load_part(RULESET_RECONCILER_EXTENSION, "Ruleset reconciler BOM extension")
     require(len(base["workflows"]) == 5, "base Workflow Capability BOM historical workflow count changed")
 
+    one_workflow(
+        approved_banner_extension,
+        identity="approved-banner-rotation",
+        path=".github/workflows/approved-banner-rotation.yml",
+        label="Independent approved banner BOM extension",
+    )
     one_workflow(
         action_provenance_witness_extension,
         identity="action-provenance-witness",
@@ -131,6 +139,7 @@ def load_combined() -> dict[str, Any]:
     workflows = (
         list(base["workflows"])
         + list(action_provenance_witness_extension["workflows"])
+        + list(approved_banner_extension["workflows"])
         + list(admission_extension["workflows"])
         + list(autofix_extension["workflows"])
         + list(dependabot_extension["workflows"])
@@ -362,10 +371,11 @@ def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
 def self_test() -> None:
     combined = load_combined()
     validate_ruleset_reconciler_safety(combined)
-    require(len(combined["workflows"]) == 13, "composite Workflow Capability BOM must contain thirteen workflows")
+    require(len(combined["workflows"]) == 14, "composite Workflow Capability BOM must contain fourteen workflows")
     require(
         [workflow["path"] for workflow in combined["workflows"]] == [
             ".github/workflows/action-provenance-witness.yml",
+            ".github/workflows/approved-banner-rotation.yml",
             ".github/workflows/bot-pr-user-approval.yml",
             ".github/workflows/capability-admission.yml",
             ".github/workflows/codeql-autofix.yml",
@@ -399,4 +409,4 @@ def self_test() -> None:
 
 if __name__ == "__main__":
     self_test()
-    print("Composite Workflow Capability BOM snapshot validation passed: 13 workflows.")
+    print("Composite Workflow Capability BOM snapshot validation passed: 14 workflows.")
