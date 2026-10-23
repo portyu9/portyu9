@@ -1303,6 +1303,13 @@
       "rationale": "Authorize frozen #1116 hardening of the existing Dependabot, CodeQL Autofix, and Spotlight terminal merge PUTs: capture gh api --include and require HTTP 200 before consuming the already-typed success response, while preserving Dependabot's existing nonzero failure diagnostics. Semantic BOMs, endpoints, call counts, permissions, triggers, merge authority, required checks, secrets/OIDC, direct-main authority, rulesets, retries, and bypass remain unchanged."
     },
     {
+      "baseBomSha256": "cd4e7d9e6f474fc73cdb94f6b9fd1e6ab3bf65c588bc85e91f2315a697629b29",
+      "candidateBomSha256": "78b8eb31af869c57feceb269e89e0d535f722b1fd045dea9d91613eee6da7561",
+      "expansionSha256": "45c69bc2b60d2a879448b8f214ba96aa408a37b8cc9488328a4c27fc866f09c4",
+      "id": "cap-independent-activity-metrics-5min-v1",
+      "rationale": "Authorize exact independently attested activity-metrics five-minute workflow proposal #1799, candidate tree 9e12a0d93f32702f27e8e1ffa7d4c9e1517256db and accepted-main measurement #1807. Separates four presentation-only Signal Field SVGs from strict-live Portfolio Evidence Ledger/Spotlight publication; permits only bounded independent signing and write-only fast-forward activity-metrics branch publication. Existing generated eleven-subject attestation, evidence freshness, proof checking, protected required checks and other branch writes remain fail-closed. No API-derived stale CI acceptance, merge/bypass authority, new secret, or generic publisher."
+    },
+    {
       "baseBomSha256": "7f91352fc1f77fbb890b058b86e71592ff85012777b149fecff0deb378fd37c3",
       "candidateBomSha256": "d1c6dc9d071c5876eeee3b6ad1cd6b42f0f7d5682115b1afe1644b24ca571020",
       "expansionSha256": "76db7100bd3c51f0880a62cab3add50fc86e75bdb15660850492fa4fbf901517",
