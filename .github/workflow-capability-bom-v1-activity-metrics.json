@@ -248,8 +248,12 @@
         },
         "workflow_dispatch": {},
         "workflow_run": {
-          "types": "[completed]",
-          "workflows": "[\"Capability admission\"]"
+          "types": [
+            "completed"
+          ],
+          "workflows": [
+            "Capability admission"
+          ]
         }
       },
       "workflowPermissions": {
