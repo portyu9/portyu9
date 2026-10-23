@@ -375,6 +375,7 @@ def self_test() -> None:
     require(
         [workflow["path"] for workflow in combined["workflows"]] == [
             ".github/workflows/action-provenance-witness.yml",
+            ".github/workflows/activity-metrics.yml",
             ".github/workflows/bot-pr-user-approval.yml",
             ".github/workflows/capability-admission.yml",
             ".github/workflows/codeql-autofix.yml",
