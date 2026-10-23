@@ -46,6 +46,14 @@ def first_difference(expected: Any, observed: Any, path: str = "$") -> str | Non
 
 
 def validate_snapshot() -> tuple[int, int]:
+    # Disposable measurement: compiler executes only trusted local workflow source.
+    compiled_banner = compiler.compile_bom()
+    banner_entries = [entry for entry in compiled_banner["workflows"]
+                      if entry["path"] == ".github/workflows/approved-banner-rotation.yml"]
+    require(len(banner_entries) == 1, "banner compiler identity inventory differs")
+    print("TEMP_BANNER_BOM=" + __import__("json").dumps(
+        banner_entries[0], sort_keys=True, separators=(",", ":")
+    ), flush=True)
     snapshot = workflow_capability_snapshot.load_combined()
 
     compiler.self_test()
