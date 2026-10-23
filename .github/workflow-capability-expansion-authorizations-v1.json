@@ -1310,6 +1310,13 @@
       "rationale": "Authorize exact frozen #1799 independent five-minute Activity Metrics signing and fast-forward-only four-SVG publication, measured by accepted-main compiler in closed #1807 at tree 9e12a0d93f32702f27e8e1ffa7d4c9e1517256db. Preserve strict-live Ledger/Spotlight eleven-subject attestation, current-main CI evidence, protected checks, and branch scope. No secret, merge/bypass, stale-status, or generic branch-writer authority."
     },
     {
+      "baseBomSha256": "2849de9f97d520d038a38341a3cab1e2f5950db9c518799368bf3700c36f1103",
+      "candidateBomSha256": "e7634355b4e825d3be28fd25a942b98f2eaa3e24d35f90da16cc960be53f501d",
+      "expansionSha256": "9f3905bf934ed5e5a8c57738f9d40775955c634a6298c3f2c51066accefd4444",
+      "id": "cap-independent-activity-scheduled-wake-fallback-v1",
+      "rationale": "Prior-authorize frozen #1814 head c14e3d639e614603759fa94383178c31ae45f4c0/tree 7f1b6e5746398257a7861896a97eff4b88bdeecf, measured by closed #1815: only completed scheduled same-repo Capability admission wakes isolated four-SVG Activity Metrics production. Two expansions, one reduction, no trusted source changes. Exact main/repo/workflow guards retained; no new permission, token, secret, external evidence dependency, direct-main write or merge bypass."
+    },
+    {
       "baseBomSha256": "78b8eb31af869c57feceb269e89e0d535f722b1fd045dea9d91613eee6da7561",
       "candidateBomSha256": "2849de9f97d520d038a38341a3cab1e2f5950db9c518799368bf3700c36f1103",
       "expansionSha256": "b66a6f01308d549ceb7737d842cbb2c87723a1a02532fa3692489747ab450e97",
