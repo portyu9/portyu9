@@ -38,11 +38,11 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Verify exact runtime and standalone approved artwork
-        run: |
-          set -euo pipefail
-          python3 source/scripts/verify-python-runtime.py
-          python3 source/scripts/independent_banner_rotation.py --self-test
+      - name: Verify resolved Python runtime
+        run: python3 source/scripts/verify-python-runtime.py
+
+      - name: Verify standalone approved artwork
+        run: python3 source/scripts/independent_banner_rotation.py --self-test
 
       - name: Produce independent README proposal
         id: plan
@@ -100,6 +100,9 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 source/scripts/verify-python-runtime.py
 
       - name: Download exact read-only banner plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
