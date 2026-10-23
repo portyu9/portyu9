@@ -67,3 +67,36 @@ Generation refresh cadence and evidence freshness are different claims. The Port
 ## Change rule
 
 Changing the cron, the push-trigger source boundary, the source-epoch compiler, the published refresh provenance, the current-day highlight contract, or the refresh-contract version is a governance change. My repository governance validator and Profile Quality integration must fail closed until the workflow, trigger validator, finalizer, validator, source epoch, cache identity, and this rationale agree.
+
+## Independent Activity Metrics (proposed `independent-activity-v1`)
+
+Activity Metrics and the strict-live portfolio-evidence set serve different freshness
+purposes. The existing attested eleven-subject `generated` branch remains governed
+by the hourly best-effort pipeline above: a missing exact-current-main CI/Security
+execution must still block Ledger/Spotlight publication, and this historical
+publication/receipt contract is not relaxed.
+
+The new `activity-metrics.yml` workflow is **independent**: it gathers GitHub account
+activity using the same pinned upstream generator and reviewed Signal Field pipeline,
+validates its original four SVG subjects, and then projects exactly four cadence
+presentation strings with a reversible equality proof. This changes the display
+to `REFRESH · 5 MIN`, `data-generation-schedule="5-minutes"`, and
+`data-generation-cadence-contract="independent-activity-v1"`. Measured evidence,
+contributions, the latest-day ring, the desktop/mobile geometry, and Signal Field
+Evidence IDs must not change. The separate source remains constrained to the four
+responsive `profile-stats/profile/signal-field-*.svg` subjects.
+
+`activity-metrics.yml` requests the shortest GitHub Actions cron interval,
+`2/5 * * * *` (UTC; 02, 07, ..., 57 minutes). This is **not a freshness SLA**:
+GitHub may delay or drop scheduled events, upstream profile APIs may cache values,
+and raw.githubusercontent.com/README clients have their own caches. Only
+successful, changed validated candidates advance the independent
+`activity-metrics` branch; identical candidates are explicit no-ops.
+
+The generator job has no repository write or OIDC permission. A separate signer
+attests the four independently generated SVGs without content-write permission.
+A terminal publisher can write the isolated `activity-metrics` branch only;
+it cannot issue attestations. Its source-main freshness proof and Git
+fast-forward semantics reject stale or conflicting publication. It never modifies
+the legacy `generated` branch, its eleven-subject inventory, its Ledger, its
+Spotlight visuals, or its immutable attestation/receipt history.

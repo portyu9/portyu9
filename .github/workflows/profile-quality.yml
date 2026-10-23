@@ -587,6 +587,17 @@ jobs:
           python3 scripts/validate-signal-field-v214.py roundtrip-signal-field
           python3 scripts/validate-generated-signal-field.py roundtrip-signal-field
 
+      - name: Exercise independent activity metrics projection on actual upstream SVGs
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          python3 scripts/project-independent-activity.py --self-test
+          mkdir -p integration-independent-activity
+          cp roundtrip-signal-field/signal-field-*.svg integration-independent-activity/
+          python3 scripts/project-independent-activity.py integration-independent-activity
+          test "$(grep -l 'data-generation-cadence-contract="independent-activity-v1"' integration-independent-activity/*.svg | wc -l)" -eq 4
+          test "$(grep -l 'REFRESH · 5 MIN' integration-independent-activity/*.svg | wc -l)" -eq 4
+
       - name: Revalidate deterministic local profile evidence boundary
         env:
           SIGNAL_FIELD_DIR: ${{ steps.stats.outputs.ready-dir }}
@@ -833,7 +844,7 @@ jobs:
           test -z "$(git -C trusted-base status --porcelain)"
           test -z "$(git -C candidate-source status --porcelain)"
           test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_capability_admission.py)" = "ba08a271986dd523b1386f41eeb5bc28b06b5cd8"
-          test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_controller.py)" = "dbc66bb9162d3674bdd3f9006b291e65c07cbaff"
+          test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_controller.py)" = "4380c155345b6eac991adb665f392c899627570e"
           test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_release.py)" = "229faaf9eadb7f187b71ce5c25809258cbf0c23a"
           test "$(git -C trusted-base rev-parse HEAD:scripts/workflow_capability_api_collection.py)" = "fd111c3aae1ecaf704e522f17a998118978aa994"
           test "$(git -C trusted-base rev-parse HEAD:scripts/workflow_capability_tcb.py)" = "58f4d55e7e65bc7f417c1ce3c006f0b7b9c412c7"

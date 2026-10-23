@@ -1,0 +1,256 @@
+{
+  "automationPolicyId": "automation-policy-v1",
+  "bomId": "workflow-capability-bom-v1",
+  "repository": "portyu9/portyu9",
+  "schemaVersion": 1,
+  "workflows": [
+    {
+      "id": "activity-metrics",
+      "jobs": [
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "1e69f48acb82d1966a394da916b4c1698aa569d6",
+              "repository": "actions/attest",
+              "step": "Sign independently generated activity subjects"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
+              "repository": "actions/download-artifact",
+              "step": "Download immutable activity subjects for signing"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "digest-mismatch": "error",
+              "name": "independent-activity-subjects",
+              "operation": "download",
+              "path": "attested-activity",
+              "step": "Download immutable activity subjects for signing"
+            }
+          ],
+          "id": "attest",
+          "mutations": [
+            {
+              "class": "attestation",
+              "step": "Sign independently generated activity subjects",
+              "target": "attested-activity/signal-field-*.svg"
+            }
+          ],
+          "name": "attest-activity-only",
+          "needs": [
+            "generate"
+          ],
+          "oidc": true,
+          "permissions": {
+            "attestations": "write",
+            "contents": "read",
+            "id-token": "write"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout trusted generator source"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "49b5f7091182a45f3ef93923505b660c6da5f835",
+              "repository": "shinpr/github-profile-stats",
+              "step": "Generate upstream Signal Field"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Upload four independently validated activity subjects"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "if-no-files-found": "error",
+              "name": "independent-activity-subjects",
+              "operation": "upload",
+              "path": "${{ steps.stats.outputs.ready-dir }}/signal-field-*.svg",
+              "retention-days": "1",
+              "step": "Upload four independently validated activity subjects"
+            }
+          ],
+          "id": "generate",
+          "mutations": [],
+          "name": "generate-activity-read-only",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
+              "repository": "actions/download-artifact",
+              "step": "Download signed immutable activity candidates"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "git",
+              "mutating": false,
+              "operation": "fetch",
+              "remote": "origin",
+              "step": "Publish four SVGs on isolated activity-metrics branch",
+              "targets": [
+                "refs/heads/activity-metrics"
+              ]
+            },
+            {
+              "client": "git",
+              "mutating": false,
+              "operation": "ls-remote",
+              "remote": "$REPOSITORY_URL",
+              "step": "Publish four SVGs on isolated activity-metrics branch",
+              "targets": [
+                "refs/heads/activity-metrics"
+              ]
+            },
+            {
+              "client": "git",
+              "mutating": false,
+              "operation": "ls-remote",
+              "remote": "$REPOSITORY_URL",
+              "step": "Publish four SVGs on isolated activity-metrics branch",
+              "targets": [
+                "refs/heads/main"
+              ]
+            },
+            {
+              "client": "git",
+              "mutating": false,
+              "operation": "ls-remote",
+              "remote": "$REPOSITORY_URL",
+              "step": "Publish four SVGs on isolated activity-metrics branch",
+              "targets": [
+                "refs/heads/main"
+              ]
+            },
+            {
+              "client": "git",
+              "mutating": true,
+              "operation": "push",
+              "remote": "origin",
+              "step": "Publish four SVGs on isolated activity-metrics branch",
+              "targets": [
+                "HEAD:refs/heads/activity-metrics"
+              ]
+            }
+          ],
+          "artifacts": [
+            {
+              "digest-mismatch": "error",
+              "name": "independent-activity-subjects",
+              "operation": "download",
+              "path": "activity-candidate",
+              "step": "Download signed immutable activity candidates"
+            }
+          ],
+          "id": "publish",
+          "mutations": [
+            {
+              "class": "git-ref-push",
+              "step": "Publish four SVGs on isolated activity-metrics branch",
+              "target": "origin HEAD:refs/heads/activity-metrics"
+            }
+          ],
+          "name": "publish-activity-write-only",
+          "needs": [
+            "generate",
+            "attest"
+          ],
+          "oidc": false,
+          "permissions": {
+            "contents": "write"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        }
+      ],
+      "name": "Update independent activity metrics",
+      "path": ".github/workflows/activity-metrics.yml",
+      "references": {
+        "env": [
+          "PYTHON_VERSION"
+        ],
+        "githubToken": [
+          "github.token"
+        ],
+        "secrets": [],
+        "vars": []
+      },
+      "triggers": {
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            ".github/workflows/activity-metrics.yml",
+            "scripts/project-independent-activity.py",
+            "scripts/signal-field-pipeline-v2.json"
+          ]
+        },
+        "schedule": {
+          "cron": [
+            "2/5 * * * *"
+          ]
+        },
+        "workflow_dispatch": {}
+      },
+      "workflowPermissions": {
+        "contents": "read"
+      }
+    }
+  ]
+}
