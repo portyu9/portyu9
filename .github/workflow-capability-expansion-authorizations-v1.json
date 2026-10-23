@@ -1310,6 +1310,13 @@
       "rationale": "Authorize exact frozen #1799 independent five-minute Activity Metrics signing and fast-forward-only four-SVG publication, measured by accepted-main compiler in closed #1807 at tree 9e12a0d93f32702f27e8e1ffa7d4c9e1517256db. Preserve strict-live Ledger/Spotlight eleven-subject attestation, current-main CI evidence, protected checks, and branch scope. No secret, merge/bypass, stale-status, or generic branch-writer authority."
     },
     {
+      "baseBomSha256": "78b8eb31af869c57feceb269e89e0d535f722b1fd045dea9d91613eee6da7561",
+      "candidateBomSha256": "2849de9f97d520d038a38341a3cab1e2f5950db9c518799368bf3700c36f1103",
+      "expansionSha256": "b66a6f01308d549ceb7737d842cbb2c87723a1a02532fa3692489747ab450e97",
+      "id": "cap-independent-approved-banner-pr-v1",
+      "rationale": "Authorize frozen #1810 tree 9bb8a4b388f5f9ca5f9328bcf99108149d861156, measured by accepted-main compiler in closed #1812. Allow read-only UTC-day selection of three already-approved banner paths, a same-run bound proposal, and a separate terminal README-only PR writer. No new artwork, generated/Ledger/Spotlight write, CI substitution, arbitrary merge/bypass, OIDC, or secret authority."
+    },
+    {
       "baseBomSha256": "7f91352fc1f77fbb890b058b86e71592ff85012777b149fecff0deb378fd37c3",
       "candidateBomSha256": "d1c6dc9d071c5876eeee3b6ad1cd6b42f0f7d5682115b1afe1644b24ca571020",
       "expansionSha256": "76db7100bd3c51f0880a62cab3add50fc86e75bdb15660850492fa4fbf901517",
