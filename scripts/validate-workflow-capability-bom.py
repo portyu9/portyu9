@@ -94,4 +94,44 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # TEMPORARY read-only exact-candidate measurement carrier. NEVER MERGE.
+    # Executable authorization logic is from accepted main; candidate files are inert data.
+    outcome = main()
+    if outcome == 0:
+        import json
+        from pathlib import Path
+        import subprocess
+        import tempfile
+
+        FROZEN_SHA = "c14e3d639e614603759fa94383178c31ae45f4c0"
+        FROZEN_TREE = "7f1b6e5746398257a7861896a97eff4b88bdeecf"
+        with tempfile.TemporaryDirectory(prefix="measure-activity-wake-") as directory:
+            candidate = Path(directory) / "candidate"
+            candidate.mkdir()
+            subprocess.run(["git", "init", "-q", str(candidate)], check=True)
+            subprocess.run([
+                "git", "-C", str(candidate), "fetch", "-q", "--depth=1",
+                "https://github.com/portyu9/portyu9.git",
+                "refs/heads/fix/independent-activity-schedule-wake-20261023",
+            ], check=True)
+            subprocess.run(
+                ["git", "-C", str(candidate), "checkout", "-q", "--detach", "FETCH_HEAD"],
+                check=True,
+            )
+            observed_sha = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD"], text=True,
+            ).strip()
+            observed_tree = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD^{tree}"], text=True,
+            ).strip()
+            require(observed_sha == FROZEN_SHA and observed_tree == FROZEN_TREE,
+                    "frozen activity wake candidate SHA/tree changed")
+            difference = workflow_capability_admission.measure(
+                candidate, candidate_tree_sha=FROZEN_TREE,
+            )
+            measurement = workflow_capability_admission.public_measurement(
+                difference, candidate_tree_sha=FROZEN_TREE,
+            )
+            print("EXACT_ACTIVITY_WAKE_AUTHORIZATION_MEASUREMENT=" +
+                  json.dumps(measurement, sort_keys=True, separators=(",", ":")), flush=True)
+    raise SystemExit(outcome)
