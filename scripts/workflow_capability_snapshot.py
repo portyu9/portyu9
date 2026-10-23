@@ -371,7 +371,7 @@ def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
 def self_test() -> None:
     combined = load_combined()
     validate_ruleset_reconciler_safety(combined)
-    require(len(combined["workflows"]) == 13, "composite Workflow Capability BOM must contain thirteen workflows")
+    require(len(combined["workflows"]) == 14, "composite Workflow Capability BOM must contain fourteen workflows")
     require(
         [workflow["path"] for workflow in combined["workflows"]] == [
             ".github/workflows/action-provenance-witness.yml",
@@ -408,4 +408,4 @@ def self_test() -> None:
 
 if __name__ == "__main__":
     self_test()
-    print("Composite Workflow Capability BOM snapshot validation passed: 13 workflows.")
+    print("Composite Workflow Capability BOM snapshot validation passed: 14 workflows.")
