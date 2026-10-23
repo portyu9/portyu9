@@ -10,8 +10,10 @@ on:
       - "scripts/project-independent-activity.py"
       - "scripts/signal-field-pipeline-v2.json"
   workflow_run:
-    workflows: ["Capability admission"]
-    types: [completed]
+    workflows:
+      - Capability admission
+    types:
+      - completed
   schedule:
     # GitHub's shortest supported interval. This is best-effort, not an SLA.
     - cron: "*/5 * * * *"
