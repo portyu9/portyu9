@@ -87,7 +87,7 @@ Evidence IDs must not change. The separate source remains constrained to the fou
 responsive `profile-stats/profile/signal-field-*.svg` subjects.
 
 `activity-metrics.yml` requests the shortest GitHub Actions cron interval,
-`2/5 * * * *` (UTC; 02, 07, ..., 57 minutes). This is **not a freshness SLA**:
+`*/5 * * * *` (UTC; every five minutes, best effort). This is **not a freshness SLA**:
 GitHub may delay or drop scheduled events, upstream profile APIs may cache values,
 and raw.githubusercontent.com/README clients have their own caches. Only
 successful, changed validated candidates advance the independent
@@ -100,3 +100,7 @@ it cannot issue attestations. Its source-main freshness proof and Git
 fast-forward semantics reject stale or conflicting publication. It never modifies
 the legacy `generated` branch, its eleven-subject inventory, its Ledger, its
 Spotlight visuals, or its immutable attestation/receipt history.
+
+### Independent Activity Metrics liveness recovery
+
+The canonical five-minute GitHub Actions interval is `*/5 * * * *`. GitHub can delay or drop schedule events, and the first observed metrics publish was a trusted `push`, not a scheduled event. A second, separately validated internal wake now listens only for the **completed scheduled** run of this repository's `Capability admission` workflow. It does not depend on that workflow succeeding and it never consumes another repository's CI/Security status. The read-only generator admits this fallback only when the event originates from the canonical workflow path, `main`, and this same repository; its output continues through identical four-SVG validation, independent signing, and fast-forward-only `activity-metrics` publication. Other `workflow_run` events create no candidates. The backup is best effort and cannot guarantee a five-minute freshness SLA. The independent metrics producer must not be reattached to the strict-live eleven-subject portfolio evidence transaction.
