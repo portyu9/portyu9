@@ -57,8 +57,10 @@ jobs:
       - name: Validate original Signal Field before cadence projection
         env:
           READY_DIR: ${{ steps.stats.outputs.ready-dir }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          test -n "$GITHUB_TOKEN"
           test -d "$READY_DIR"
           python3 source/scripts/project-independent-activity.py --self-test
           python3 source/scripts/signal_field_pipeline.py "$READY_DIR"
