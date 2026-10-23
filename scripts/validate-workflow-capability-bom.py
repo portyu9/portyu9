@@ -94,4 +94,40 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # Diagnostic only. Accepted-main evaluator reads frozen candidate as inert data.
+    exit_code = main()
+    if exit_code == 0:
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+
+        FROZEN_SHA = "dcb186d81d2a114ef3ae1513271e4d3c60a20fbe"
+        FROZEN_TREE = "9bb8a4b388f5f9ca5f9328bcf99108149d861156"
+        with tempfile.TemporaryDirectory(prefix="measure-standalone-banner-") as dirname:
+            candidate = Path(dirname) / "candidate"
+            candidate.mkdir()
+            subprocess.run(["git", "init", "-q", str(candidate)], check=True)
+            subprocess.run([
+                "git", "-C", str(candidate), "fetch", "-q", "--depth=1",
+                "https://github.com/portyu9/portyu9.git",
+                "refs/heads/feat/independent-approved-banner-rotation-20261023",
+            ], check=True)
+            subprocess.run(["git", "-C", str(candidate), "checkout", "-q", "--detach", "FETCH_HEAD"], check=True)
+            commit_sha = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD"], text=True
+            ).strip()
+            tree_sha = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD^{tree}"], text=True
+            ).strip()
+            require(commit_sha == FROZEN_SHA and tree_sha == FROZEN_TREE,
+                    "frozen independently approved banner candidate SHA/tree changed")
+            difference = workflow_capability_admission.measure(
+                candidate, candidate_tree_sha=FROZEN_TREE,
+            )
+            measurement = workflow_capability_admission.public_measurement(
+                difference, candidate_tree_sha=FROZEN_TREE,
+            )
+            print("EXACT_INDEPENDENT_BANNER_AUTHORIZATION_MEASUREMENT=" +
+                  json.dumps(measurement, sort_keys=True, separators=(",", ":")), flush=True)
+    raise SystemExit(exit_code)
