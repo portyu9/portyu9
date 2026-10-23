@@ -32,7 +32,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PYTHON_VERSION: "3.13.16"
+  PYTHON_VERSION: "3.13.17"
 
 jobs:
   prepare:
@@ -216,6 +216,6 @@ jobs:
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: witness-attestation-input/action-provenance-witness-subject.json
-          predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/action-provenance-witness-v1.schema.json
+          predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/action-provenance-witness-v2.schema.json
           predicate-path: witness-attestation-input/action-provenance-witness.json
           show-summary: true

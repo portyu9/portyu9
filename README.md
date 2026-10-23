@@ -1,10 +1,10 @@
 <br>
 
-<!-- banner-rotation:v7 utc-day=2026-10-22 slot=3 slug=03-chronohedron -->
+<!-- banner-rotation:v7 utc-day=2026-10-23 slot=4 slug=04-lagrange-tides -->
 <p align="center">
 <picture>
-  <source media="(max-width: 640px)" srcset="assets/profile-banners/approved/03-chronohedron-top-compact.svg">
-  <img alt="Animated quantum apex signal crown" src="assets/profile-banners/approved/03-chronohedron-top.svg" width="100%">
+  <source media="(max-width: 640px)" srcset="assets/profile-banners/approved/04-lagrange-tides-v3-kinetic-top-compact.svg">
+  <img alt="Animated quantum apex signal crown" src="assets/profile-banners/approved/04-lagrange-tides-v3-kinetic-top.svg" width="100%">
 </picture>
 </p>
 
@@ -115,22 +115,22 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 
 <p align="center">
 <a href="https://github.com/portyu9/ai-qa-automation"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/profile-systems/qualification-ai-qa-control-plane-dark.svg?mobile-corner-topology-v1"><img alt="AI QA Control Plane engineering system card" src="assets/profile-systems/qualification-ai-qa-control-plane-light.svg?mobile-corner-topology-v1"></picture></a><br>
-<a href="https://github.com/portyu9/ai-qa-automation/actions/workflows/ci.yml"><img alt="AI QA CI" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/ai-qa-automation/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/ai-qa-automation/actions/workflows/security.yml"><img alt="AI QA security" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/ai-qa-automation/security.yml?branch=main&style=flat-square&label=SECURITY"></a>
+<a href="https://github.com/portyu9/ai-qa-automation/actions/workflows/ci.yml"><img alt="AI QA ci" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/ai-qa-automation/ci.yml?branch=main&amp;style=flat-square&amp;label=ci"></a>&nbsp;<a href="https://github.com/portyu9/ai-qa-automation/actions/workflows/security.yml"><img alt="AI QA security" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/ai-qa-automation/security.yml?branch=main&amp;style=flat-square&amp;label=security"></a>
 </p>
 
 <p align="center">
 <a href="https://github.com/portyu9/qa-automation-ai-agent-evals"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/profile-systems/qualification-agent-evaluation-tevv-dark.svg?mobile-corner-topology-v1"><img alt="Agent Evaluation and TEVV engineering system card" src="assets/profile-systems/qualification-agent-evaluation-tevv-light.svg?mobile-corner-topology-v1"></picture></a><br>
-<a href="https://github.com/portyu9/qa-automation-ai-agent-evals/actions/workflows/ci.yml"><img alt="Agent Evaluation TEVV CI" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-ai-agent-evals/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-ai-agent-evals/actions/workflows/security.yml"><img alt="Agent Evaluation TEVV security" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-ai-agent-evals/security.yml?branch=main&style=flat-square&label=SECURITY"></a>
+<a href="https://github.com/portyu9/qa-automation-ai-agent-evals/actions/workflows/ci.yml"><img alt="Agent Evaluation TEVV ci" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-ai-agent-evals/ci.yml?branch=main&amp;style=flat-square&amp;label=ci"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-ai-agent-evals/actions/workflows/security.yml"><img alt="Agent Evaluation TEVV security" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-ai-agent-evals/security.yml?branch=main&amp;style=flat-square&amp;label=security"></a>
 </p>
 
 <p align="center">
 <a href="https://github.com/portyu9/qa-automation-graphql"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/profile-systems/qualification-graphql-qe-dark.svg?mobile-corner-topology-v1"><img alt="GraphQL Quality Engineering system card" src="assets/profile-systems/qualification-graphql-qe-light.svg?mobile-corner-topology-v1"></picture></a><br>
-<a href="https://github.com/portyu9/qa-automation-graphql/actions/workflows/ci.yml"><img alt="GraphQL QE CI" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-graphql/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-graphql/actions/workflows/security.yml"><img alt="GraphQL QE security" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-graphql/security.yml?branch=main&style=flat-square&label=SECURITY"></a>
+<a href="https://github.com/portyu9/qa-automation-graphql/actions/workflows/ci.yml"><img alt="GraphQL QE ci" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-graphql/ci.yml?branch=main&amp;style=flat-square&amp;label=ci"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-graphql/actions/workflows/security.yml"><img alt="GraphQL QE security" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-graphql/security.yml?branch=main&amp;style=flat-square&amp;label=security"></a>
 </p>
 
 <p align="center">
 <a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/profile-systems/qualification-visual-accessibility-qe-dark.svg?mobile-corner-topology-v1"><img alt="Visual and Accessibility Quality Engineering system card" src="assets/profile-systems/qualification-visual-accessibility-qe-light.svg?mobile-corner-topology-v1"></picture></a><br>
-<a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe/actions/workflows/ci.yml"><img alt="Visual and accessibility QE CI" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-visual-and-accessibility-playwright-axe/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe/actions/workflows/security.yml"><img alt="Visual and accessibility QE security" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-visual-and-accessibility-playwright-axe/security.yml?branch=main&style=flat-square&label=SECURITY"></a>
+<a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe/actions/workflows/ci.yml"><img alt="Visual and accessibility QE ci" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-visual-and-accessibility-playwright-axe/ci.yml?branch=main&amp;style=flat-square&amp;label=ci"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe/actions/workflows/security.yml"><img alt="Visual and accessibility QE security" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-visual-and-accessibility-playwright-axe/security.yml?branch=main&amp;style=flat-square&amp;label=security"></a>
 </p>
 
 <p align="center"><sub>Workflow badges are scoped <code>main</code>-branch evidence signals, not universal certification.</sub></p>
@@ -184,6 +184,6 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 
 <p align="center">
 <picture>
-  <img alt="Animated evidence horizon" src="assets/profile-banners/approved/03-chronohedron-bottom.svg" width="100%">
+  <img alt="Animated evidence horizon" src="assets/profile-banners/approved/04-lagrange-tides-v3-kinetic-bottom.svg" width="100%">
 </picture>
 </p>

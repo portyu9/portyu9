@@ -32,7 +32,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PYTHON_VERSION: "3.13.16"
+  PYTHON_VERSION: "3.13.17"
 
 jobs:
   validate:
@@ -257,7 +257,7 @@ jobs:
           test -z "$(find action-provenance-witness-consumer -mindepth 1 -maxdepth 1 ! -type f -print -quit)"
           gh attestation verify "$SUBJECT" \
             --repo "$GITHUB_REPOSITORY" \
-            --predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/action-provenance-witness-v1.schema.json \
+            --predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/action-provenance-witness-v2.schema.json \
             --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/action-provenance-witness.yml" \
             --signer-digest "$SOURCE_SHA" \
             --source-digest "$SOURCE_SHA" \
