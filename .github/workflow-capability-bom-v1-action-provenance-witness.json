@@ -28,7 +28,7 @@
           "artifacts": [
             {
               "digest-mismatch": "error",
-              "name": "action-provenance-witness-v2",
+              "name": "action-provenance-witness-v1",
               "operation": "download",
               "path": "witness-attestation-input",
               "step": "Download exact prepared witness bundle"
@@ -87,7 +87,7 @@
           "artifacts": [
             {
               "if-no-files-found": "error",
-              "name": "action-provenance-witness-v2",
+              "name": "action-provenance-witness-v1",
               "operation": "upload",
               "path": "witness/",
               "retention-days": "1",
