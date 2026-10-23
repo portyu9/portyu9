@@ -1394,6 +1394,13 @@
       "rationale": "Authorize #559's exact PR-native Dependabot admission gate. The existing trusted-main semantic proof remains authoritative; the added Profile Quality pull_request job is read-only, executes no candidate repository code, re-proves the exact live PR/base/head, and succeeds only after consuming the exact trusted-capability-admission-proof. This gives Protect Main an eligible-event GitHub Actions check without weakening admission, reviewer visibility, workflow approval, or exact-head merge."
     },
     {
+      "baseBomSha256": "e7634355b4e825d3be28fd25a942b98f2eaa3e24d35f90da16cc960be53f501d",
+      "candidateBomSha256": "e7634355b4e825d3be28fd25a942b98f2eaa3e24d35f90da16cc960be53f501d",
+      "expansionSha256": "cbc25d50c1da35c7abcb4b6e826e0f4cdac08cb5c736a1148f517de50b4d864b",
+      "id": "cap-privileged-python-31317-convergence-v1",
+      "rationale": "Prior-authorize frozen #1817 head 65af1c2c9169f6cf3580fa71c7a7b00c88782311/tree 22d297af2934c15e87963da10283871411736bda, measured by closed #1818: update only Capability admission and Dependabot controller exact CPython 3.13.16→3.13.17 runtime pins; remove temporary contract exception and regenerate exact blob/negative-control fixture identities. Two expansions, zero reductions. No new triggers, permissions, endpoints, secrets, signer, bypass or direct-main mutation."
+    },
+    {
       "baseBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
       "candidateBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
       "expansionSha256": "2bd48c4cb8b4cabf131c8abb053e1c2e968b4edad6d450a177816a61d978bece",
