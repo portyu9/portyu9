@@ -17,6 +17,7 @@ from pathlib import Path
 
 import banner_rotation as daily_banners
 import approved_banner_rotation as approved_banners
+import independent_banner_rotation as standalone_banners
 
 ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
@@ -609,6 +610,7 @@ def main() -> int:
     approved_slots = approved_banners.load_catalog()
     approved_banners.validate_assets(approved_slots)
     approved_banners.self_test(approved_slots)
+    standalone_banners.self_test()
     approved_helper_source = (ROOT / "scripts/approved_banner_rotation.py").read_text(encoding="utf-8")
     require("candidateTcbSha256" not in approved_helper_source and
             "workflow_capability_tcb" not in approved_helper_source and
