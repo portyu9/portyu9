@@ -1660,8 +1660,8 @@ def self_test_recovery_acceptance() -> None:
 
         # Git blob identities for the exact accepted workflow and this one-line
         # physical fixture repair. The fixture never computes a cryptographic digest.
-        base_blob = "3870132bd4ef19b0c096e2b6bf03aa1a2e69268b"
-        candidate_blob = "02245500e528054a76029e504ac5eb86c4fc55c7"
+        base_blob = "a3619f9b5c8d45709cff9453e75c0239ad623e1e"
+        candidate_blob = "78196df2245fced287f6c6e84d382875d88b9b7d"
 
         companion_path = positive_root / companion_relative
         companion_text = companion_path.read_text(encoding="utf-8")
