@@ -66,7 +66,7 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         'test "$(git -C trusted-base rev-parse HEAD)" = "$BASE_SHA"',
         'test "$(git -C candidate-source rev-parse HEAD)" = "$HEAD_SHA"',
         'HEAD:scripts/dependabot_capability_admission.py)" = "ba08a271986dd523b1386f41eeb5bc28b06b5cd8"',
-        'HEAD:scripts/dependabot_controller.py)" = "447f9aa054dfe038f8a8cd91fe05106fb99911f4"',
+        'HEAD:scripts/dependabot_controller.py)" = "4380c155345b6eac991adb665f392c899627570e"',
         'HEAD:scripts/dependabot_release.py)" = "229faaf9eadb7f187b71ce5c25809258cbf0c23a"',
         'HEAD:scripts/workflow_capability_api_collection.py)" = "fd111c3aae1ecaf704e522f17a998118978aa994"',
         'HEAD:scripts/workflow_capability_tcb.py)" = "58f4d55e7e65bc7f417c1ce3c006f0b7b9c412c7"',
