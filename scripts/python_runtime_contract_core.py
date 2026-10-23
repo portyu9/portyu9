@@ -15,6 +15,7 @@ EXPECTED_VERSION = "3.13.16"
 EXPECTED_VERSION_INFO = tuple(int(part) for part in EXPECTED_VERSION.split("."))
 EXPECTED_WORKFLOWS = {
     "action-provenance-witness.yml",
+    "activity-metrics.yml",
     "capability-admission.yml",
     "codeql-autofix.yml",
     "dependabot-controller.yml",
@@ -25,6 +26,7 @@ EXPECTED_WORKFLOWS = {
 }
 VERIFY_COMMANDS = {
     "action-provenance-witness.yml": "python3 scripts/verify-python-runtime.py",
+    "activity-metrics.yml": "python3 source/scripts/verify-python-runtime.py",
     "capability-admission.yml": "python3 scripts/verify-python-runtime.py",
     "codeql-autofix.yml": "python3 scripts/verify-python-runtime.py",
     "dependabot-controller.yml": "python3 scripts/verify-python-runtime.py",
