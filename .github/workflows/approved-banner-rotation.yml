@@ -165,15 +165,14 @@ jobs:
           opened=false
           cleanup() {
             if [ "$created" = true ] && [ "$opened" != true ]; then
-              git -C source -c "http.https://github.com/.extraheader=$AUTH_HEADER" \
-                push -q origin ":refs/heads/$BRANCH" || true
+              git -C source -c "http.https://github.com/.extraheader=$AUTH_HEADER" push -q origin ":refs/heads/$BRANCH" || true
             fi
           }
           trap cleanup EXIT
-          git -C source -c "http.https://github.com/.extraheader=$AUTH_HEADER" \
-            push -q origin "HEAD:refs/heads/$BRANCH"
+          git -C source -c "http.https://github.com/.extraheader=$AUTH_HEADER" push -q origin "HEAD:refs/heads/$BRANCH"
           created=true
-          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$BRANCH" \
-            --title "chore(profile): independently rotate approved banners for ${UTC_DAY}" \
-            --body "README-only UTC banner rotation from approved v7 four-slot manifest. Base: \`$SOURCE_SHA\`. Exact output SHA256: \`$OUTPUT_SHA256\`. Three surface images and marker only; no external CI evidence. Requires normal protected checks and review; never bypass merge gates."
+          PR_BODY="README-only UTC banner rotation using the reviewed approved v7 catalog. Three image surfaces and marker only; external CI evidence unchanged. Base $SOURCE_SHA. Output SHA256 $OUTPUT_SHA256. Requires normal protected checks."
+          PR_REQUEST="$(jq -n --arg title "chore(profile): independently rotate approved banners for $UTC_DAY" --arg head "$BRANCH" --arg body "$PR_BODY" '{title:$title,base:"main",head:$head,body:$body,draft:false}')"
+          PR_JSON="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input - <<< "$PR_REQUEST")"
+          jq -e --arg head "$BRANCH" '(type=="object") and (.number|type=="number" and .>0) and (.head.ref==$head) and (.base.ref=="main") and (.draft==false)' <<< "$PR_JSON" > /dev/null
           opened=true
