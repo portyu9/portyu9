@@ -3,7 +3,7 @@
 
 The item-12 five-workflow snapshot remains a canonical historical partition. Later trusted
 workflow extensions are stored as one-workflow canonical snapshots. This module is the only
-assembly boundary: callers receive one ordinary thirteen-workflow BOM object whose semantic and
+assembly boundary: callers receive one ordinary fourteen-workflow BOM object whose semantic and
 canonical representation is compared with live trusted compilation.
 """
 from __future__ import annotations
