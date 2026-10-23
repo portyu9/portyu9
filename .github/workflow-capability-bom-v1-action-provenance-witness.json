@@ -28,7 +28,7 @@
           "artifacts": [
             {
               "digest-mismatch": "error",
-              "name": "action-provenance-witness-v1",
+              "name": "action-provenance-witness-v2",
               "operation": "download",
               "path": "witness-attestation-input",
               "step": "Download exact prepared witness bundle"
@@ -87,7 +87,7 @@
           "artifacts": [
             {
               "if-no-files-found": "error",
-              "name": "action-provenance-witness-v1",
+              "name": "action-provenance-witness-v2",
               "operation": "upload",
               "path": "witness/",
               "retention-days": "1",
@@ -136,7 +136,7 @@
             ".github/GOVERNANCE.md",
             ".github/action-lock.json",
             ".github/automation-retry-policy-v1.json",
-            ".github/attestation/action-provenance-witness-v1.schema.json",
+            ".github/attestation/action-provenance-witness-v2.schema.json",
             ".github/workflows/action-provenance-witness.yml",
             ".github/workflows/profile-quality.yml",
             "scripts/action_identity_lock.py",
