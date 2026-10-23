@@ -1174,7 +1174,7 @@ def _compile_artifact_retention_policy(
 
             if identity[0] == ".github/workflows/action-provenance-witness.yml":
                 source_path = ROOT / "scripts" / "action_provenance_witness.py"
-                schema_path = ROOT / ".github" / "attestation" / "action-provenance-witness-v2.schema.json"
+                schema_path = ROOT / ".github" / "attestation" / "action-provenance-witness-v1.schema.json"
                 source_fragments = (
                     "TTL_SECONDS = 21600",
                     'return validity["issuedAtEpoch"] <= now_epoch < validity["expiresAtEpoch"]',
