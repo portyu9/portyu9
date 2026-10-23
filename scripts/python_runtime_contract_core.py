@@ -15,7 +15,7 @@ EXPECTED_VERSION = "3.13.17"
 EXPECTED_VERSION_INFO = tuple(int(part) for part in EXPECTED_VERSION.split("."))
 LEGACY_VERSION = "3.13.16"
 EXPECTED_WORKFLOW_VERSIONS = {
-    "action-provenance-witness.yml": LEGACY_VERSION,
+    "action-provenance-witness.yml": EXPECTED_VERSION,
     "capability-admission.yml": LEGACY_VERSION,
     "codeql-autofix.yml": EXPECTED_VERSION,
     "dependabot-controller.yml": LEGACY_VERSION,
@@ -187,7 +187,7 @@ def self_test() -> None:
         + "          python-version: ${{ env.PYTHON_VERSION }}\n"
     )
     require(validate_text(good, "self-test-good.yml"), "self-test rejected exact Python runtime pin")
-    require(TEMPORARY_LEGACY_WORKFLOWS == {"action-provenance-witness.yml", "capability-admission.yml", "dependabot-controller.yml"},
+    require(TEMPORARY_LEGACY_WORKFLOWS == {"capability-admission.yml", "dependabot-controller.yml"},
             "temporary legacy-runtime workflow set drifted")
     legacy_good = good.replace(EXPECTED_VERSION, LEGACY_VERSION, 1)
     require(validate_text(legacy_good, "capability-admission.yml", LEGACY_VERSION),
