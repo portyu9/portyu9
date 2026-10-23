@@ -94,4 +94,41 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # Disposable measurement carrier: all executable tooling comes from the
+    # accepted base, and candidate files are read only as inert source data.
+    outcome = main()
+    if outcome == 0:
+        import json
+        from pathlib import Path
+        import subprocess
+        import tempfile
+
+        FROZEN_SHA = "3e2dc7b01aa8a67b3e0acf3869fae13832453761"
+        FROZEN_TREE = "46e0ac3867826e145346fd74fb3e80964413b465"
+        with tempfile.TemporaryDirectory(prefix="measure-cpython31317-") as temp:
+            candidate = Path(temp) / "candidate"
+            candidate.mkdir()
+            subprocess.run(["git", "init", "-q", str(candidate)], check=True)
+            subprocess.run([
+                "git", "-C", str(candidate), "fetch", "-q", "--depth=1",
+                "https://github.com/portyu9/portyu9.git",
+                "refs/heads/fix/stage1-cpython-31317-20261023",
+            ], check=True)
+            subprocess.run(["git", "-C", str(candidate), "checkout", "-q", "--detach", "FETCH_HEAD"], check=True)
+            observed_sha = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD"], text=True
+            ).strip()
+            observed_tree = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD^{tree}"], text=True
+            ).strip()
+            require(observed_sha == FROZEN_SHA and observed_tree == FROZEN_TREE,
+                    "frozen production candidate SHA/tree changed")
+            measured = workflow_capability_admission.measure(
+                candidate, candidate_tree_sha=FROZEN_TREE,
+            )
+            sanitized = workflow_capability_admission.public_measurement(
+                measured, candidate_tree_sha=FROZEN_TREE,
+            )
+            print("EXACT_ACCEPTED_MAIN_AUTHORIZATION_MEASUREMENT=" +
+                  json.dumps(sanitized, sort_keys=True, separators=(",", ":")), flush=True)
+    raise SystemExit(outcome)
