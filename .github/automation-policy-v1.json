@@ -970,7 +970,8 @@
       "triggers": [
         "push",
         "schedule",
-        "workflow_dispatch"
+        "workflow_dispatch",
+        "workflow_run"
       ],
       "permissions": {
         "contents": "read"
