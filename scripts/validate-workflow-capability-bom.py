@@ -57,9 +57,6 @@ def validate_snapshot() -> tuple[int, int]:
     capability_admission_workflow_contract.validate()
 
     compiled = compiler.compile_bom()
-    activity = [item for item in compiled['workflows'] if item['path'] == '.github/workflows/activity-metrics.yml']
-    if activity:
-        print('TEMP_ACTIVITY_CAPABILITY_ENTRY=' + __import__('json').dumps(activity[0], sort_keys=True, separators=(',', ':')), flush=True)
     difference = first_difference(compiled, snapshot)
     if difference is not None:
         raise ValueError(f"Workflow Capability BOM snapshot differs from compiled source: {difference}")
@@ -77,7 +74,7 @@ def validate_snapshot() -> tuple[int, int]:
 
     workflows = compiled["workflows"]
     jobs = sum(len(workflow["jobs"]) for workflow in workflows)
-    require(len(workflows) == 13, f"Workflow Capability BOM workflow count changed: {len(workflows)}")
+    require(len(workflows) == 14, f"Workflow Capability BOM workflow count changed: {len(workflows)}")
     require(jobs > 0, "Workflow Capability BOM contains no jobs")
     return len(workflows), jobs
 
