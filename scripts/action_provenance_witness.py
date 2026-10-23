@@ -34,7 +34,7 @@ from action_identity_lock import (
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = "portyu9/portyu9"
 REPOSITORY_ID = 1355082509
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 KIND = "action-provenance-witness"
 SUBJECT_KIND = "action-provenance-witness-subject"
 SOURCE_REF = "refs/heads/main"
@@ -45,9 +45,9 @@ WORKFLOW_REF = (
 TTL_SECONDS = 21600
 PREDICATE_TYPE = (
     "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/"
-    "action-provenance-witness-v1.schema.json"
+    "action-provenance-witness-v2.schema.json"
 )
-PREDICATE_SCHEMA = ROOT / ".github/attestation/action-provenance-witness-v1.schema.json"
+PREDICATE_SCHEMA = ROOT / ".github/attestation/action-provenance-witness-v2.schema.json"
 WITNESS_WORKFLOW = ROOT / ".github/workflows/action-provenance-witness.yml"
 WORKFLOW_NAME = "Action provenance witness"
 WORKFLOW_PATH = ".github/workflows/action-provenance-witness.yml"
@@ -75,7 +75,7 @@ RUNTIME_FINGERPRINT_VERSION = "github-hosted-runtime-fingerprint-v1"
 RUNNER_LABEL = "ubuntu-24.04"
 RUNNER_OS = "Linux"
 RUNNER_ARCH = "X64"
-PINNED_PYTHON_VERSION = "Python 3.13.16"
+PINNED_PYTHON_VERSION = "Python 3.13.17"
 RUNTIME_TOOL_SPECS = (
     ("bash", ("bash", "--version")),
     ("git", ("git", "--version")),
@@ -92,7 +92,7 @@ POLICY_PATHS = (
     ".github/GOVERNANCE.md",
     ".github/action-lock.json",
     ".github/automation-retry-policy-v1.json",
-    ".github/attestation/action-provenance-witness-v1.schema.json",
+    ".github/attestation/action-provenance-witness-v2.schema.json",
     ".github/workflows/action-provenance-witness.yml",
     ".github/workflows/profile-quality.yml",
     "scripts/action_identity_lock.py",
@@ -513,7 +513,7 @@ def _fixture_runtime_fingerprint() -> dict[str, Any]:
         },
         "python": {
             "version": PINNED_PYTHON_VERSION,
-            "path": "/opt/hostedtoolcache/Python/3.13.16/x64/bin/python3.13",
+            "path": "/opt/hostedtoolcache/Python/3.13.17/x64/bin/python3.13",
             "executableDigest": "sha256:" + "7" * 64,
         },
     }
@@ -1204,7 +1204,7 @@ def validate_signer_workflow_contract(text: str | None = None) -> None:
         and "predicate-path: witness-attestation-input/action-provenance-witness.json" in signer
         and (
             "predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/"
-            ".github/attestation/action-provenance-witness-v1.schema.json"
+            ".github/attestation/action-provenance-witness-v2.schema.json"
         ) in signer,
         "Action provenance witness signer subject/predicate identity changed",
     )

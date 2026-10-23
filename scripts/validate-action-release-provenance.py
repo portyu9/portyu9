@@ -361,7 +361,7 @@ def validate_quality_contract(text: str) -> None:
         "github-token: ${{ github.token }}",
         "digest-mismatch: error",
         'gh attestation verify "$SUBJECT"',
-        "--predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/action-provenance-witness-v1.schema.json",
+        "--predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/action-provenance-witness-v2.schema.json",
         '--signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/action-provenance-witness.yml"',
         '--signer-digest "$SOURCE_SHA"',
         '--source-digest "$SOURCE_SHA"',
