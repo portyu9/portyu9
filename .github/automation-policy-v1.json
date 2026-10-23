@@ -1005,6 +1005,35 @@
           }
         }
       }
+    },
+    "approved-banner-rotation": {
+      "path": ".github/workflows/approved-banner-rotation.yml",
+      "triggers": [
+        "schedule",
+        "workflow_dispatch"
+      ],
+      "permissions": {
+        "contents": "read"
+      },
+      "jobs": {
+        "plan": {
+          "name": "propose-accepted-banner-triplet-read-only",
+          "needs": [],
+          "permissions": {
+            "contents": "read"
+          }
+        },
+        "publish": {
+          "name": "open-protected-README-only-banner-PR",
+          "needs": [
+            "plan"
+          ],
+          "permissions": {
+            "contents": "write",
+            "pull-requests": "write"
+          }
+        }
+      }
     }
   },
   "transactionMachines": {

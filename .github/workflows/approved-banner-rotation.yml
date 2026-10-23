@@ -1,0 +1,177 @@
+name: Rotate approved profile banners independently
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Best-effort daily run, offset from the top-of-hour congestion window.
+    - cron: "11 1 * * *"
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.13.17"
+
+jobs:
+  plan:
+    name: propose-accepted-banner-triplet-read-only
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.plan.outputs.changed }}
+      base_sha: ${{ steps.plan.outputs.base_sha }}
+      utc_day: ${{ steps.plan.outputs.utc_day }}
+      output_sha256: ${{ steps.plan.outputs.output_sha256 }}
+    steps:
+      - name: Checkout exact accepted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 source/scripts/verify-python-runtime.py
+
+      - name: Verify standalone approved artwork
+        run: python3 source/scripts/independent_banner_rotation.py --self-test
+
+      - name: Produce independent README proposal
+        id: plan
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          UTC_DAY="$(date -u +%F)"
+          python3 source/scripts/independent_banner_rotation.py \
+            --plan banner-ready --base-sha "$GITHUB_SHA" --date "$UTC_DAY" \
+            > banner-plan-output.json
+          python3 source/scripts/independent_banner_rotation.py \
+            --verify banner-ready --base-sha "$GITHUB_SHA" --date "$UTC_DAY" \
+            > /dev/null
+          CHANGED="$(jq -er '.changed | tostring' banner-ready/plan.json)"
+          OUT_SHA="$(jq -er .outputSha256 banner-ready/plan.json)"
+          test "$CHANGED" = "true" || test "$CHANGED" = "false"
+          [[ "$OUT_SHA" =~ ^[0-9a-f]{64}$ ]]
+          echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          echo "utc_day=$UTC_DAY" >> "$GITHUB_OUTPUT"
+          echo "output_sha256=$OUT_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Upload one exact banner-only candidate
+        if: steps.plan.outputs.changed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reviewed-banner-readme
+          path: banner-ready/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: open-protected-README-only-banner-PR
+    needs: plan
+    if: needs.plan.outputs.changed == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    concurrency:
+      group: approved-banner-rotation-terminal
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout exact reviewed main without retained credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          ref: ${{ needs.plan.outputs.base_sha }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 source/scripts/verify-python-runtime.py
+
+      - name: Download exact read-only banner plan
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: reviewed-banner-readme
+          path: banner-candidate
+          digest-mismatch: error
+
+      - name: Re-prove plan and create only an immutable README PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.plan.outputs.base_sha }}
+          UTC_DAY: ${{ needs.plan.outputs.utc_day }}
+          OUTPUT_SHA256: ${{ needs.plan.outputs.output_sha256 }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "portyu9/portyu9"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/approved-banner-rotation.yml@refs/heads/main"
+          test "$SOURCE_SHA" = "$GITHUB_SHA"
+          test "$(git -C source rev-parse HEAD)" = "$SOURCE_SHA"
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$UTC_DAY" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]
+          [[ "$OUTPUT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          python3 source/scripts/verify-python-runtime.py
+          python3 source/scripts/independent_banner_rotation.py \
+            --verify banner-candidate --base-sha "$SOURCE_SHA" --date "$UTC_DAY" \
+            > /dev/null
+          test "$(sha256sum banner-candidate/README.md | cut -d' ' -f1)" = "$OUTPUT_SHA256"
+          LIVE_MAIN="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)"
+          if [ "$LIVE_MAIN" != "$SOURCE_SHA" ]; then
+            echo "Main advanced: decline stale banner PR and retry on next schedule."
+            exit 0
+          fi
+          PR_LIST="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=main&per_page=100")"
+          jq -e 'type == "array" and length < 100' <<< "$PR_LIST" > /dev/null
+          if jq -e 'any(.[]; .head.ref | startswith("automation/banner-rotation/"))' <<< "$PR_LIST" > /dev/null; then
+            echo "Prior banner candidate remains open; avoid duplicate lanes."
+            exit 0
+          fi
+          BRANCH="automation/banner-rotation/${UTC_DAY}-${SOURCE_SHA:0:12}"
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BRANCH}" >/dev/null 2>&1; then
+            echo "Banner branch already exists without an open PR; refuse orphan/duplicate."
+            exit 1
+          fi
+          cp banner-candidate/README.md source/README.md
+          git -C source config user.name 'github-actions[bot]'
+          git -C source config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C source checkout -q -b "$BRANCH"
+          git -C source add -- README.md
+          test "$(git -C source diff --cached --name-only)" = README.md
+          git -C source commit -q -m "chore(profile): rotate approved banner triplet for ${UTC_DAY} [skip ci]"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)" = "$SOURCE_SHA" || {
+            echo "Main advanced before banner push; decline stale candidate."
+            exit 0
+          }
+          AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          created=false
+          opened=false
+          cleanup() {
+            if [ "$created" = true ] && [ "$opened" != true ]; then
+              git -C source -c "http.https://github.com/.extraheader=$AUTH_HEADER" push -q origin ":refs/heads/$BRANCH" || true
+            fi
+          }
+          trap cleanup EXIT
+          git -C source -c "http.https://github.com/.extraheader=$AUTH_HEADER" push -q origin "HEAD:refs/heads/$BRANCH"
+          created=true
+          PR_BODY="README-only UTC banner rotation using the reviewed approved v7 catalog. Three image surfaces and marker only; external CI evidence unchanged. Base $SOURCE_SHA. Output SHA256 $OUTPUT_SHA256. Requires normal protected checks."
+          PR_REQUEST="$(jq -n --arg title "chore(profile): independently rotate approved banners for $UTC_DAY" --arg head "$BRANCH" --arg body "$PR_BODY" '{title:$title,base:"main",head:$head,body:$body,draft:false}')"
+          PR_JSON="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input - <<< "$PR_REQUEST")"
+          jq -e --arg head "$BRANCH" '(type=="object") and (.number|type=="number" and .>0) and (.head.ref==$head) and (.base.ref=="main") and (.draft==false)' <<< "$PR_JSON" > /dev/null
+          opened=true

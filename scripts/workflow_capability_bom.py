@@ -39,6 +39,7 @@ AUTHORITY_ARTIFACT_ANTI_REPLAY_MODES = frozenset({
     "cross-run-current-main-expiry",
 })
 REVIEWED_AUTHORITY_ARTIFACT_ANTI_REPLAY: dict[tuple[str, str, str], str] = {
+    (".github/workflows/approved-banner-rotation.yml", "plan", "Upload one exact banner-only candidate"): "same-run-container-bound",
     (".github/workflows/activity-metrics.yml", "generate", "Upload four independently validated activity subjects"): "same-run-container-bound",
     (".github/workflows/action-provenance-witness.yml", "prepare", "Upload unsigned reviewed witness bundle"): "cross-run-attested-explicit-ttl",
     (".github/workflows/codeql-autofix.yml", "controller", "Upload immutable controller provenance receipt"): "cross-run-current-main-expiry",
@@ -66,6 +67,7 @@ REVIEWED_CROSS_RUN_AUTHORITY_DOWNLOADS: dict[tuple[str, str, str], dict[str, Any
     },
 }
 REVIEWED_ARTIFACT_RETENTION_CLASSIFICATIONS: dict[tuple[str, str, str], dict[str, str]] = {
+    (".github/workflows/approved-banner-rotation.yml", "plan", "Upload one exact banner-only candidate"): {"classification": "authority", "consumerMode": "same-run-proposal-authority"},
     (".github/workflows/activity-metrics.yml", "generate", "Upload four independently validated activity subjects"): {"classification": "authority", "consumerMode": "same-run-publication-authority"},
     (".github/workflows/action-provenance-witness.yml", "prepare", "Upload unsigned reviewed witness bundle"): {"classification": "authority", "consumerMode": "cross-run-attested-authority"},
     (".github/workflows/codeql-autofix.yml", "controller", "Upload immutable controller provenance receipt"): {"classification": "authority", "consumerMode": "cross-run-custom-api-authority"},
@@ -92,6 +94,7 @@ REVIEWED_LONG_LIVED_AUTHORITY_RETENTION_DAYS: dict[tuple[str, str, str], int] = 
     (".github/workflows/codeql-autofix.yml", "controller", "Upload immutable controller provenance receipt"): 7,
 }
 REVIEWED_ARTIFACT_DOWNLOAD_BINDINGS: dict[tuple[str, str, str], dict[str, Any]] = {
+    (".github/workflows/approved-banner-rotation.yml", "publish", "Download exact read-only banner plan"): {"producer": (".github/workflows/approved-banner-rotation.yml", "plan", "Upload one exact banner-only candidate"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "reviewed-banner-readme"},
     (".github/workflows/activity-metrics.yml", "publish", "Download signed immutable activity candidates"): {"producer": (".github/workflows/activity-metrics.yml", "generate", "Upload four independently validated activity subjects"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "independent-activity-subjects"},
     (".github/workflows/activity-metrics.yml", "attest", "Download immutable activity subjects for signing"): {"producer": (".github/workflows/activity-metrics.yml", "generate", "Upload four independently validated activity subjects"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "independent-activity-subjects"},
     (".github/workflows/action-provenance-witness.yml", "attest", "Download exact prepared witness bundle"): {"producer": (".github/workflows/action-provenance-witness.yml", "prepare", "Upload unsigned reviewed witness bundle"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "action-provenance-witness-v1"},
@@ -1664,12 +1667,12 @@ def self_test() -> None:
     live_workflows = live_bom["workflows"]
     live_retention = compile_artifact_retention_policy(live_workflows, live_bom["repository"])
     require(
-        live_retention["uploadProducerCount"] == 21
-        and live_retention["downloadConsumerCount"] == 30
+        live_retention["uploadProducerCount"] == 22
+        and live_retention["downloadConsumerCount"] == 31
         and sum(
             1 for entry in live_retention["entries"]
             if entry.get("antiReplayMode") in AUTHORITY_ARTIFACT_ANTI_REPLAY_MODES
-        ) == 11,
+        ) == 12,
         "artifact retention/anti-replay live inventory cardinality changed",
     )
 
