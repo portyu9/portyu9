@@ -1,0 +1,174 @@
+name: Update independent activity metrics
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/activity-metrics.yml"
+      - "scripts/project-independent-activity.py"
+      - "scripts/signal-field-pipeline-v2.json"
+  schedule:
+    # GitHub's shortest supported interval. This is best-effort, not an SLA.
+    - cron: "2/5 * * * *"
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.13.17"
+
+jobs:
+  generate:
+    if: github.ref == 'refs/heads/main'
+    name: generate-activity-read-only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    concurrency:
+      group: activity-metrics-generation
+      cancel-in-progress: true
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout trusted generator source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 source/scripts/verify-python-runtime.py
+
+      - name: Generate upstream Signal Field
+        id: stats
+        uses: shinpr/github-profile-stats@49b5f7091182a45f3ef93923505b660c6da5f835 # v0.2.0
+        with:
+          username: portyu9
+          token: ${{ github.token }}
+          profile: signal-field
+
+      - name: Validate original Signal Field before cadence projection
+        env:
+          READY_DIR: ${{ steps.stats.outputs.ready-dir }}
+        run: |
+          set -euo pipefail
+          test -d "$READY_DIR"
+          python3 source/scripts/project-independent-activity.py --self-test
+          python3 source/scripts/signal_field_pipeline.py "$READY_DIR"
+          python3 source/scripts/validate-generated-signal-field.py "$READY_DIR"
+          python3 source/scripts/project-independent-activity.py "$READY_DIR"
+          test "$(find "$READY_DIR" -maxdepth 1 -type f -name 'signal-field-*.svg' | wc -l)" -eq 4
+
+      - name: Upload four independently validated activity subjects
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: independent-activity-subjects
+          path: ${{ steps.stats.outputs.ready-dir }}/signal-field-*.svg
+          if-no-files-found: error
+          retention-days: 1
+
+  attest:
+    name: attest-activity-only
+    needs: generate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Download immutable activity subjects for signing
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: independent-activity-subjects
+          path: attested-activity
+          digest-mismatch: error
+
+      - name: Sign independently generated activity subjects
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: attested-activity/signal-field-*.svg
+
+  publish:
+    name: publish-activity-write-only
+    needs: [generate, attest]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    concurrency:
+      group: activity-metrics-terminal
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download signed immutable activity candidates
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: independent-activity-subjects
+          path: activity-candidate
+          digest-mismatch: error
+
+      - name: Publish four SVGs on isolated activity-metrics branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = schedule || test "$GITHUB_EVENT_NAME" = workflow_dispatch || test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/activity-metrics.yml@refs/heads/main"
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          REPOSITORY_URL="https://github.com/$GITHUB_REPOSITORY.git"
+          test "$(git ls-remote "$REPOSITORY_URL" refs/heads/main | cut -f1)" = "$GITHUB_SHA" || {
+            echo "Source main advanced after generation; skip stale metrics publication."
+            exit 0
+          }
+          expected="$(printf '%s\n' signal-field-compact-dark.svg signal-field-compact-light.svg signal-field-wide-dark.svg signal-field-wide-light.svg)"
+          actual="$(find activity-candidate -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+          test "$(find activity-candidate -mindepth 1 -maxdepth 1 | wc -l)" -eq 4
+          for svg in activity-candidate/*.svg; do
+            test ! -L "$svg"
+            test -s "$svg"
+            test "$(wc -c < "$svg")" -le 250000
+            grep -q 'data-generation-schedule="5-minutes"' "$svg"
+            grep -q 'data-generation-cadence-contract="independent-activity-v1"' "$svg"
+          done
+          git init -q activity-tree
+          git -C activity-tree remote add origin "$REPOSITORY_URL"
+          if git ls-remote --exit-code "$REPOSITORY_URL" refs/heads/activity-metrics >/dev/null; then
+            git -C activity-tree fetch -q --depth=1 origin refs/heads/activity-metrics
+            git -C activity-tree checkout -q -B activity-metrics FETCH_HEAD
+            observed="$(git -C activity-tree ls-tree -r --name-only HEAD | LC_ALL=C sort)"
+            expected_paths="$(printf 'profile-stats/profile/%s\n' $expected | LC_ALL=C sort)"
+            test "$observed" = "$expected_paths"
+          else
+            git -C activity-tree switch -q --orphan activity-metrics
+          fi
+          mkdir -p activity-tree/profile-stats/profile
+          cp activity-candidate/*.svg activity-tree/profile-stats/profile/
+          git -C activity-tree add -- profile-stats/profile
+          test "$(git -C activity-tree ls-files | wc -l)" -eq 4
+          if git -C activity-tree diff --cached --quiet; then
+            echo "Independent activity subjects are unchanged; no commit needed."
+            exit 0
+          fi
+          git -C activity-tree config user.name 'github-actions[bot]'
+          git -C activity-tree config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C activity-tree commit -q -m "chore: publish independent activity metrics [skip ci]"
+          test "$(git ls-remote "$REPOSITORY_URL" refs/heads/main | cut -f1)" = "$GITHUB_SHA" || {
+            echo "Source main advanced while staging; decline stale push."
+            exit 0
+          }
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -C activity-tree push -q origin HEAD:refs/heads/activity-metrics

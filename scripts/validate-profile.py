@@ -108,10 +108,10 @@ HEADER_REFERENCES = tuple(
     for path in HEADER_SVGS
 )
 GENERATED_SVG_REFERENCES = (
-    "https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-light.svg",
-    "https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-dark.svg",
-    "https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-light.svg",
-    "https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-dark.svg",
+    "https://raw.githubusercontent.com/portyu9/portyu9/activity-metrics/profile-stats/profile/signal-field-wide-light.svg",
+    "https://raw.githubusercontent.com/portyu9/portyu9/activity-metrics/profile-stats/profile/signal-field-wide-dark.svg",
+    "https://raw.githubusercontent.com/portyu9/portyu9/activity-metrics/profile-stats/profile/signal-field-compact-light.svg",
+    "https://raw.githubusercontent.com/portyu9/portyu9/activity-metrics/profile-stats/profile/signal-field-compact-dark.svg",
 )
 QUALIFICATION_CARD_SVGS = (
     "assets/profile-systems/qualification-ai-qa-control-plane.svg",

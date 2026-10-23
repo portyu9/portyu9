@@ -964,6 +964,47 @@
           }
         }
       }
+    },
+    "activity-metrics": {
+      "path": ".github/workflows/activity-metrics.yml",
+      "triggers": [
+        "push",
+        "schedule",
+        "workflow_dispatch"
+      ],
+      "permissions": {
+        "contents": "read"
+      },
+      "jobs": {
+        "generate": {
+          "name": "generate-activity-read-only",
+          "needs": [],
+          "permissions": {
+            "contents": "read"
+          }
+        },
+        "attest": {
+          "name": "attest-activity-only",
+          "needs": [
+            "generate"
+          ],
+          "permissions": {
+            "contents": "read",
+            "id-token": "write",
+            "attestations": "write"
+          }
+        },
+        "publish": {
+          "name": "publish-activity-write-only",
+          "needs": [
+            "generate",
+            "attest"
+          ],
+          "permissions": {
+            "contents": "write"
+          }
+        }
+      }
     }
   },
   "transactionMachines": {
