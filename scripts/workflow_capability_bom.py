@@ -1664,12 +1664,12 @@ def self_test() -> None:
     live_workflows = live_bom["workflows"]
     live_retention = compile_artifact_retention_policy(live_workflows, live_bom["repository"])
     require(
-        live_retention["uploadProducerCount"] == 20
-        and live_retention["downloadConsumerCount"] == 28
+        live_retention["uploadProducerCount"] == 21
+        and live_retention["downloadConsumerCount"] == 30
         and sum(
             1 for entry in live_retention["entries"]
             if entry.get("antiReplayMode") in AUTHORITY_ARTIFACT_ANTI_REPLAY_MODES
-        ) == 10,
+        ) == 11,
         "artifact retention/anti-replay live inventory cardinality changed",
     )
 
