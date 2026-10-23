@@ -273,13 +273,15 @@ def validate_readme(expected_signal: str = SIGNAL_FIELD_TOKEN) -> None:
         require(stale not in text, f"stale generated-surface cache token remains in README: {stale}")
 
     mutable_urls = re.findall(
-        r"https://raw\.githubusercontent\.com/portyu9/portyu9/generated/[^\"'> ]+",
+        r"https://raw\.githubusercontent\.com/portyu9/portyu9/(?:generated|activity-metrics)/[^\"'> ]+",
         text,
     )
     require(len(mutable_urls) == 4,
-            "mutable generated profile asset inventory must contain only four Signal Field URLs")
+            "mutable profile asset inventory must contain only four independent Signal Field URLs")
+    require(all("/activity-metrics/profile-stats/profile/" in url for url in mutable_urls),
+            "legacy generated branch must not serve mutable README SVGs")
     require(all("?v=" in url for url in mutable_urls),
-            "mutable generated profile asset lacks an explicit cache identity")
+            "mutable activity asset lacks an explicit cache identity")
     require(text.count(SIGNAL_FIELD_RESPONSIVE_BLOCK) == 1,
             "README Signal Field responsive source contract changed")
     require(SIGNAL_FIELD_COMPACT_MAX_WIDTH == 480,
