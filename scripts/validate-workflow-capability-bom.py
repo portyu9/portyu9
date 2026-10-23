@@ -103,8 +103,8 @@ if __name__ == "__main__":
         import tempfile
         from pathlib import Path
 
-        FROZEN_SHA = "a6aedfac20c978c145d528a428ea36dc0a3ea84c"
-        FROZEN_TREE = "5bc5e4ce330dbe52b21b801e42481003cd56ca6c"
+        FROZEN_SHA = "0f6b8b2416f6c79d111c451f1ca6337e05f0ada0"
+        FROZEN_TREE = "10418e7e0aabe2d40073a4805ac2ba70688f7a5f"
         with tempfile.TemporaryDirectory(prefix="measure-protected-python-") as tmp:
             candidate = Path(tmp) / "candidate"
             candidate.mkdir()
