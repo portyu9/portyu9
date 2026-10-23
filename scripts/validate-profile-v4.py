@@ -161,7 +161,9 @@ def flagship_native_badge_references(readme: str) -> set[str]:
             "Flagship workflow labels must be lowercase ci and security")
     require("/badge.svg?branch=main" not in block,
             "Flagship native badge must not silently override lowercase visible labels")
-    return approved
+    # These dynamic workflow-status endpoints do not end in .svg, so they are
+    # checked exhaustively above, not in the static SVG-reference inventory.
+    return set()
 
 
 def spotlight_native_badge_references(readme: str) -> set[str]:
