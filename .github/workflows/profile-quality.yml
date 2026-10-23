@@ -587,6 +587,17 @@ jobs:
           python3 scripts/validate-signal-field-v214.py roundtrip-signal-field
           python3 scripts/validate-generated-signal-field.py roundtrip-signal-field
 
+      - name: Exercise independent activity metrics projection on actual upstream SVGs
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          python3 scripts/project-independent-activity.py --self-test
+          mkdir -p integration-independent-activity
+          cp roundtrip-signal-field/signal-field-*.svg integration-independent-activity/
+          python3 scripts/project-independent-activity.py integration-independent-activity
+          test "$(grep -l 'data-generation-cadence-contract="independent-activity-v1"' integration-independent-activity/*.svg | wc -l)" -eq 4
+          test "$(grep -l 'REFRESH · 5 MIN' integration-independent-activity/*.svg | wc -l)" -eq 4
+
       - name: Revalidate deterministic local profile evidence boundary
         env:
           SIGNAL_FIELD_DIR: ${{ steps.stats.outputs.ready-dir }}
