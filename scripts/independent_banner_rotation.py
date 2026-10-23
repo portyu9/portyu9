@@ -106,7 +106,8 @@ def self_test() -> None:
     approved.self_test(slots)
     source = approved.read_file(ROOT / "README.md")
     approved.validate_readme_state(source, slots)
-    day = date(2026, 10, 23)
+    marker = approved.MARKER.search(source)
+    day = date.fromisoformat(marker.group(2)) if marker else approved.EPOCH
     correct = approved.propose(source, approved.chosen(day, slots), slots)
     only_banner_changes(source, correct)
     require(only_banner_changes.__name__ == "only_banner_changes", "scope guard renamed")
