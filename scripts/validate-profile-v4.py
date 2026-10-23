@@ -123,6 +123,43 @@ def require(condition: bool, message: str) -> None:
         legacy.fail(message)
 
 
+def flagship_native_badge_references(readme: str) -> set[str]:
+    """Approve four paired, repository-bound GitHub Actions badges for the flagships.
+
+    Derive subjects from the actual card anchors instead of maintaining an
+    independent list of badge URLs. Reject foreign hosts, missing workflows,
+    duplicate evidence, or badges not scoped to the named main branch.
+    """
+    start = '<h2 align="center">◇ Selected Engineering Systems</h2>'
+    end = '<h3 align="center">↻ Evidence Spotlight</h3>'
+    require(readme.count(start) == readme.count(end) == 1,
+            "Flagship badge policy requires one bounded engineering systems section")
+    block = readme.split(start, 1)[1].split(end, 1)[0]
+    repositories = re.findall(
+        r'<a href="https://github\.com/(portyu9/[A-Za-z0-9_.-]+)"><picture>',
+        block,
+    )
+    require(len(repositories) == 4 and len(set(repositories)) == 4,
+            "Flagship badge policy requires four distinct repository-bound cards")
+    approved: set[str] = set()
+    for repository in repositories:
+        for workflow in ("ci", "security"):
+            target = f"https://github.com/{repository}/actions/workflows/{workflow}.yml"
+            image = target + "/badge.svg?branch=main"
+            markup = re.compile(
+                re.escape(f'<a href="{target}"><img ') +
+                r'alt="[^"]+" height="24" src="' + re.escape(image) + r'"></a>'
+            )
+            require(len(markup.findall(block)) == 1,
+                    f"{repository} flagship {workflow} must use its own native GitHub workflow badge")
+            approved.add(image.split("?", 1)[0])
+    require(len(approved) == 8 and block.count("/badge.svg?branch=main") == 8,
+            "Flagship native GitHub badge inventory changed")
+    require("img.shields.io/github/actions/workflow/status/" not in block,
+            "Off-host flagship workflow status images are forbidden")
+    return approved
+
+
 def spotlight_native_badge_references(readme: str) -> set[str]:
     """Approve only six GitHub-owned badges tied to the three active Spotlight cards.
 
@@ -175,7 +212,7 @@ def validate_references(readme: str) -> None:
     allowed = (set(legacy.IDENTITY_AND_PRINCIPLE_SVGS) | set(DESKTOP_PRINCIPLE_SVGS) |
                set(THESIS_HEADER_REFS) | set(legacy.GENERATED_SVG_REFERENCES) | set(FLAGSHIP_SVGS) |
                set(selected_banner.values()) | {ANIMATED_HERO_SVG} |
-               spotlight_native_badge_references(readme))
+               flagship_native_badge_references(readme) | spotlight_native_badge_references(readme))
     unexpected=sorted(set(references)-allowed); missing=sorted(allowed-set(references))
     require(not unexpected, "README contains unapproved SVG references: " + ", ".join(unexpected))
     require(not missing, "README is missing approved SVG references: " + ", ".join(missing))
@@ -454,10 +491,7 @@ def validate_flagships(readme: str) -> None:
         "BASELINE GOVERNANCE",
     ):
         require(any(phrase in (ROOT/path).read_text(encoding="utf-8") for path in FLAGSHIP_SVGS), f"Reviewed flagship language missing: {phrase}")
-    require(readme.count('ai-qa-automation/ci.yml?branch=main')==1 and readme.count('ai-qa-automation/security.yml?branch=main')==1, "AI flagship must expose CI + Security")
-    require(readme.count('qa-automation-ai-agent-evals/ci.yml?branch=main')==1 and readme.count('qa-automation-ai-agent-evals/security.yml?branch=main')==1, "Agent Evaluation / TEVV flagship must expose CI + Security")
-    require(readme.count('qa-automation-graphql/ci.yml?branch=main')==1 and readme.count('qa-automation-graphql/security.yml?branch=main')==1, "GraphQL flagship must expose CI + Security")
-    require(readme.count('qa-automation-visual-and-accessibility-playwright-axe/ci.yml?branch=main')==1 and readme.count('qa-automation-visual-and-accessibility-playwright-axe/security.yml?branch=main')==1, "Visual/accessibility flagship must expose CI + Security")
+    flagship_native_badge_references(readme)
 
     sequence = (
         ("qualification-ai-qa-control-plane", "01"),
