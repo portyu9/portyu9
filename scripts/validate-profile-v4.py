@@ -137,7 +137,7 @@ def flagship_native_badge_references(readme: str) -> set[str]:
             "Flagship badge policy requires one bounded engineering systems section")
     block = readme.split(start, 1)[1].split(end, 1)[0]
     repositories = re.findall(
-        r'<a href="https://github\\.com/(portyu9/[A-Za-z0-9_.-]+)"><picture>',
+        r'<a href="https://github\.com/(portyu9/[A-Za-z0-9_.-]+)"><picture>',
         block,
     )
     require(len(repositories) == 4 and len(set(repositories)) == 4,
