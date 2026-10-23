@@ -1314,7 +1314,7 @@
       "candidateBomSha256": "2849de9f97d520d038a38341a3cab1e2f5950db9c518799368bf3700c36f1103",
       "expansionSha256": "b66a6f01308d549ceb7737d842cbb2c87723a1a02532fa3692489747ab450e97",
       "id": "cap-independent-approved-banner-pr-v1",
-      "rationale": "Authorize frozen #1810 tree 9bb8a4b388f5f9ca5f9328bcf99108149d861156 as measured by closed-unmerged #1812 with accepted-main evaluator: read-only selection of exactly three already approved banner surfaces plus UTC day, exact-main bound same-run artifact transport, and a distinct PR-only terminal writer that may create one normal README-only banner PR. No generated/Activity Metrics/Ledger/Spotlight publication, new artwork, direct-main merge/bypass, security-status substitution, external CI dependency, OIDC, or secret expansion."
+      "rationale": "Authorize frozen #1810 tree 9bb8a4b388f5f9ca5f9328bcf99108149d861156, measured by accepted-main compiler in closed #1812. Allow read-only UTC-day selection of three already-approved banner paths, a same-run bound proposal, and a separate terminal README-only PR writer. No new artwork, generated/Ledger/Spotlight write, CI substitution, arbitrary merge/bypass, OIDC, or secret authority."
     },
     {
       "baseBomSha256": "7f91352fc1f77fbb890b058b86e71592ff85012777b149fecff0deb378fd37c3",
