@@ -357,7 +357,7 @@ def validate_quality_contract(text: str) -> None:
         "python3 scripts/action_provenance_witness.py select-run",
         "python3 scripts/action_provenance_witness.py select-artifact",
         "uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2",
-        "name: action-provenance-witness-v2",
+        "name: action-provenance-witness-v1",
         "github-token: ${{ github.token }}",
         "digest-mismatch: error",
         'gh attestation verify "$SUBJECT"',
