@@ -35,7 +35,7 @@ def sha256(text: str) -> str:
 def blob_sha(text: str) -> str:
     value = text.encode("utf-8")
     return hashlib.sha1(
-        f"blob {len(value)}\\0".encode("ascii") + value, usedforsecurity=False
+        f"blob {len(value)}\0".encode("ascii") + value, usedforsecurity=False
     ).hexdigest()
 
 
@@ -141,6 +141,8 @@ def valid_candidate(
 
 
 def self_test() -> None:
+    require(blob_sha("hello\n") == "ce013625030ba8dba906f756967f9e9ca394464a",
+            "git blob SHA1 NUL delimiter regression")
     source = approved.read_file(approved.ROOT / "README.md")
     slots = approved.load_catalog()
     approved.validate_assets(slots)
