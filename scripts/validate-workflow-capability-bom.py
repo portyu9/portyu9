@@ -94,4 +94,38 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # One-shot diagnostic only. Read inert exact #1825 source with trusted base.
+    exit_code = main()
+    if exit_code == 0:
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        FROZEN_SHA = "6d70695e342d9209cda4275828569cf92f6e59f0"
+        FROZEN_TREE = "268ab26495fc1ae113adfcde63823b337e0492d4"
+        with tempfile.TemporaryDirectory(prefix="measure-dependabot-prior-base-v2-") as dirname:
+            candidate = Path(dirname) / "candidate"
+            candidate.mkdir()
+            subprocess.run(["git", "init", "-q", str(candidate)], check=True)
+            subprocess.run([
+                "git", "-C", str(candidate), "fetch", "-q", "--depth=1",
+                "https://github.com/portyu9/portyu9.git", FROZEN_SHA,
+            ], check=True)
+            subprocess.run(["git", "-C", str(candidate), "checkout", "-q", "--detach", "FETCH_HEAD"], check=True)
+            commit_sha = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD"], text=True,
+            ).strip()
+            tree_sha = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD^{tree}"], text=True,
+            ).strip()
+            require(commit_sha == FROZEN_SHA and tree_sha == FROZEN_TREE,
+                    "read-only diagnostic SHA/tree differs from exact frozen #1825")
+            difference = workflow_capability_admission.measure(
+                candidate, candidate_tree_sha=FROZEN_TREE,
+            )
+            measurement = workflow_capability_admission.public_measurement(
+                difference, candidate_tree_sha=FROZEN_TREE,
+            )
+            print("EXACT_DEPENDABOT_PRIOR_BASE_V2_AUTHORIZATION_MEASUREMENT=" +
+                  json.dumps(measurement, sort_keys=True, separators=(",", ":")), flush=True)
+    raise SystemExit(exit_code)
