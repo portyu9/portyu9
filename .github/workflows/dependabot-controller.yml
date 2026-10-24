@@ -253,7 +253,14 @@ jobs:
             test "$(jq -r .nodeId rebase-response-normalized.json)" = "$REBASING_PR_NODE_ID"
             test "$(jq -r .number rebase-response-normalized.json)" = "$PR_NUMBER"
             ACK_BASE_SHA="$(jq -r .baseSha rebase-response-normalized.json)"
-            test "$ACK_BASE_SHA" = "$MAIN_SHA" || test "$ACK_BASE_SHA" = "$BASE_SHA"
+            if [ "$ACK_BASE_SHA" = "$MAIN_SHA" ]; then
+              # Preserve the existing exact-main response-identity assertion.
+              test "$(jq -r .baseSha rebase-response-normalized.json)" = "$MAIN_SHA"
+            else
+              # Prior base is admitted ONLY when the trusted typed parser has
+              # authenticated this PR's pre-rebase base SHA independently.
+              test "$ACK_BASE_SHA" = "$BASE_SHA"
+            fi
 
             UPDATE_CONVERGED=false
             for UPDATE_ATTEMPT in $(seq 1 24); do
