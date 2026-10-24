@@ -31,6 +31,27 @@ The pull-request rule intentionally keeps `required_approving_review_count: 0` f
 
 `Protect generated` targets only `refs/heads/generated`, is active, has no bypass actors, and blocks deletion and non-fast-forward updates. It intentionally does not require pull requests or status checks because my reviewed `publish-write-only` job must be able to make normal fast-forward artifact commits after generation and attestation succeed.
 
+## Staged native activity-metrics branch protection
+
+Issue #1800 requires a third active native ruleset, `Protect activity-metrics`,
+targeting **only** `refs/heads/activity-metrics`, with no bypass actors and
+exactly the two parameter-free rules `deletion` and `non_fast_forward`.
+No pull-request or required-status-check rule is permitted: the isolated signer
+and publisher must continue ordinary fast-forward updates. Existing protections
+for `main` and `generated` are unchanged.
+
+During the *bounded control-plane roll-in*, live validation accepts either the
+existing exact two-rule inventory, or exactly those two plus the third only if
+its independently fetched live rule details have the exact active target,
+conditions, no observable bypass actors, and two-rule inventory. Unexpected
+rulesets, duplicate identities, extra parameters, changed legacy semantics,
+and any expanded bypass fail closed. This transitional read-only parser grants
+**no** administration token, ruleset mutation, or bypass. GitHub Administration
+must separately create the third ruleset through a previously authorized and
+audited workflow, with success/readback evidence. A final source change must
+then remove the two-ruleset predecessor allowance and require all three before
+closing issue #1800.
+
 ## Verification
 
 `python3 scripts/validate-ruleset-contract.py` validates the version-controlled contract and its fail-closed invariants without requiring administration access.
