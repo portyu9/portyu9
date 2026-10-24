@@ -21,7 +21,7 @@ import approved_banner_rotation as approved
 
 ROOT = Path(__file__).resolve().parents[1]
 SHA = re.compile(r"^[0-9a-f]{40}$")
-MARKER = re.compile(r"<!-- banner-rotation:v[3-7] utc-day=\d{4}-\d{2}-\d{2} slot=\d+ slug=[a-z0-9-]+ -->")
+MARKER = re.compile(r"<!-- banner-rotation:v[3-8] utc-day=\d{4}-\d{2}-\d{2} slot=\d+ slug=[a-z0-9-]+ -->")
 
 
 def require(ok: bool, reason: str) -> None:
@@ -110,6 +110,16 @@ def self_test() -> None:
     day = date.fromisoformat(marker.group(2)) if marker else approved.EPOCH
     correct = approved.propose(source, approved.chosen(day, slots), slots)
     only_banner_changes(source, correct)
+    for approved_version in ("v7", "v8"):
+        marker_fixture = (
+            "<!-- banner-rotation:" + approved_version
+            + " utc-day=2026-10-24 slot=1 slug=01-luminous-singularity -->"
+        )
+        require(MARKER.fullmatch(marker_fixture) is not None,
+                f"historical/present banner marker version rejected: {approved_version}")
+    require(MARKER.fullmatch(
+        "<!-- banner-rotation:v9 utc-day=2026-10-24 slot=1 slug=01-luminous-singularity -->"
+    ) is None, "unreviewed future banner marker version accepted")
     require(only_banner_changes.__name__ == "only_banner_changes", "scope guard renamed")
     corrupt = correct.replace("© 2026", "© 2027", 1)
     require(corrupt != correct, "non-banner mutation fixture is ineffective")
