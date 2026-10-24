@@ -106,6 +106,13 @@
       "rationale": "Authorize #595's exact frozen Spotlight convergence fix: Capability Admission hydrates the unique discovered PR before trusting full-PR metadata, and Spotlight verifies the complete multiline approval comment by exact JSON equality. Bot/current-main/head/title/body proofs remain fail-closed. No trigger, write permission, mutation class, secret, OIDC authority, required-check reduction, merge bypass, or candidate execution is added."
     },
     {
+      "id": "cap-banner-dark-only-v8-source-v1",
+      "baseBomSha256": "e7634355b4e825d3be28fd25a942b98f2eaa3e24d35f90da16cc960be53f501d",
+      "candidateBomSha256": "e7634355b4e825d3be28fd25a942b98f2eaa3e24d35f90da16cc960be53f501d",
+      "expansionSha256": "db793720558363026f5444296de0c3d06ce7e8e291ac146467376aff1b16f704",
+      "rationale": "Authorize frozen #1820 head 9e8b81a89f502bf47a37cbf911e66d3c0353f7b9/tree b5f5855d652023504e8f90081de71704b545f866 measured by closed unmerged #1821: six dark-only derivatives, immutable historical replay, v8 banner selector, README, Spotlight read-only delegate source pin. One trusted-source expansion / zero reductions; semantic workflow BOM unchanged. No triggers, job/action permissions, tokens, OIDC, endpoints, bypass, merge or direct-main authority added."
+    },
+    {
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "expansionSha256": "1c44d1abf42c3bb918db41beeb57cb27a005c7c09d2cad61c6713376d3fa8a0e",
