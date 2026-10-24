@@ -123,6 +123,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/portyu9/portyu9/rulesets",
+              "method": "POST",
+              "mutating": true,
+              "step": "Apply only exact reviewed predecessor to successor"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/portyu9/portyu9/rulesets/22148161",
               "method": "PUT",
               "mutating": true,
@@ -146,6 +153,12 @@
               "method": "POST",
               "step": "Apply only exact reviewed predecessor to successor",
               "target": "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Apply only exact reviewed predecessor to successor",
+              "target": "repos/portyu9/portyu9/rulesets"
             },
             {
               "class": "github-api-put",
