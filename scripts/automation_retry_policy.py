@@ -2554,10 +2554,10 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
             f"Ruleset reconciler specialist read regained raw transport: {forbidden}",
         )
     require(
-        ruleset_reconcile_step.count("gh api ") == 2
-        and ruleset_reconcile_step.count("--method POST") == 1
+        ruleset_reconcile_step.count("gh api ") == 3
+        and ruleset_reconcile_step.count("--method POST") == 2
         and ruleset_reconcile_step.count("--method PUT") == 1,
-        "Ruleset reconciler raw transport must remain exactly the two single-shot mutations",
+        "Ruleset reconciler raw transport must remain exactly three reviewed single-shot mutations",
     )
 
     profile_stats = texts[".github/workflows/profile-stats.yml"]
