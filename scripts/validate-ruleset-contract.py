@@ -21,6 +21,7 @@ import urllib.request
 from typing import Any, Callable
 
 import ruleset_transition_contract
+import activity_metrics_ruleset_contract
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / ".github" / "rulesets" / "repository-rulesets-v1.json"
@@ -1939,6 +1940,7 @@ def self_test(payload: dict[str, Any]) -> None:
     # exact predecessor/successor classifier here so runtime-only ordering or digest
     # regressions fail in ordinary protected PR validation before any admin run.
     ruleset_transition_contract.self_test()
+    activity_metrics_ruleset_contract.self_test()
     self_test_recovery_acceptance()
     transition = ruleset_transition_contract.load_contract()
     transition_predecessor = next(
