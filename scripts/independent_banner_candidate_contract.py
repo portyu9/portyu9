@@ -242,7 +242,7 @@ def verified_required_workflow_runs(
     verified_required_check_snapshot(check_runs, head_sha)
     require(type(head_ref) is str and
             head_ref.startswith("automation/banner-rotation/") and
-            re.fullmatch(r"automation/banner-rotation/\\d{4}-\\d{2}-\\d{2}-[0-9a-f]{12}", head_ref) is not None,
+            re.fullmatch(r"automation/banner-rotation/\d{4}-\d{2}-\d{2}-[0-9a-f]{12}", head_ref) is not None,
             "protected banner workflow head ref is not canonical")
     require(type(workflow_runs) is list and
             len(workflow_runs) == len(EXPECTED_PROTECTED_WORKFLOWS),
