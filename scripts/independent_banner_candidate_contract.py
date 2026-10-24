@@ -451,6 +451,82 @@ def terminal_banner_readiness(
         "readmeBlob": result["readmeBlob"],
     }
 
+
+def select_read_only_banner_candidate(
+    open_prs: Any, *, current_main_sha: str, utc_day: date,
+) -> dict[str, Any]:
+    """Select zero or one canonical banner PR from a COMPLETE live PR page.
+
+    Never delete an apparently stale candidate based only on listing data:
+    stale-banner-candidate-requires-proof must be independently checked
+    against historical accepted base/readme, one-commit ancestry, live refs
+    and an explicit comment-before-close policy. No GitHub API is called here.
+    """
+    require(type(current_main_sha) is str
+            and HEX40.fullmatch(current_main_sha) is not None
+            and type(utc_day) is date,
+            "banner selection requires exact current main and UTC date")
+    require(type(open_prs) is list and len(open_prs) < 100,
+            "banner open-PR list missing, oversized or possibly incomplete")
+    candidates: list[dict[str, Any]] = []
+    pr_numbers: set[int] = set()
+    for pr in open_prs:
+        require(type(pr) is dict and type(pr.get("number")) is int
+                and pr["number"] > 0 and pr["number"] not in pr_numbers
+                and pr.get("state") == "open" and type(pr.get("draft")) is bool
+                and type(pr.get("base")) is dict
+                and pr["base"].get("ref") == "main"
+                and type(pr.get("head")) is dict
+                and type(pr["head"].get("ref")) is str,
+                "banner selector received malformed or duplicated open PR")
+        pr_numbers.add(pr["number"])
+        ref = pr["head"]["ref"]
+        if not ref.startswith("automation/banner-rotation/"):
+            continue
+        match = re.fullmatch(
+            r"automation/banner-rotation/(\d{4}-\d{2}-\d{2})-([0-9a-f]{12})",
+            ref,
+        )
+        require(match is not None, "unreviewed banner-shaped branch ref")
+        candidate_day = date.fromisoformat(match.group(1))
+        base_sha = pr["base"].get("sha")
+        head_sha = pr["head"].get("sha")
+        actor = pr.get("user")
+        require(type(base_sha) is str and HEX40.fullmatch(base_sha) is not None
+                and type(head_sha) is str and HEX40.fullmatch(head_sha) is not None
+                and head_sha != base_sha
+                and type(actor) is dict and actor.get("login") == BOT_LOGIN
+                and type(actor.get("id")) is int and actor["id"] == BOT_ID
+                and type(pr["head"].get("repo")) is dict
+                and pr["head"]["repo"].get("full_name") == REPOSITORY
+                and pr["draft"] is False,
+                "banner-shaped PR was not the expected reviewed producer")
+        require(candidate_day <= utc_day,
+                "future-day banner candidate must not be auto-admitted")
+        candidates.append({
+            "prNumber": pr["number"],
+            "headRef": ref,
+            "headSha": head_sha,
+            "baseSha": base_sha,
+            "originalBasePrefix": match.group(2),
+            "utcDay": candidate_day.isoformat(),
+        })
+    require(len(candidates) <= 1,
+            "multiple banner candidates block safe automatic selection")
+    if not candidates:
+        return {
+            "decision": "no-open-banner-candidate",
+            "currentMainSha": current_main_sha, "utcDay": utc_day.isoformat(),
+        }
+    chosen = candidates[0]
+    if (chosen["baseSha"] != current_main_sha
+            or chosen["originalBasePrefix"] != current_main_sha[:12]
+            or chosen["utcDay"] != utc_day.isoformat()):
+        state = "stale-banner-candidate-requires-proof"
+    else:
+        state = "current-banner-candidate-requires-proof"
+    return {"decision": state, "currentMainSha": current_main_sha, **chosen}
+
 def self_test() -> None:
     require(blob_sha("hello\n") == "ce013625030ba8dba906f756967f9e9ca394464a",
             "git blob SHA1 NUL delimiter regression")
@@ -770,3 +846,85 @@ def self_test() -> None:
             pass
         else:
             raise ValueError(f"untrusted banner terminal evidence accepted: {fragment}")
+
+    # Selection is read-only and must never turn stale/hijacked candidate
+    # observations into a merge or a blind branch deletion.
+    listing_candidate = copy.deepcopy(pr)
+    unrelated = {
+        "number": 77, "state": "open", "draft": False,
+        "base": {"ref": "main", "sha": base},
+        "head": {"ref": "automation/spotlight-links/" + "c" * 64,
+                 "sha": "d" * 40},
+    }
+    empty_selection = select_read_only_banner_candidate(
+        [unrelated], current_main_sha=base, utc_day=day
+    )
+    require(empty_selection["decision"] == "no-open-banner-candidate",
+            "unrelated Spotlight PR incorrectly entered banner lane")
+    current_selection = select_read_only_banner_candidate(
+        [unrelated, listing_candidate], current_main_sha=base, utc_day=day
+    )
+    require(current_selection["decision"] ==
+            "current-banner-candidate-requires-proof"
+            and current_selection["prNumber"] == 19,
+            "current canonical banner candidate was not selected")
+    stale_selection = select_read_only_banner_candidate(
+        [listing_candidate], current_main_sha="c" * 40,
+        utc_day=day + timedelta(days=1),
+    )
+    require(stale_selection["decision"] ==
+            "stale-banner-candidate-requires-proof"
+            and stale_selection["headSha"] == head,
+            "stale candidate was not quarantined for historical proof")
+
+    # GitHub PR base.sha may track the newly advanced main even though the
+    # immutable candidate branch still records the older source prefix.
+    advanced_listing = copy.deepcopy(listing_candidate)
+    advanced_listing["base"]["sha"] = "c" * 40
+    advanced = select_read_only_banner_candidate(
+        [advanced_listing], current_main_sha="c" * 40, utc_day=day
+    )
+    require(advanced["decision"] ==
+            "stale-banner-candidate-requires-proof"
+            and advanced["originalBasePrefix"] == base[:12],
+            "advanced GitHub PR base was falsely classified as a new candidate")
+    for label, mutation in [
+        ("extra banner candidate", [listing_candidate, {
+            **listing_candidate, "number": 20,
+        }]),
+        ("duplicate PR number", [listing_candidate, listing_candidate]),
+        ("incomplete listing", [unrelated] * 100),
+        ("malformed listing", {"items": [listing_candidate]}),
+        ("fake head actor", [{**listing_candidate,
+                              "user": {"login": "attacker", "id": 1}}]),
+        ("bot ID spoof", [{**listing_candidate,
+                           "user": {"login": BOT_LOGIN, "id": False}}]),
+        ("fork", [{**listing_candidate, "head": {
+            **listing_candidate["head"], "repo": {
+                "full_name": "outsider/fork",
+            },
+        }}]),
+        ("draft", [{**listing_candidate, "draft": True}]),
+        ("future banner day", [{**listing_candidate, "head": {
+            **listing_candidate["head"],
+            "ref": expected_branch(day + timedelta(days=1), base),
+        }}]),
+        ("malformed branch", [{**listing_candidate, "head": {
+            **listing_candidate["head"],
+            "ref": "automation/banner-rotation/spoof",
+        }}]),
+        ("malformed base SHA", [{**listing_candidate, "base": {
+            **listing_candidate["base"], "sha": "not-an-object-id",
+        }}]),
+        ("non-main PR", [{**listing_candidate, "base": {
+            **listing_candidate["base"], "ref": "generated",
+        }}]),
+    ]:
+        try:
+            select_read_only_banner_candidate(
+                mutation, current_main_sha=base, utc_day=day
+            )
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"banner selector accepted: {label}")
