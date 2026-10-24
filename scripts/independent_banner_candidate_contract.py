@@ -206,6 +206,93 @@ def verified_required_check_snapshot(check_runs: Any, head_sha: str) -> dict[str
     return {name: seen[name]["id"] for name in sorted(seen)}
 
 
+
+# These identities are workflow *contracts*, not hardcoded alert IDs or run IDs.
+# A reconciler must acquire each native run from the corresponding observed
+# check suite and independently verify authenticated API result completeness.
+EXPECTED_PROTECTED_WORKFLOWS = {
+    "Profile quality": (
+        ".github/workflows/profile-quality.yml", "pull_request",
+        PROFILE_CHECK_NAMES,
+    ),
+    "CodeQL": (
+        ".github/workflows/codeql.yml", "pull_request",
+        CODEQL_CHECK_NAMES,
+    ),
+    "Dependency review": (
+        ".github/workflows/dependency-review.yml", "pull_request",
+        frozenset({"dependency-review"}),
+    ),
+    "Capability admission": (
+        ".github/workflows/capability-admission.yml", "pull_request_target",
+        frozenset({"trusted-capability-admission"}),
+    ),
+}
+
+
+def verified_required_workflow_runs(
+    check_runs: Any, workflow_runs: Any, head_ref: str, head_sha: str,
+) -> dict[str, int]:
+    """Bind seven successful check contexts to four genuine native run suites.
+
+    The authenticated caller must separately verify complete GitHub API pages,
+    exact current main, associated PR number, review threads and any prior
+    attempts. This read-only function does not issue checks or dispatches.
+    """
+    verified_required_check_snapshot(check_runs, head_sha)
+    require(type(head_ref) is str and
+            head_ref.startswith("automation/banner-rotation/") and
+            re.fullmatch(r"automation/banner-rotation/\\d{4}-\\d{2}-\\d{2}-[0-9a-f]{12}", head_ref) is not None,
+            "protected banner workflow head ref is not canonical")
+    require(type(workflow_runs) is list and
+            len(workflow_runs) == len(EXPECTED_PROTECTED_WORKFLOWS),
+            "protected workflow evidence must have exactly four native runs")
+    checks_by_name = {row["name"]: row for row in check_runs
+                      if row["name"] in REQUIRED_CHECK_NAMES}
+    seen: dict[str, int] = {}
+    seen_run_ids: set[int] = set()
+    seen_suite_ids: set[int] = set()
+    for run in workflow_runs:
+        require(type(run) is dict and type(run.get("name")) is str,
+                "protected workflow run is malformed")
+        name = run["name"]
+        require(name in EXPECTED_PROTECTED_WORKFLOWS and name not in seen,
+                "unknown or duplicate protected workflow run")
+        path, event, context_names = EXPECTED_PROTECTED_WORKFLOWS[name]
+        suite_ids = {checks_by_name[n]["check_suite"]["id"]
+                     for n in context_names}
+        require(len(suite_ids) == 1,
+                "protected workflow contexts bind to different check suites")
+        suite_id = next(iter(suite_ids))
+        run_id = run.get("id")
+        workflow_id = run.get("workflow_id")
+        attempt = run.get("run_attempt")
+        require(type(run_id) is int and run_id > 0
+                and run_id not in seen_run_ids
+                and type(workflow_id) is int and workflow_id > 0
+                and type(attempt) is int and 1 <= attempt <= 20,
+                "protected workflow execution identity/attempt invalid")
+        require(type(run.get("check_suite_id")) is int
+                and run["check_suite_id"] == suite_id
+                and suite_id not in seen_suite_ids,
+                "protected workflow run is not bound to required native suite")
+        require(run.get("path") == path and run.get("event") == event
+                and run.get("head_sha") == head_sha
+                and run.get("head_branch") == head_ref
+                and run.get("status") == "completed"
+                and run.get("conclusion") == "success"
+                and type(run.get("repository")) is dict
+                and run["repository"].get("full_name") == REPOSITORY
+                and type(run.get("head_repository")) is dict
+                and run["head_repository"].get("full_name") == REPOSITORY,
+                "protected workflow event/path/head/repository provenance changed")
+        seen[name] = run_id
+        seen_run_ids.add(run_id)
+        seen_suite_ids.add(suite_id)
+    require(set(seen) == set(EXPECTED_PROTECTED_WORKFLOWS),
+            "protected workflow run inventory incomplete")
+    return {name: seen[name] for name in sorted(seen)}
+
 def verified_owner_review_snapshot(
     reviews: Any, base_sha: str, head_sha: str,
 ) -> None:
@@ -228,7 +315,7 @@ def qualified_banner_candidate(
     *, pr: Any, commit: Any, files: Any,
     accepted_readme: str, proposed_readme: str,
     base_sha: str, utc_day: date,
-    check_runs: Any, reviews: Any,
+    check_runs: Any, reviews: Any, workflow_runs: Any,
 ) -> dict[str, str | int]:
     """Compose reviewed artwork/ancestry, genuine-check and owner-veto gates.
 
@@ -242,6 +329,9 @@ def qualified_banner_candidate(
         base_sha=base_sha, utc_day=utc_day,
     )
     verified_required_check_snapshot(check_runs, str(result["headSha"]))
+    verified_required_workflow_runs(
+        check_runs, workflow_runs, pr["head"]["ref"], str(result["headSha"])
+    )
     verified_owner_review_snapshot(reviews, base_sha, str(result["headSha"]))
     return result
 
@@ -354,7 +444,30 @@ def self_test() -> None:
     }
     verified_required_check_snapshot(checks, head)
     verified_owner_review_snapshot([owner_review], base, head)
-    qualified_banner_candidate(**fixture, check_runs=checks, reviews=[owner_review])
+
+    # Four independent suites must bind real event/path/repository/head tuples.
+    run_fixtures: list[dict[str, Any]] = []
+    for index, (name, (workflow_path, event, contexts)) in enumerate(
+        EXPECTED_PROTECTED_WORKFLOWS.items(), start=1
+    ):
+        suite_id = next(row["check_suite"]["id"] for row in checks
+                        if row["name"] in contexts)
+        run_fixtures.append({
+            "id": 1000 + index, "workflow_id": 2000 + index,
+            "name": name, "path": workflow_path, "event": event,
+            "head_sha": head, "head_branch": pr["head"]["ref"],
+            "run_attempt": 1, "check_suite_id": suite_id,
+            "status": "completed", "conclusion": "success",
+            "repository": {"full_name": REPOSITORY},
+            "head_repository": {"full_name": REPOSITORY},
+        })
+    verified_required_workflow_runs(
+        checks, run_fixtures, pr["head"]["ref"], head
+    )
+    qualified_banner_candidate(
+        **fixture, check_runs=checks, reviews=[owner_review],
+        workflow_runs=run_fixtures,
+    )
     check_mutants: list[tuple[int, str, Any]] = [
         (0, "head_sha", "f" * 40),
         (0, "status", "queued"),
@@ -407,3 +520,53 @@ def self_test() -> None:
             pass
         else:
             raise ValueError("unapproved, revoked or vetoed owner review was accepted")
+
+    # Adversarial provenance: no lookalike named job can stand in for its
+    # actual check suite, workflow path/event or native repository identity.
+    for run_index, key, bad in [
+        (0, "check_suite_id", 999),
+        (0, "head_sha", "f" * 40),
+        (0, "head_branch", "automation/banner-rotation/spoof"),
+        (0, "name", "CodeQL"),
+        (0, "path", ".github/workflows/fake.yml"),
+        (0, "event", "workflow_dispatch"),
+        (0, "status", "queued"),
+        (0, "conclusion", "failure"),
+        (0, "run_attempt", True),
+        (0, "run_attempt", 21),
+        (0, "id", True),
+        (0, "workflow_id", 0),
+        (3, "event", "pull_request"),
+        (3, "repository", {"full_name": "attacker/repo"}),
+        (3, "head_repository", {"full_name": "attacker/repo"}),
+    ]:
+        mutant = copy.deepcopy(run_fixtures)
+        mutant[run_index][key] = bad
+        try:
+            verified_required_workflow_runs(
+                checks, mutant, pr["head"]["ref"], head
+            )
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"untrusted workflow provenance admitted: {key}")
+    for bad_runs in (
+        run_fixtures[:-1], run_fixtures + [run_fixtures[0]], "fake",
+    ):
+        try:
+            verified_required_workflow_runs(
+                checks, bad_runs, pr["head"]["ref"], head
+            )
+        except ValueError:
+            pass
+        else:
+            raise ValueError("missing, duplicated or malformed workflow runs admitted")
+    try:
+        verified_required_workflow_runs(
+            checks, run_fixtures,
+            "automation/banner-rotation/spoof", head
+        )
+    except ValueError:
+        pass
+    else:
+        raise ValueError("noncanonical banner branch admitted")
