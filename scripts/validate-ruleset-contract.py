@@ -34,11 +34,10 @@ API_ORIGIN = "https://api.github.com"
 API_PATH = f"/repos/{REPOSITORY}/rulesets"
 API = f"{API_ORIGIN}{API_PATH}"
 EXPECTED_INTEGRATION_ID = 15368
-EXPECTED_RULESET_NAMES = ("Protect Main", "Protect generated")
-# Temporary, exact-shape successor admitted ONLY while the third native ruleset
-# is being added by a separately authorized Administration App transaction.
-# Source still mandates the two existing rules; production will require all three
-# after a proven live-admin readback. Never accept a generic third ruleset.
+EXPECTED_RULESET_NAMES = ("Protect Main", "Protect activity-metrics", "Protect generated")
+# Native third ruleset independently created and admin-readback verified in run
+# 40059001708; fail closed if any of the exact three protections disappears.
+# Dynamic live IDs only: no remote ruleset identifiers belong in this contract.
 ACTIVITY_RULESET_NAME = "Protect activity-metrics"
 ACTIVITY_RULESET_BRANCH = "refs/heads/activity-metrics"
 ACTIVITY_RULESET_RULES = frozenset({"deletion", "non_fast_forward"})
@@ -165,6 +164,11 @@ def validate_source(payload: dict[str, Any]) -> None:
     require(set(rulesets) == set(EXPECTED_RULESET_NAMES), "ruleset contract inventory changed")
     main = rulesets["Protect Main"]
     generated = rulesets["Protect generated"]
+    activity = rulesets[ACTIVITY_RULESET_NAME]
+    require(
+        activity == {**ACTIVITY_RULESET_TARGET, "rules": {"deletion": True, "non_fast_forward": True}},
+        "Protect activity-metrics must be the exact active non-deletable fast-forward-only branch ruleset",
+    )
 
     require(main.get("target") == "branch" and main.get("enforcement") == "active", "Protect Main must be an active branch ruleset")
     require(main.get("include") == ["~DEFAULT_BRANCH"] and main.get("exclude") == [], "Protect Main target changed")
@@ -217,6 +221,7 @@ def validate_source(payload: dict[str, Any]) -> None:
         "integration_id: 15368",
         "solo-maintainer",
         "Protect generated",
+        "Protect activity-metrics",
         "no bypass actors",
         "--live",
         "control-plane",
@@ -1332,8 +1337,8 @@ def ruleset_collection_map(collection: Any) -> dict[str, dict[str, Any]]:
     """Return the exact live ruleset inventory without filtering or collapsing identities."""
     require(isinstance(collection, list), "live ruleset collection is malformed")
     require(
-        len(collection) in (len(EXPECTED_RULESET_NAMES), len(EXPECTED_RULESET_NAMES) + 1),
-        "live repository ruleset inventory must contain exactly 2 or 3 entries during activity transition",
+        len(collection) == len(EXPECTED_RULESET_NAMES),
+        "live repository ruleset inventory must contain exactly three reviewed entries",
     )
     result: dict[str, dict[str, Any]] = {}
     seen_ids: set[int] = set()
@@ -1350,8 +1355,8 @@ def ruleset_collection_map(collection: Any) -> dict[str, dict[str, Any]]:
     names = set(result)
     mandatory = set(EXPECTED_RULESET_NAMES)
     require(
-        names == mandatory or names == (mandatory | {ACTIVITY_RULESET_NAME}),
-        "live repository ruleset inventory differs from exact activity transition contract",
+        names == mandatory,
+        "live repository ruleset inventory differs from final three-rule contract",
     )
     return result
 
@@ -1429,7 +1434,7 @@ def validate_live(payload: dict[str, Any]) -> tuple[str, ...]:
     bypass_unobservable: list[str] = []
     for name in by_name:
         detail = details[name]
-        target = ACTIVITY_RULESET_TARGET if name == ACTIVITY_RULESET_NAME else expected[name]
+        target = expected[name]
         require(detail.get("target") == target["target"], f"{name}: live target differs from contract")
         require(detail.get("enforcement") == target["enforcement"], f"{name}: live enforcement differs from contract")
         conditions = detail.get("conditions")
@@ -1470,8 +1475,7 @@ def validate_live(payload: dict[str, Any]) -> tuple[str, ...]:
 
     generated_rules = rule_map(details["Protect generated"])
     require(set(generated_rules) == {"deletion", "non_fast_forward"}, "Protect generated: live rule inventory differs from contract")
-    if ACTIVITY_RULESET_NAME in details:
-        validate_activity_rules(details[ACTIVITY_RULESET_NAME])
+    validate_activity_rules(details[ACTIVITY_RULESET_NAME])
     return tuple(bypass_unobservable)
 
 
@@ -2042,17 +2046,16 @@ def self_test(payload: dict[str, Any]) -> None:
 
     canonical_collection = [
         {"id": 1, "name": "Protect Main"},
-        {"id": 2, "name": "Protect generated"},
+        {"id": 2, "name": ACTIVITY_RULESET_NAME},
+        {"id": 3, "name": "Protect generated"},
     ]
     require(
         tuple(ruleset_collection_map(canonical_collection)) == EXPECTED_RULESET_NAMES,
-        "ruleset collection self-test did not preserve the exact reviewed inventory",
+        "ruleset collection self-test did not preserve all three reviewed rulesets",
     )
-    candidate_collection = canonical_collection + [{"id": 3, "name": ACTIVITY_RULESET_NAME}]
-    require(
-        tuple(ruleset_collection_map(candidate_collection))
-        == (*EXPECTED_RULESET_NAMES, ACTIVITY_RULESET_NAME),
-        "ruleset transition self-test rejected the exact added native activity ruleset",
+    expect_collection_failure(
+        canonical_collection[:1] + canonical_collection[2:],
+        "exactly three reviewed entries",
     )
     validate_activity_rules({
         "rules": [{"type": "deletion"}, {"type": "non_fast_forward"}],
@@ -2070,23 +2073,27 @@ def self_test(payload: dict[str, Any]) -> None:
         else:
             raise ValueError("activity ruleset transition self-test admitted unreviewed protection changes")
     expect_collection_failure(
-        [{"id": 1, "name": "Protect Main"}, {"id": 2, "name": "Protect Main"}],
+        [{"id": 1, "name": "Protect Main"}, {"id": 2, "name": "Protect Main"},
+         {"id": 3, "name": "Protect generated"}],
         "duplicate name",
     )
     expect_collection_failure(
-        [{"id": 1, "name": "Protect Main"}, "malformed"],
+        [{"id": 1, "name": "Protect Main"}, {"id": 2, "name": ACTIVITY_RULESET_NAME},
+         "malformed"],
         "malformed entry",
     )
     expect_collection_failure(
-        [{"id": 1, "name": "Protect Main"}, {"id": 1, "name": "Protect generated"}],
+        [{"id": 1, "name": "Protect Main"}, {"id": 1, "name": ACTIVITY_RULESET_NAME},
+         {"id": 3, "name": "Protect generated"}],
         "duplicate id",
     )
     expect_collection_failure(
-        canonical_collection + [{"id": 3, "name": "Unexpected"}],
-        "inventory differs from exact activity transition contract",
+        canonical_collection[:2] + [{"id": 3, "name": "Unexpected"}],
+        "inventory differs from final three-rule contract",
     )
     expect_collection_failure(
-        [{"id": True, "name": "Protect Main"}, {"id": 2, "name": "Protect generated"}],
+        [{"id": True, "name": "Protect Main"}, {"id": 2, "name": ACTIVITY_RULESET_NAME},
+         {"id": 3, "name": "Protect generated"}],
         "id is malformed",
     )
     try:

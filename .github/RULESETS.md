@@ -31,26 +31,27 @@ The pull-request rule intentionally keeps `required_approving_review_count: 0` f
 
 `Protect generated` targets only `refs/heads/generated`, is active, has no bypass actors, and blocks deletion and non-fast-forward updates. It intentionally does not require pull requests or status checks because my reviewed `publish-write-only` job must be able to make normal fast-forward artifact commits after generation and attestation succeed.
 
-## Staged native activity-metrics branch protection
+## Native activity-metrics branch protection — accepted steady state
 
-Issue #1800 requires a third active native ruleset, `Protect activity-metrics`,
-targeting **only** `refs/heads/activity-metrics`, with no bypass actors and
-exactly the two parameter-free rules `deletion` and `non_fast_forward`.
-No pull-request or required-status-check rule is permitted: the isolated signer
-and publisher must continue ordinary fast-forward updates. Existing protections
-for `main` and `generated` are unchanged.
+Native `Protect activity-metrics` is **active**, targeting only
+`refs/heads/activity-metrics` with zero bypass actors and exactly the
+parameter-free `deletion` and `non_fast_forward` rules. The accepted
+`generated` and `main` protections remain unchanged, including seven
+required protected Main checks. The dedicated Activity Metrics publisher
+continues ordinary fast-forward writes without a PR or bypass.
 
-During the *bounded control-plane roll-in*, live validation accepts either the
-existing exact two-rule inventory, or exactly those two plus the third only if
-its independently fetched live rule details have the exact active target,
-conditions, no observable bypass actors, and two-rule inventory. Unexpected
-rulesets, duplicate identities, extra parameters, changed legacy semantics,
-and any expanded bypass fail closed. This transitional read-only parser grants
-**no** administration token, ruleset mutation, or bypass. GitHub Administration
-must separately create the third ruleset through a previously authorized and
-audited workflow, with success/readback evidence. A final source change must
-then remove the two-ruleset predecessor allowance and require all three before
-closing issue #1800.
+The source contract and live validator require **exactly three named rulesets**.
+Missing, duplicate, unexpected, disabled, mis-targeted, broadened-bypass,
+extra-rule or rule-parameter changes fail closed. Ruleset IDs are discovered
+dynamically and never invented or hardcoded for the new publisher branch.
+
+Creation provenance: trusted existing Ruleset Administration App, `Ruleset
+reconciler` run `40059001708`, privileged administration job
+`120768238715` **successful**. Live native rule was created as dynamic ID
+`25769270` (observational receipt only, not a production configuration
+constant), and live REST detail independently confirmed the exact
+branch/ref/enforcement/no-bypass/two-rule contract. Follow-up publication
+fast-forward evidence is tracked under issue #1800.
 
 ## Verification
 
