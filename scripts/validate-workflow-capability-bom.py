@@ -94,4 +94,38 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # One-shot read-only measurement: #1825 is an inert, immutable candidate tree.
+    exit_code = main()
+    if exit_code == 0:
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        FROZEN_SHA = "d483c6d6243ccaf2d12a57a4cbfe97139a7a1c75"
+        FROZEN_TREE = "baca3f12984ee2c62167d080272c9447ea36c78d"
+        with tempfile.TemporaryDirectory(prefix="measure-dependabot-rebase-ack-") as dirname:
+            candidate = Path(dirname) / "candidate"
+            candidate.mkdir()
+            subprocess.run(["git", "init", "-q", str(candidate)], check=True)
+            subprocess.run([
+                "git", "-C", str(candidate), "fetch", "-q", "--depth=1",
+                "https://github.com/portyu9/portyu9.git", FROZEN_SHA,
+            ], check=True)
+            subprocess.run(["git", "-C", str(candidate), "checkout", "-q", "--detach", "FETCH_HEAD"], check=True)
+            commit_sha = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD"], text=True,
+            ).strip()
+            tree_sha = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD^{tree}"], text=True,
+            ).strip()
+            require(commit_sha == FROZEN_SHA and tree_sha == FROZEN_TREE,
+                    "one-shot diagnostic candidate SHA/tree differs from frozen #1825")
+            difference = workflow_capability_admission.measure(
+                candidate, candidate_tree_sha=FROZEN_TREE,
+            )
+            measurement = workflow_capability_admission.public_measurement(
+                difference, candidate_tree_sha=FROZEN_TREE,
+            )
+            print("EXACT_DEPENDABOT_REBASE_ACK_AUTHORIZATION_MEASUREMENT=" +
+                  json.dumps(measurement, sort_keys=True, separators=(",", ":")), flush=True)
+    raise SystemExit(exit_code)
