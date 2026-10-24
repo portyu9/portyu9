@@ -36,6 +36,13 @@
       "rationale": "Authorize #693's exact Action release-identity hardening: lock repository ID, release ID, direct tag-ref object/type, and peeled commit SHA, plus strict public read-only repository/release reproof in Profile Quality and delegated Dependabot. Exact pinning, candidate-data isolation, protected checks, exact-head merge, and fail-closed behavior remain; no write permission, mutation, secret, OIDC authority, check reduction, direct-main write, or bypass is added."
     },
     {
+      "baseBomSha256": "108a640e07b544bf2a498fc4fcb4af2d21b7d437e2f1db404853270af0213a3a",
+      "candidateBomSha256": "cc23a41ff115f7a06324797801f3d0f15fdc492db7bd3d4a3da175280c11e9fd",
+      "expansionSha256": "4014ff53b8635f954f4054bf82f3cf75d0e4812e597cc31075ab42f2a4061625",
+      "id": "cap-activity-native-ruleset-admin-create-v1",
+      "rationale": "Prior-authorize frozen source PR #1831 head 2c475f3e11cafb4d8f9a6f11c7875db0be067759 tree b8f2c58cbe03e6febc4cb06ce375867ff79fd02f, measured by closed read-only #1832: 6 expansions, 0 reductions, candidate TCB SHA256 452881c66db0febbe4f7f28af27a864313faa08f9dc6fed4be489495b0366f27. Add only one exact native activity branch rule POST in existing least-privilege Admin writer, with dynamic-ID, empty-bypass readback. No new secret, token, role, Main check reduction or bypass."
+    },
+    {
       "baseBomSha256": "15302736defe3a3c7d20893bb15c2b7cc39e7be2c9f947860317b9ceac3a9f98",
       "candidateBomSha256": "15302736defe3a3c7d20893bb15c2b7cc39e7be2c9f947860317b9ceac3a9f98",
       "expansionSha256": "63cfaa462209e8539303e9db66ae5569fae5ea32a3ea8b8ec4340aa45eb24f27",
