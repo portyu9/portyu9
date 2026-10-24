@@ -121,6 +121,27 @@ jobs:
           STATE_HINT="$(jq -r .stateHint <<<"$OBSERVABLE")"
           test "$STATE_HINT" = "predecessor" -o "$STATE_HINT" = "successor"
           jq -e '.bypassActorsObservable | type == "boolean"' <<<"$OBSERVABLE" >/dev/null
+          # Main's transition remains intact. Also plan a second, independently
+          # scoped native rule only when its reviewed branch-specific rule is absent.
+          if [ "$STATE_HINT" = "successor" ]; then
+            python3 scripts/activity_metrics_ruleset_contract.py --self-test >/dev/null
+            python3 scripts/automation_github_read.py \
+              "repos/portyu9/portyu9/rulesets?per_page=100" > activity-native-plan-list.json
+            ACTIVITY_ID="$(jq -r '[.[] | select(.name == "Protect activity-metrics")] |
+              if length == 0 then "" elif length == 1 then (.[0].id | tostring) else error("duplicate native activity ruleset") end' activity-native-plan-list.json)"
+            if [ -n "$ACTIVITY_ID" ]; then
+              [[ "$ACTIVITY_ID" =~ ^[1-9][0-9]*$ ]]
+              python3 scripts/automation_github_read.py \
+                "repos/portyu9/portyu9/rulesets/$ACTIVITY_ID" > activity-native-plan-detail.json
+              python3 scripts/activity_metrics_ruleset_contract.py \
+                --preflight activity-native-plan-list.json --detail activity-native-plan-detail.json >/dev/null
+            else
+              ACTIVITY_PROOF="$(python3 scripts/activity_metrics_ruleset_contract.py \
+                --preflight activity-native-plan-list.json)"
+              test "$(jq -r .state <<<"$ACTIVITY_PROOF")" = absent
+              STATE_HINT=predecessor
+            fi
+          fi
           echo "live_state=$STATE_HINT" >> "$GITHUB_OUTPUT"
 
   reconcile:
@@ -312,7 +333,67 @@ jobs:
           PREWRITE="$(python3 scripts/ruleset_transition_contract.py classify --live live-prewrite.json)"
           PREWRITE_STATE="$(jq -r .state <<<"$PREWRITE")"
           if [ "$PREWRITE_STATE" = "successor" ]; then
-            echo "outcome=already-applied-before-write" >> "$GITHUB_OUTPUT"
+            # Main is already protected. The only permitted additional mutation
+            # here is one exact native activity rule, with a dynamically read ID.
+            # The already accepted source/live contract is checked before write.
+            GH_TOKEN="$ADMIN_TOKEN" python3 scripts/validate-ruleset-contract.py --live >/dev/null
+            GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_read.py \
+              "repos/portyu9/portyu9/rulesets?per_page=100" > activity-native-before.json
+            BEFORE_ACTIVITY_ID="$(jq -r '[.[] | select(.name == "Protect activity-metrics")] |
+              if length == 0 then "" elif length == 1 then (.[0].id | tostring) else error("duplicate native activity ruleset") end' activity-native-before.json)"
+            if [ -n "$BEFORE_ACTIVITY_ID" ]; then
+              [[ "$BEFORE_ACTIVITY_ID" =~ ^[1-9][0-9]*$ ]]
+              GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_read.py \
+                "repos/portyu9/portyu9/rulesets/$BEFORE_ACTIVITY_ID" > activity-native-before-detail.json
+              python3 scripts/activity_metrics_ruleset_contract.py \
+                --postflight activity-native-before.json --detail activity-native-before-detail.json >/dev/null
+              echo "outcome=activity-already-protected" >> "$GITHUB_OUTPUT"
+              unset ADMIN_TOKEN APP_JWT ADMIN_PRIVATE_KEY
+              exit 0
+            fi
+            BEFORE_STATE="$(python3 scripts/activity_metrics_ruleset_contract.py \
+              --preflight activity-native-before.json)"
+            test "$(jq -r .state <<<"$BEFORE_STATE")" = absent
+
+            NOW="$(date +%s)"
+            test "$NOW" -ge "$ISSUED_AT"
+            test "$NOW" -lt "$EXPIRES_AT"
+            LIVE_MAIN_REF_RESPONSE="$(python3 scripts/automation_github_read.py \
+              "repos/portyu9/portyu9/git/ref/heads/main")"
+            test "$(jq -er '.object.sha' <<<"$LIVE_MAIN_REF_RESPONSE")" = "$TRUSTED_MAIN_SHA"
+            GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_read.py \
+              "repos/portyu9/portyu9/git/ref/heads/activity-metrics" > activity-native-branch.json
+            jq -e '.ref == "refs/heads/activity-metrics" and .object.type == "commit" and
+              (.object.sha | type == "string" and test("^[0-9a-f]{40}$"))' activity-native-branch.json >/dev/null
+
+            python3 scripts/activity_metrics_ruleset_contract.py --emit > activity-native-create.json
+            ACTIVITY_POST_HTTP_RESPONSE="$RUNNER_TEMP/activity-native-ruleset-post.txt"
+            # Single-shot POST. If HTTP acknowledgement is lost, re-read on the
+            # next pass; never blindly replay creation or fabricate an ID.
+            GH_TOKEN="$ADMIN_TOKEN" gh api --include --method POST \
+              "repos/portyu9/portyu9/rulesets" \
+              --input activity-native-create.json > "$ACTIVITY_POST_HTTP_RESPONSE"
+            [[ "$(head -n 1 "$ACTIVITY_POST_HTTP_RESPONSE" | tr -d '\r')" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: native activity ruleset creation returned unexpected HTTP status" >&2
+              exit 1
+            }
+            sed '1,/^[[:space:]]*$/d' "$ACTIVITY_POST_HTTP_RESPONSE" > activity-native-created.json
+            GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_read.py \
+              "repos/portyu9/portyu9/rulesets?per_page=100" > activity-native-after.json
+            AFTER_ACTIVITY_ID="$(jq -er '[.[] | select(.name == "Protect activity-metrics")] |
+              if length == 1 then .[0].id else error("native activity ruleset missing or duplicated") end' activity-native-after.json)"
+            [[ "$AFTER_ACTIVITY_ID" =~ ^[1-9][0-9]*$ ]]
+            GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_read.py \
+              "repos/portyu9/portyu9/rulesets/$AFTER_ACTIVITY_ID" > activity-native-after-detail.json
+            python3 scripts/activity_metrics_ruleset_contract.py \
+              --postflight activity-native-after.json \
+              --detail activity-native-after-detail.json \
+              --created-response activity-native-created.json > activity-native-converged.json
+            test "$(jq -r .state activity-native-converged.json)" = present
+            test "$(jq -r .rulesetId activity-native-converged.json)" = "$AFTER_ACTIVITY_ID"
+            echo "outcome=activity-native-protected" >> "$GITHUB_OUTPUT"
+            # 'mutated' has historically denoted ONLY the Protect Main transition;
+            # do not send a fabricated Main reconciliation attestation.
             unset ADMIN_TOKEN APP_JWT ADMIN_PRIVATE_KEY
             exit 0
           fi
