@@ -974,6 +974,13 @@
       "rationale": "Authorize frozen #1015 protected-TCB hardening that validates existing Dependabot singleton PR and update-branch responses before scalar consumption. Equal base/candidate BOM hashes prove no semantic capability expansion. Endpoints, methods, permissions, review/update behavior, retry budgets, protected checks, admission, merge/CodeQL dispatch authority, rulesets, direct-main writes and bypasses remain unchanged."
     },
     {
+      "baseBomSha256": "108a640e07b544bf2a498fc4fcb4af2d21b7d437e2f1db404853270af0213a3a",
+      "candidateBomSha256": "108a640e07b544bf2a498fc4fcb4af2d21b7d437e2f1db404853270af0213a3a",
+      "expansionSha256": "8d2f7b28307189df042db50196856cb2090d078325544a9888fb6201cb49d37c",
+      "id": "cap-dependabot-prior-base-graphql-rebase-ack-v1",
+      "rationale": "Authorize frozen #1825 head 41a2dcb29cf289085c0f0c01e4d5a1cd76ddfc4e tree 5b4e21674d4928f8fad8f88d1b291d0d1d194856, measured by read-only #1827: 2 protected source expansions, 0 reductions, TCB SHA256 9043a93e8b961f776ba7c45972ff0b14ee944034f981875f424f350c160b3c53. Only same-PR verified old base may appear in asynchronous GraphQL rebase ACK. Preserve exact main, PR/head identity, fresh REST main convergence, seven protected checks and governance. No permission, token, mutation or bypass change."
+    },
+    {
       "id": "cap-dependabot-profile-epoch-hydration-v1",
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
