@@ -2494,8 +2494,8 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "Re-prove successor and receipt identity",
     )
     for label, block, expected in (
-        ("plan", ruleset_plan_step, 2),
-        ("reconcile", ruleset_reconcile_step, 5),
+        ("plan", ruleset_plan_step, 4),
+        ("reconcile", ruleset_reconcile_step, 11),
         ("attest", ruleset_attest_step, 2),
     ):
         require(
@@ -3273,7 +3273,7 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
     expect_failure(
         copy.deepcopy(policy),
         ruleset_plan_transport_drift,
-        "Ruleset reconciler plan must use exactly 2 governed repository singleton reads",
+        "Ruleset reconciler plan must use exactly 4 governed repository singleton reads",
     )
 
     ruleset_reconcile_transport_drift = dict(texts)
@@ -3297,7 +3297,7 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
     expect_failure(
         copy.deepcopy(policy),
         ruleset_reconcile_transport_drift,
-        "Ruleset reconciler reconcile must use exactly 5 governed repository singleton reads",
+        "Ruleset reconciler reconcile must use exactly 11 governed repository singleton reads",
     )
 
     ruleset_attest_transport_drift = dict(texts)
