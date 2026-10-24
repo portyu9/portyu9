@@ -501,10 +501,14 @@ def validate_pull_request_response(
 
 
 def validate_rebase_graphql_response(
-    value: Any, *, expected_pr_id: str, expected_number: int, expected_main_sha: str
+    value: Any, *, expected_pr_id: str, expected_number: int, expected_main_sha: str,
+    expected_previous_base_sha: str | None = None,
 ) -> dict[str, str | int]:
-    """Type only the bound GraphQL REBASE acknowledgement; re-check head later."""
+    """Type exact current/verified-prior base acknowledgement; re-check fresh REST head."""
     expected_main_sha = _response_sha(expected_main_sha, "expected rebase main sha")
+    if expected_previous_base_sha is not None:
+        expected_previous_base_sha = _response_sha(
+            expected_previous_base_sha, "expected previously authenticated PR base sha")
     require(isinstance(expected_pr_id, str)
             and re.fullmatch(r"PR_[A-Za-z0-9_-]{8,128}", expected_pr_id) is not None,
             "Dependabot rebase expected PR node identity changed")
@@ -521,11 +525,13 @@ def validate_rebase_graphql_response(
             "Dependabot GraphQL rebase PR node identity drifted")
     require(type(pr.get("number")) is int and pr["number"] == expected_number,
             "Dependabot GraphQL rebase PR number drifted")
-    require(_response_sha(pr.get("baseRefOid"), "Dependabot GraphQL rebase base oid") == expected_main_sha,
-            "Dependabot GraphQL rebase main head moved")
+    observed_base = _response_sha(pr.get("baseRefOid"), "Dependabot GraphQL rebase base oid")
+    require(observed_base == expected_main_sha or (
+        expected_previous_base_sha is not None and observed_base == expected_previous_base_sha),
+        "Dependabot GraphQL rebase base is neither current main nor authenticated prior PR base")
     updated_head = _response_sha(pr.get("headRefOid"), "Dependabot GraphQL rebase head oid")
     return {"kind": "graph-ql-rebase", "nodeId": expected_pr_id,
-            "number": expected_number, "baseSha": expected_main_sha, "headSha": updated_head}
+            "number": expected_number, "baseSha": observed_base, "headSha": updated_head}
 
 
 def validate_update_branch_response(value: Any) -> dict[str, str]:
@@ -1340,6 +1346,32 @@ def self_test() -> None:
     )
     require(safe_rebase["headSha"] == commit_sha and safe_rebase["baseSha"] == parent_sha,
             "Dependabot GraphQL rebase schema positive fixture changed")
+    old_base_rebase = validate_rebase_graphql_response(
+        {"data": {"updatePullRequestBranch": {"pullRequest": {
+            "id": "PR_fixtureController123", "number": 17,
+            "headRefOid": commit_sha, "baseRefOid": parent_sha,
+        }}}},
+        expected_pr_id="PR_fixtureController123",
+        expected_number=17, expected_main_sha="f" * 40,
+        expected_previous_base_sha=parent_sha,
+    )
+    require(old_base_rebase["baseSha"] == parent_sha,
+            "Authenticated stale base GraphQL response was not preserved")
+    for rejected_base in ("e" * 40, "", 1, None):
+        try:
+            validate_rebase_graphql_response(
+                {"data": {"updatePullRequestBranch": {"pullRequest": {
+                    "id": "PR_fixtureController123", "number": 17,
+                    "headRefOid": commit_sha, "baseRefOid": rejected_base,
+                }}}},
+                expected_pr_id="PR_fixtureController123",
+                expected_number=17, expected_main_sha="f" * 40,
+                expected_previous_base_sha=parent_sha,
+            )
+        except ValueError:
+            pass
+        else:
+            raise ValueError("GraphQL acknowledgement admitted unbound or malformed base")
     for corrupt in (
         {"data": {"updatePullRequestBranch": {"pullRequest": {
             "id": "PR_attacker999", "number": 17, "headRefOid": commit_sha,
@@ -2257,6 +2289,7 @@ def parser() -> argparse.ArgumentParser:
     rebase_response.add_argument("--expected-pr-id", required=True)
     rebase_response.add_argument("--expected-number", type=int, required=True)
     rebase_response.add_argument("--expected-main-sha", required=True)
+    rebase_response.add_argument("--expected-previous-base-sha")
     rebase_response.add_argument("--out", type=Path, required=True)
     update_branch_response = sub.add_parser("update-branch-response")
     update_branch_response.add_argument("--response", type=Path, required=True)
@@ -2362,7 +2395,8 @@ def main() -> int:
                 result = validate_rebase_graphql_response(response,
                     expected_pr_id=args.expected_pr_id,
                     expected_number=args.expected_number,
-                    expected_main_sha=args.expected_main_sha)
+                    expected_main_sha=args.expected_main_sha,
+                    expected_previous_base_sha=args.expected_previous_base_sha)
             elif args.command == "wake-run-response":
                 result = validate_wake_run_response(
                     response,

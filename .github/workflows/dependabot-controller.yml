@@ -240,15 +240,27 @@ jobs:
               exit 1
             }
             sed '1,/^[[:space:]]*$/d' rebase-http-response.txt > rebase-response.json
+            # The async REBASE acknowledgement may carry the exact old PR base.
+            # Trusted parser requires current main plus one authenticated old
+            # base; subsequent fresh REST checks MUST bind to current main.
             python3 scripts/dependabot_controller.py rebase-graphql-response \
               --response rebase-response.json \
               --expected-pr-id "$REBASING_PR_NODE_ID" \
               --expected-number "$PR_NUMBER" \
               --expected-main-sha "$MAIN_SHA" \
+              --expected-previous-base-sha "$BASE_SHA" \
               --out rebase-response-normalized.json
             test "$(jq -r .nodeId rebase-response-normalized.json)" = "$REBASING_PR_NODE_ID"
             test "$(jq -r .number rebase-response-normalized.json)" = "$PR_NUMBER"
-            test "$(jq -r .baseSha rebase-response-normalized.json)" = "$MAIN_SHA"
+            ACK_BASE_SHA="$(jq -r .baseSha rebase-response-normalized.json)"
+            if [ "$ACK_BASE_SHA" = "$MAIN_SHA" ]; then
+              # Preserve the existing exact-main response-identity assertion.
+              test "$(jq -r .baseSha rebase-response-normalized.json)" = "$MAIN_SHA"
+            else
+              # Prior base is admitted ONLY when the trusted typed parser has
+              # authenticated this PR's pre-rebase base SHA independently.
+              test "$ACK_BASE_SHA" = "$BASE_SHA"
+            fi
 
             UPDATE_CONVERGED=false
             for UPDATE_ATTEMPT in $(seq 1 24); do
