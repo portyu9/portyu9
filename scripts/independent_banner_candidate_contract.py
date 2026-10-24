@@ -140,6 +140,112 @@ def valid_candidate(
     }
 
 
+
+# Read-only evidence projection for a *future separately authorized* banner
+# reconciler. Never create or infer GitHub checks or owner approval here.
+REQUIRED_CHECK_NAMES = frozenset({
+    "validate-contracts",
+    "integration-pinned-upstream",
+    "trusted-governed-bot-review",
+    "dependency-review",
+    "analyze-actions",
+    "analyze-python",
+    "trusted-capability-admission",
+})
+PROFILE_CHECK_NAMES = frozenset({
+    "validate-contracts", "integration-pinned-upstream",
+    "trusted-governed-bot-review",
+})
+CODEQL_CHECK_NAMES = frozenset({"analyze-actions", "analyze-python"})
+GITHUB_ACTIONS_APP_ID = 15368
+
+
+def verified_required_check_snapshot(check_runs: Any, head_sha: str) -> dict[str, int]:
+    """Reject missing/duplicate/foreign/non-success exact-head check observations.
+
+    The trusted future caller must first prove the authenticated GitHub API
+    transport and total_count/pagination completeness. This pure predicate
+    does not create statuses and never treats its own output as a check.
+    """
+    require(type(head_sha) is str and HEX40.fullmatch(head_sha) is not None,
+            "required check head SHA is malformed")
+    require(type(check_runs) is list and len(check_runs) <= 100,
+            "required check inventory is malformed or incomplete")
+    seen: dict[str, dict[str, Any]] = {}
+    ids: set[int] = set()
+    for row in check_runs:
+        require(type(row) is dict and type(row.get("name")) is str,
+                "required check response has an invalid record")
+        name = row["name"]
+        if name not in REQUIRED_CHECK_NAMES:
+            continue  # An unrelated check cannot satisfy a required context.
+        require(name not in seen, f"duplicate required check context: {name}")
+        run_id = row.get("id")
+        suite = row.get("check_suite")
+        app = row.get("app")
+        require(type(run_id) is int and run_id > 0 and run_id not in ids,
+                f"required check id invalid: {name}")
+        require(type(app) is dict and type(app.get("id")) is int
+                and app["id"] == GITHUB_ACTIONS_APP_ID,
+                f"required check is not GitHub Actions: {name}")
+        require(type(suite) is dict and type(suite.get("id")) is int
+                and suite["id"] > 0,
+                f"required check suite missing: {name}")
+        require(row.get("head_sha") == head_sha
+                and row.get("status") == "completed"
+                and row.get("conclusion") == "success",
+                f"required check is not successful on exact head: {name}")
+        seen[name] = row
+        ids.add(run_id)
+    require(set(seen) == REQUIRED_CHECK_NAMES,
+            "one or more required protected checks are missing")
+    require(len({seen[n]["check_suite"]["id"] for n in PROFILE_CHECK_NAMES}) == 1,
+            "Profile Quality checks do not share one verified suite")
+    require(len({seen[n]["check_suite"]["id"] for n in CODEQL_CHECK_NAMES}) == 1,
+            "CodeQL Actions and Python checks do not share one verified suite")
+    return {name: seen[name]["id"] for name in sorted(seen)}
+
+
+def verified_owner_review_snapshot(
+    reviews: Any, base_sha: str, head_sha: str,
+) -> None:
+    """Require exact-marker owner APPROVED review, honoring explicit veto.
+
+    Does not submit reviews, mint owner credentials or trigger a job rerun.
+    """
+    require(type(base_sha) is str and HEX40.fullmatch(base_sha) is not None
+            and type(head_sha) is str and HEX40.fullmatch(head_sha) is not None
+            and base_sha != head_sha,
+            "governed owner review base/head binding malformed")
+    require(type(reviews) is list and len(reviews) <= 2000,
+            "governed owner review snapshot malformed or incomplete")
+    from automation_governed_bot_review_gate import review_decision
+    require(review_decision(reviews, base_sha, head_sha) == "approved",
+            "exact-head governed owner approval is absent, revoked or vetoed")
+
+
+def qualified_banner_candidate(
+    *, pr: Any, commit: Any, files: Any,
+    accepted_readme: str, proposed_readme: str,
+    base_sha: str, utc_day: date,
+    check_runs: Any, reviews: Any,
+) -> dict[str, str | int]:
+    """Compose reviewed artwork/ancestry, genuine-check and owner-veto gates.
+
+    Caller must independently bind the exact live GitHub main ref, complete
+    API pages, run-to-suite/event provenance and review-thread resolution.
+    This helper does not grant merge permission or certify unattended runs.
+    """
+    result = valid_candidate(
+        pr=pr, commit=commit, files=files,
+        accepted_readme=accepted_readme, proposed_readme=proposed_readme,
+        base_sha=base_sha, utc_day=utc_day,
+    )
+    verified_required_check_snapshot(check_runs, str(result["headSha"]))
+    verified_owner_review_snapshot(reviews, base_sha, str(result["headSha"]))
+    return result
+
+
 def self_test() -> None:
     require(blob_sha("hello\n") == "ce013625030ba8dba906f756967f9e9ca394464a",
             "git blob SHA1 NUL delimiter regression")
@@ -227,3 +333,77 @@ def self_test() -> None:
         pass
     else:
         raise ValueError("extra candidate file escaped exact-one-file gate")
+
+    # Phase 2: check-run and owner-veto evidence is independent of candidate art.
+    checks: list[dict[str, Any]] = []
+    for index, name in enumerate(sorted(REQUIRED_CHECK_NAMES), start=1):
+        suite = (100 if name in PROFILE_CHECK_NAMES
+                 else 200 if name in CODEQL_CHECK_NAMES
+                 else 300 + index)
+        checks.append({
+            "id": index, "name": name, "head_sha": head,
+            "status": "completed", "conclusion": "success",
+            "app": {"id": GITHUB_ACTIONS_APP_ID},
+            "check_suite": {"id": suite},
+        })
+    from automation_governed_bot_review_gate import review_marker
+    owner_review = {
+        "id": 1000, "user": {"login": "portyu9"},
+        "state": "APPROVED", "commit_id": head,
+        "body": review_marker(base, head),
+    }
+    verified_required_check_snapshot(checks, head)
+    verified_owner_review_snapshot([owner_review], base, head)
+    qualified_banner_candidate(**fixture, check_runs=checks, reviews=[owner_review])
+    check_mutants: list[tuple[int, str, Any]] = [
+        (0, "head_sha", "f" * 40),
+        (0, "status", "queued"),
+        (0, "conclusion", "failure"),
+        (0, "id", True),
+        (0, "app", {"id": 123}),
+        (0, "check_suite", {"id": False}),
+        (0, "name", "untrusted-check-name"),
+    ]
+    for index, key, value in check_mutants:
+        mutation = copy.deepcopy(checks)
+        mutation[index][key] = value
+        try:
+            verified_required_check_snapshot(mutation, head)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"mutated required check was accepted: {key}")
+    for mutation in (checks[:-1], checks + [checks[0]], "not-a-list"):
+        try:
+            verified_required_check_snapshot(mutation, head)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("missing, duplicated or malformed required checks accepted")
+    mismatched_suite = copy.deepcopy(checks)
+    one_profile = next(i for i, row in enumerate(checks)
+                       if row["name"] == "validate-contracts")
+    mismatched_suite[one_profile]["check_suite"]["id"] = 900
+    try:
+        verified_required_check_snapshot(mismatched_suite, head)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("split profile required-check suite was accepted")
+    stale_review = {**owner_review, "commit_id": "e" * 40}
+    revoked_review = {**owner_review, "state": "DISMISSED"}
+    manual_veto = {
+        "id": 1001, "user": {"login": "portyu9"},
+        "state": "CHANGES_REQUESTED", "commit_id": head, "body": "Stop",
+    }
+    for evidence in (
+        [], [stale_review], [revoked_review],
+        [owner_review, manual_veto],
+        [{**owner_review, "body": "ordinary manual review"}],
+    ):
+        try:
+            verified_owner_review_snapshot(evidence, base, head)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("unapproved, revoked or vetoed owner review was accepted")
