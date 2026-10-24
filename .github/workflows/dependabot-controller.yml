@@ -240,15 +240,26 @@ jobs:
               exit 1
             }
             sed '1,/^[[:space:]]*$/d' rebase-http-response.txt > rebase-response.json
+            # GraphQL can acknowledge an asynchronous REBASE with the old base
+            # snapshot even after successfully starting the update. Admit only
+            # the two authenticated commit identities: exact main or this PR's
+            # previously verified base. Fresh REST convergence below still
+            # requires updated base == exact main AND a changed native head.
+            REBASE_ACK_BASE_SHA="$(jq -er '.data.updatePullRequestBranch.pullRequest.baseRefOid' rebase-response.json)"
+            [[ "$REBASE_ACK_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+            if [ "$REBASE_ACK_BASE_SHA" != "$MAIN_SHA" ] && [ "$REBASE_ACK_BASE_SHA" != "$BASE_SHA" ]; then
+              echo "ERROR: GraphQL REBASE base is neither bound main nor authenticated previous PR base." >&2
+              exit 1
+            fi
             python3 scripts/dependabot_controller.py rebase-graphql-response \
               --response rebase-response.json \
               --expected-pr-id "$REBASING_PR_NODE_ID" \
               --expected-number "$PR_NUMBER" \
-              --expected-main-sha "$MAIN_SHA" \
+              --expected-main-sha "$REBASE_ACK_BASE_SHA" \
               --out rebase-response-normalized.json
             test "$(jq -r .nodeId rebase-response-normalized.json)" = "$REBASING_PR_NODE_ID"
             test "$(jq -r .number rebase-response-normalized.json)" = "$PR_NUMBER"
-            test "$(jq -r .baseSha rebase-response-normalized.json)" = "$MAIN_SHA"
+            test "$(jq -r .baseSha rebase-response-normalized.json)" = "$REBASE_ACK_BASE_SHA"
 
             UPDATE_CONVERGED=false
             for UPDATE_ATTEMPT in $(seq 1 24); do
