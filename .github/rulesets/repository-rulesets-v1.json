@@ -39,6 +39,19 @@
         }
       }
     },
+    "Protect activity-metrics": {
+      "target": "branch",
+      "enforcement": "active",
+      "include": [
+        "refs/heads/activity-metrics"
+      ],
+      "exclude": [],
+      "bypassActors": [],
+      "rules": {
+        "deletion": true,
+        "non_fast_forward": true
+      }
+    },
     "Protect generated": {
       "target": "branch",
       "enforcement": "active",
