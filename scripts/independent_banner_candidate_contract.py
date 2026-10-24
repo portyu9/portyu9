@@ -336,6 +336,121 @@ def qualified_banner_candidate(
     return result
 
 
+
+def verified_native_ref_leases(
+    *, main_ref: Any, candidate_ref: Any,
+    base_sha: str, head_ref: str, head_sha: str,
+) -> None:
+    """Bind two *authenticated* native ref snapshots to the reviewed PR.
+
+    The caller must acquire fresh GET responses immediately before mutation,
+    repeat them after any interposed Actions/review gate, and fail closed if
+    GitHub returned a stale or incomplete snapshot.
+    """
+    require(type(base_sha) is str and HEX40.fullmatch(base_sha) is not None
+            and type(head_sha) is str and HEX40.fullmatch(head_sha) is not None
+            and base_sha != head_sha,
+            "banner native ref SHAs are invalid or identical")
+    require(type(head_ref) is str
+            and re.fullmatch(
+                r"automation/banner-rotation/\d{4}-\d{2}-\d{2}-[0-9a-f]{12}",
+                head_ref,
+            ) is not None,
+            "banner native candidate ref is not canonical")
+    for observed, expected_ref, sha in (
+        (main_ref, "refs/heads/main", base_sha),
+        (candidate_ref, "refs/heads/" + head_ref, head_sha),
+    ):
+        require(type(observed) is dict and observed.get("ref") == expected_ref
+                and type(observed.get("object")) is dict
+                and observed["object"].get("type") == "commit"
+                and observed["object"].get("sha") == sha,
+                "banner native Git ref does not bind to exact accepted head")
+
+
+def verified_review_thread_connection(connection: Any) -> None:
+    """One complete native GraphQL page; refuse unresolved or hidden threads.
+
+    An additional page must be fetched and normalized by a future caller,
+    or the decision is not ready. A missing review-thread API response is
+    never interpreted as an empty/approved inventory.
+    """
+    require(type(connection) is dict
+            and set(connection) == {"nodes", "pageInfo", "totalCount"},
+            "review thread connection has missing or unexpected fields")
+    nodes = connection["nodes"]
+    info = connection["pageInfo"]
+    total = connection["totalCount"]
+    require(type(nodes) is list and type(total) is int and 0 <= total <= 100
+            and len(nodes) == total,
+            "review thread inventory is incomplete, oversized or malformed")
+    require(type(info) is dict and
+            set(info) == {"hasNextPage", "endCursor"}
+            and info["hasNextPage"] is False
+            and (info["endCursor"] is None or type(info["endCursor"]) is str),
+            "review thread pagination is incomplete or malformed")
+    seen: set[str] = set()
+    for thread in nodes:
+        require(type(thread) is dict
+                and set(thread) == {"id", "isResolved"}
+                and type(thread["id"]) is str and thread["id"]
+                and type(thread["isResolved"]) is bool
+                and thread["id"] not in seen,
+                "review thread identity or resolution is malformed")
+        require(thread["isResolved"] is True,
+                "unresolved review thread blocks banner terminal merge")
+        seen.add(thread["id"])
+
+
+def terminal_banner_readiness(
+    *, pr: Any, commit: Any, files: Any,
+    accepted_readme: str, proposed_readme: str,
+    base_sha: str, utc_day: date, observed_now: Any,
+    check_runs: Any, workflow_runs: Any, reviews: Any,
+    review_threads: Any, main_ref: Any, candidate_ref: Any,
+) -> dict[str, str | int]:
+    """Pure terminal authorization *evidence*; does not authorize a mutation.
+
+    Exactly one reviewed immutable README candidate, fresh native refs,
+    seven successful required checks from four trusted workflows, genuine
+    owner approval without manual veto, no unresolved review threads,
+    and valid current UTC day are all mandatory. The future authority job
+    must independently re-read all live resources after this decision and
+    perform a protected exact-head merge without a bypass.
+    """
+    from datetime import datetime, timezone
+    require(type(observed_now) is datetime
+            and observed_now.tzinfo is not None
+            and observed_now.utcoffset() == timezone.utc.utcoffset(observed_now)
+            and observed_now.date() == utc_day,
+            "banner candidate is not for the current timezone-aware UTC day")
+    result = qualified_banner_candidate(
+        pr=pr, commit=commit, files=files,
+        accepted_readme=accepted_readme, proposed_readme=proposed_readme,
+        base_sha=base_sha, utc_day=utc_day,
+        check_runs=check_runs, workflow_runs=workflow_runs, reviews=reviews,
+    )
+    verified_native_ref_leases(
+        main_ref=main_ref, candidate_ref=candidate_ref,
+        base_sha=base_sha, head_ref=pr["head"]["ref"],
+        head_sha=str(result["headSha"]),
+    )
+    verified_review_thread_connection(review_threads)
+    require(pr.get("mergeable") is True
+            and pr.get("mergeable_state") == "clean",
+            "banner PR is unmergeable, contested or still awaiting GitHub checks")
+    require(all(run["run_attempt"] == 1 for run in workflow_runs),
+            "unattended terminal witness must use first-attempt protected runs")
+    return {
+        "decision": "exact-reviewed-banner-ready-read-only",
+        "prNumber": result["prNumber"],
+        "baseSha": result["baseSha"],
+        "headSha": result["headSha"],
+        "utcDay": result["utcDay"],
+        "readmeSha256": result["readmeSha256"],
+        "readmeBlob": result["readmeBlob"],
+    }
+
 def self_test() -> None:
     require(blob_sha("hello\n") == "ce013625030ba8dba906f756967f9e9ca394464a",
             "git blob SHA1 NUL delimiter regression")
@@ -570,3 +685,88 @@ def self_test() -> None:
         pass
     else:
         raise ValueError("noncanonical banner branch admitted")
+
+    # Terminal evidence must bind actual native ref leases and never infer
+    # missing reviews, unresolved threads, staleness or mergeability.
+    from datetime import datetime, timezone
+    now = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
+    live_main_ref = {
+        "ref": "refs/heads/main",
+        "object": {"type": "commit", "sha": base},
+    }
+    live_candidate_ref = {
+        "ref": "refs/heads/" + pr["head"]["ref"],
+        "object": {"type": "commit", "sha": head},
+    }
+    complete_threads = {
+        "totalCount": 1,
+        "nodes": [{"id": "PRRT_test", "isResolved": True}],
+        "pageInfo": {"hasNextPage": False, "endCursor": "cursor"},
+    }
+    ready_pr = {**pr, "mergeable": True, "mergeable_state": "clean"}
+    terminal = {
+        **fixture, "pr": ready_pr,
+        "observed_now": now,
+        "check_runs": checks, "workflow_runs": run_fixtures,
+        "reviews": [owner_review], "review_threads": complete_threads,
+        "main_ref": live_main_ref, "candidate_ref": live_candidate_ref,
+    }
+    decision = terminal_banner_readiness(**terminal)
+    require(decision["decision"] == "exact-reviewed-banner-ready-read-only"
+            and decision["prNumber"] == pr["number"]
+            and decision["headSha"] == head,
+            "exact terminal banner readiness fixture did not qualify")
+
+    for fragment, overrides in [
+        ("stale utc day", {"observed_now": now + timedelta(days=1)}),
+        ("unbound utc time", {"observed_now": now.replace(tzinfo=None)}),
+        ("main sha", {"main_ref": {
+            "ref": "refs/heads/main",
+            "object": {"type": "commit", "sha": "c" * 40},
+        }}),
+        ("main ref spoof", {"main_ref": {
+            "ref": "refs/heads/generated",
+            "object": {"type": "commit", "sha": base},
+        }}),
+        ("head ref spoof", {"candidate_ref": {
+            "ref": "refs/heads/automation/banner-rotation/spoof",
+            "object": {"type": "commit", "sha": head},
+        }}),
+        ("head sha spoof", {"candidate_ref": {
+            "ref": "refs/heads/" + pr["head"]["ref"],
+            "object": {"type": "commit", "sha": "c" * 40},
+        }}),
+        ("unresolved thread", {"review_threads": {
+            **complete_threads,
+            "nodes": [{"id": "PRRT_test", "isResolved": False}],
+        }}),
+        ("missing thread page", {"review_threads": {
+            **complete_threads,
+            "pageInfo": {"hasNextPage": True, "endCursor": "cursor"},
+        }}),
+        ("missing thread response", {"review_threads": None}),
+        ("truncated threads", {"review_threads": {
+            **complete_threads, "totalCount": 2,
+        }}),
+        ("unmergeable", {"pr": {**ready_pr, "mergeable": False}}),
+        ("unknown mergeability", {"pr": {**ready_pr, "mergeable": None}}),
+        ("dirty mergeability", {"pr": {
+            **ready_pr, "mergeable_state": "dirty",
+        }}),
+        ("explicit owner veto", {"reviews": [owner_review, manual_veto]}),
+        ("review not yet submitted", {"reviews": []}),
+        ("failed check", {"check_runs": [
+            {**row, "conclusion": "failure"} if row["name"] == "analyze-python"
+            else row for row in checks
+        ]}),
+        ("manual re-run", {"workflow_runs": [
+            {**row, "run_attempt": 2} if row["name"] == "CodeQL"
+            else row for row in run_fixtures
+        ]}),
+    ]:
+        try:
+            terminal_banner_readiness(**{**terminal, **overrides})
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"untrusted banner terminal evidence accepted: {fragment}")
