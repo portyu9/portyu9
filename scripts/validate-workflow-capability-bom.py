@@ -101,8 +101,8 @@ if __name__ == "__main__":
         import subprocess
         import tempfile
         from pathlib import Path
-        FROZEN_SHA = "727b836f8ffa261802d25cad94cb4fad9c3f8bfe"
-        FROZEN_TREE = "de7f9da2dac16c7c699e520c04a8a39ca30e8884"
+        FROZEN_SHA = "41a2dcb29cf289085c0f0c01e4d5a1cd76ddfc4e"
+        FROZEN_TREE = "5b4e21674d4928f8fad8f88d1b291d0d1d194856"
         with tempfile.TemporaryDirectory(prefix="measure-dependabot-prior-base-v2-") as dirname:
             candidate = Path(dirname) / "candidate"
             candidate.mkdir()
