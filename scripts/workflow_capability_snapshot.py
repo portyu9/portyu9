@@ -232,6 +232,12 @@ def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
                 "target": "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens",
             },
             {
+                "class": "github-api-post",
+                "method": "POST",
+                "step": "Apply only exact reviewed predecessor to successor",
+                "target": "repos/portyu9/portyu9/rulesets",
+            },
+            {
                 "class": "github-api-put",
                 "method": "PUT",
                 "step": "Apply only exact reviewed predecessor to successor",
