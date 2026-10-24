@@ -18,6 +18,7 @@ import sys
 import tempfile
 
 import approved_banner_rotation as approved
+import independent_banner_candidate_contract as banner_candidate
 
 ROOT = Path(__file__).resolve().parents[1]
 SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -131,6 +132,7 @@ def self_test() -> None:
         raise ValueError("scope guard admitted non-banner README mutation")
     require(approved.propose(correct, approved.chosen(day, slots), slots) == correct,
             "independent banner PR must be idempotent")
+    banner_candidate.self_test()
 
 
 def main() -> int:
