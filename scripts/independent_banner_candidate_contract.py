@@ -495,7 +495,6 @@ def select_read_only_banner_candidate(
         require(type(base_sha) is str and HEX40.fullmatch(base_sha) is not None
                 and type(head_sha) is str and HEX40.fullmatch(head_sha) is not None
                 and head_sha != base_sha
-                and match.group(2) == base_sha[:12]
                 and type(actor) is dict and actor.get("login") == BOT_LOGIN
                 and type(actor.get("id")) is int and actor["id"] == BOT_ID
                 and type(pr["head"].get("repo")) is dict
@@ -509,6 +508,7 @@ def select_read_only_banner_candidate(
             "headRef": ref,
             "headSha": head_sha,
             "baseSha": base_sha,
+            "originalBasePrefix": match.group(2),
             "utcDay": candidate_day.isoformat(),
         })
     require(len(candidates) <= 1,
@@ -519,7 +519,9 @@ def select_read_only_banner_candidate(
             "currentMainSha": current_main_sha, "utcDay": utc_day.isoformat(),
         }
     chosen = candidates[0]
-    if chosen["baseSha"] != current_main_sha or chosen["utcDay"] != utc_day.isoformat():
+    if (chosen["baseSha"] != current_main_sha
+            or chosen["originalBasePrefix"] != current_main_sha[:12]
+            or chosen["utcDay"] != utc_day.isoformat()):
         state = "stale-banner-candidate-requires-proof"
     else:
         state = "current-banner-candidate-requires-proof"
@@ -874,6 +876,18 @@ def self_test() -> None:
             "stale-banner-candidate-requires-proof"
             and stale_selection["headSha"] == head,
             "stale candidate was not quarantined for historical proof")
+
+    # GitHub PR base.sha may track the newly advanced main even though the
+    # immutable candidate branch still records the older source prefix.
+    advanced_listing = copy.deepcopy(listing_candidate)
+    advanced_listing["base"]["sha"] = "c" * 40
+    advanced = select_read_only_banner_candidate(
+        [advanced_listing], current_main_sha="c" * 40, utc_day=day
+    )
+    require(advanced["decision"] ==
+            "stale-banner-candidate-requires-proof"
+            and advanced["originalBasePrefix"] == base[:12],
+            "advanced GitHub PR base was falsely classified as a new candidate")
     for label, mutation in [
         ("extra banner candidate", [listing_candidate, {
             **listing_candidate, "number": 20,
@@ -899,8 +913,8 @@ def self_test() -> None:
             **listing_candidate["head"],
             "ref": "automation/banner-rotation/spoof",
         }}]),
-        ("wrong base prefix", [{**listing_candidate, "base": {
-            **listing_candidate["base"], "sha": "c" * 40,
+        ("malformed base SHA", [{**listing_candidate, "base": {
+            **listing_candidate["base"], "sha": "not-an-object-id",
         }}]),
         ("non-main PR", [{**listing_candidate, "base": {
             **listing_candidate["base"], "ref": "generated",
