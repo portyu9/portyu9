@@ -347,7 +347,7 @@ jobs:
                 "repos/portyu9/portyu9/rulesets/$BEFORE_ACTIVITY_ID" > activity-native-before-detail.json
               python3 scripts/activity_metrics_ruleset_contract.py \
                 --postflight activity-native-before.json --detail activity-native-before-detail.json >/dev/null
-              echo "outcome=activity-already-protected" >> "$GITHUB_OUTPUT"
+              echo "outcome=already-applied-before-write" >> "$GITHUB_OUTPUT"
               unset ADMIN_TOKEN APP_JWT ADMIN_PRIVATE_KEY
               exit 0
             fi
