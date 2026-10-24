@@ -94,4 +94,46 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # DISPOSABLE read-only accepted-main measurement. Never merge this carrier.
+    result = main()
+    if result == 0:
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+
+        frozen_sha = "9e8b81a89f502bf47a37cbf911e66d3c0353f7b9"
+        frozen_tree = "b5f5855d652023504e8f90081de71704b545f866"
+        with tempfile.TemporaryDirectory(prefix="banner-v8-capability-") as temp:
+            untrusted = Path(temp) / "candidate"
+            untrusted.mkdir()
+            subprocess.run(["git", "init", "-q", str(untrusted)], check=True)
+            subprocess.run(
+                ["git", "-C", str(untrusted), "fetch", "-q", "--depth=1",
+                 "https://github.com/portyu9/portyu9.git",
+                 "refs/heads/feat/approved-dark-only-banner-v8-20261023"], check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(untrusted), "checkout", "-q", "--detach", "FETCH_HEAD"],
+                check=True,
+            )
+            actual_sha = subprocess.check_output(
+                ["git", "-C", str(untrusted), "rev-parse", "HEAD"], text=True
+            ).strip()
+            actual_tree = subprocess.check_output(
+                ["git", "-C", str(untrusted), "rev-parse", "HEAD^{tree}"], text=True
+            ).strip()
+            require(actual_sha == frozen_sha and actual_tree == frozen_tree,
+                    "frozen dark-only banner exact-head/tree identity changed")
+            difference = workflow_capability_admission.measure(
+                untrusted, candidate_tree_sha=frozen_tree
+            )
+            measurement = workflow_capability_admission.public_measurement(
+                difference, candidate_tree_sha=frozen_tree
+            )
+            print(
+                "EXACT_DARK_ONLY_BANNER_AUTH_MEASUREMENT="
+                + json.dumps(measurement, sort_keys=True, separators=(",", ":")),
+                flush=True,
+            )
+    raise SystemExit(result)
