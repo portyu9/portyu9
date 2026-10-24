@@ -75,8 +75,10 @@ def validate_collection(collection: Any) -> dict[str, dict[str, Any]]:
     return entries
 
 
-def validate_activity_detail(detail: Any, identifier: int) -> None:
-    """Require admin-visible exact third ruleset; no inferred empty bypass list."""
+def validate_activity_detail(
+    detail: Any, identifier: int, *, allow_unobservable_bypass: bool = False
+) -> bool:
+    """Only read-only preflight may return bypass-actors unobservable, never empty."""
     require(type(detail) is dict and exact_id(identifier) and detail.get("id") == identifier
             and type(detail.get("id")) is int and detail.get("name") == NAME,
             "activity ruleset detail identity mismatched")
@@ -85,13 +87,19 @@ def validate_activity_detail(detail: Any, identifier: int) -> None:
     conditions = detail.get("conditions")
     require(type(conditions) is dict and conditions == PAYLOAD["conditions"],
             "activity ruleset branch conditions mismatched")
-    require(detail.get("bypass_actors") == [] and type(detail.get("bypass_actors")) is list,
-            "activity ruleset bypass actors are missing or non-empty")
+    observable = "bypass_actors" in detail
+    if observable:
+        require(type(detail["bypass_actors"]) is list and detail["bypass_actors"] == [],
+                "activity ruleset observed bypass actors must be an exact empty list")
+    else:
+        require(allow_unobservable_bypass,
+                "activity ruleset bypass actors must be admin-visible on postflight")
     rules = detail.get("rules")
     require(type(rules) is list and len(rules) == 2
             and all(type(rule) is dict and set(rule) == {"type"} for rule in rules)
             and {rule["type"] for rule in rules} == RULES,
             "activity ruleset must contain only parameter-free deletion/non-fast-forward")
+    return observable
 
 
 def evaluate(
@@ -108,10 +116,19 @@ def evaluate(
         return {"state": "absent", "repository": REPOSITORY, "rule": NAME}
     identifier = entries[NAME]["id"]
     require(detail is not None, "live activity ruleset detail must be authenticated")
-    validate_activity_detail(detail, identifier)
+    # A repository read token may omit the administrative bypass field.
+    # Missing is explicitly unobservable; null/false/nonempty are never accepted.
+    # Privileged creation and postflight remain strict.
+    observable = validate_activity_detail(
+        detail, identifier,
+        allow_unobservable_bypass=not require_present and created_response is None,
+    )
     if created_response is not None:
         validate_activity_detail(created_response, identifier)
-    return {"state": "present", "repository": REPOSITORY, "rule": NAME, "rulesetId": identifier}
+    return {
+        "state": "present", "repository": REPOSITORY, "rule": NAME,
+        "rulesetId": identifier, "bypassActorsObservable": observable,
+    }
 
 
 def self_test() -> None:
@@ -127,6 +144,27 @@ def self_test() -> None:
     require(evaluate(legacy)["state"] == "absent", "legacy read-only preflight changed")
     require(evaluate(successor, detail=detail)["rulesetId"] == 207,
             "exact native activity successor rejected")
+    redacted = copy.deepcopy(detail)
+    redacted.pop("bypass_actors")
+    read_only = evaluate(successor, detail=redacted)
+    require(read_only["rulesetId"] == 207
+            and read_only["bypassActorsObservable"] is False,
+            "redacted read-only bypass must be explicitly unobservable")
+    require(evaluate(successor, detail=detail)["bypassActorsObservable"] is True,
+            "observed empty bypass must differ from omission")
+    try:
+        evaluate(successor, detail=redacted, require_present=True)
+    except ValueError as exc:
+        require("admin-visible" in str(exc),
+                "privileged redacted-bypass rejection reason changed")
+    else:
+        raise ValueError("privileged postflight admitted invisible bypass")
+    try:
+        evaluate(successor, detail=redacted, created_response=detail)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("created-response proof admitted invisible bypass")
     require(evaluate(successor, detail=detail, require_present=True,
                      created_response=detail)["state"] == "present",
             "native creation-response readback identity changed")
@@ -156,6 +194,9 @@ def self_test() -> None:
         ("bypass_actors", [{"actor_id": 1, "actor_type": "OrganizationAdmin",
                             "bypass_mode": "always"}]),
         ("bypass_actors", None),
+        ("bypass_actors", True),
+        ("bypass_actors", {"actors": []}),
+        ("bypass_actors", [{"actor_id": 1}]),
         ("rules", [{"type": "deletion"}]),
         ("rules", [{"type": "deletion"}, {"type": "non_fast_forward"},
                    {"type": "pull_request"}]),
