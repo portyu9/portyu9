@@ -43,9 +43,12 @@ def expected_branch(day: date, base_sha: str) -> str:
     return f"automation/banner-rotation/{day.isoformat()}-{base_sha[:12]}"
 
 
-def expected_body(base_sha: str, readme_sha256: str) -> str:
+def expected_body(
+    base_sha: str, readme_sha256: str, *, native_app: bool = False,
+) -> str:
+    version = "v8" if native_app else "v7"
     return (
-        "README-only UTC banner rotation using the reviewed approved v7 catalog. "
+        f"README-only UTC banner rotation using the reviewed approved {version} catalog. "
         "Three image surfaces and marker only; external CI evidence unchanged. "
         f"Base {base_sha}. Output SHA256 {readme_sha256}. Requires normal protected checks."
     )
@@ -162,7 +165,9 @@ def valid_candidate(
     require(pr.get("title") ==
             f"chore(profile): independently rotate approved banners for {utc_day.isoformat()}",
             "banner PR title is not exact reviewed producer")
-    require(pr.get("body") == expected_body(base_sha, sha256(proposed_readme)),
+    require(pr.get("body") == expected_body(
+            base_sha, sha256(proposed_readme), native_app=native_app is not None
+        ),
             "banner PR body binds a different base, artwork or source")
     user = pr.get("user")
     producer = ({"login": BOT_LOGIN, "userId": BOT_ID}
@@ -1065,6 +1070,7 @@ def self_test() -> None:
             "native App provenance did not enforce a non-secret identity")
     app_pr = copy.deepcopy(pr)
     app_pr["user"] = {"login": app_user["login"], "id": app_user["id"]}
+    app_pr["body"] = expected_body(base, sha256(proposed), native_app=True)
     app_commit = copy.deepcopy(commit)
     app_commit["commit"]["message"] = (
         f"chore(profile): rotate approved banner triplet for {day.isoformat()}"
@@ -1073,6 +1079,9 @@ def self_test() -> None:
         **fixture, "pr": app_pr, "commit": app_commit,
         "native_app": app_evidence,
     }
+    require("approved v8 catalog" in app_pr["body"]
+            and "approved v7 catalog" in pr["body"],
+            "native and legacy producer metadata lost explicit catalog versions")
     app_result = valid_candidate(**app_fixture)
     require(app_result["headSha"] == head, "App-origin candidate did not qualify")
     require(select_read_only_banner_candidate(
@@ -1141,6 +1150,7 @@ def self_test() -> None:
         else:
             raise ValueError(f"native App authority witness accepted: {label}")
     for label, app_mutant in [
+        ("legacy v7 manifest", {**app_pr, "body": pr["body"]}),
         ("legacy GH Actions actor", pr),
         ("foreign app actor", {**app_pr, "user": {
             "login": "foreign-app[bot]", "id": app_user["id"],
