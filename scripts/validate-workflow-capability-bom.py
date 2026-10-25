@@ -124,6 +124,14 @@ if __name__ == "__main__":
             ).strip()
             require(actual_commit == FROZEN_COMMIT and actual_tree == FROZEN_TREE,
                     "frozen native App producer commit/tree moved")
+            import trusted_workflow_capability
+            compiled = trusted_workflow_capability.compile_repository(candidate)
+            match = [value for value in compiled["workflows"]
+                     if value["id"] == "approved-banner-rotation"]
+            require(len(match) == 1, "native App banner BOM workflow inventory changed")
+            print("BANNER_APP_COMPILED_WORKFLOW=" +
+                  json.dumps(match[0], sort_keys=True, separators=(",", ":")),
+                  flush=True)
             difference = workflow_capability_admission.measure(
                 candidate, candidate_tree_sha=FROZEN_TREE,
             )
