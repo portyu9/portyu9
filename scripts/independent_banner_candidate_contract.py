@@ -653,6 +653,96 @@ def select_read_only_banner_candidate(
         state = "current-banner-candidate-requires-proof"
     return {"decision": state, "currentMainSha": current_main_sha, **chosen}
 
+
+def verified_stale_banner_close_readiness(
+    *, open_prs: Any, pr: Any, commit: Any, files: Any,
+    historical_base_sha: str, historical_readme: str,
+    proposed_readme: str, live_main_sha: str, live_main_readme: str,
+    utc_day: date, observed_now: Any, reviews: Any,
+    issue_comments: Any, review_threads: Any,
+    main_ref: Any, candidate_ref: Any,
+    native_app: Any = None,
+) -> dict[str, str | int]:
+    """Pure *close eligibility* after complete historical candidate salvage.
+
+    The API caller must independently prove that the supplied historical
+    base commit/readme is the real immutable ancestor of the candidate, that
+    the open PR and all lists are complete authenticated GitHub snapshots,
+    and that both native refs are re-read immediately before and after a
+    human-visible comment/close transaction. NO PR is closed or deleted here.
+    Never treat a stale candidate as permission to discard user engagement.
+    """
+    from datetime import datetime, timezone
+    require(type(observed_now) is datetime and observed_now.tzinfo is not None
+            and observed_now.utcoffset() == timezone.utc.utcoffset(observed_now)
+            and observed_now.date() == utc_day,
+            "stale cleanup observation is not current UTC")
+    require(type(live_main_sha) is str and HEX40.fullmatch(live_main_sha) is not None
+            and type(historical_base_sha) is str
+            and HEX40.fullmatch(historical_base_sha) is not None
+            and type(live_main_readme) is str
+            and type(historical_readme) is str,
+            "stale cleanup main/source snapshots malformed")
+    # Re-prove current main is itself one of the previously accepted
+    # artworks; never rewrite or infer valid current evidence from the stale
+    # PR's own payload.
+    slots = approved.load_catalog()
+    approved.validate_readme_state(live_main_readme, slots)
+    chosen = select_read_only_banner_candidate(
+        open_prs, current_main_sha=live_main_sha,
+        utc_day=utc_day, native_app=native_app,
+    )
+    require(chosen["decision"] == "stale-banner-candidate-requires-proof",
+            "close eligibility requires exactly one known stale candidate")
+    require(type(pr) is dict and type(pr.get("base")) is dict
+            and type(pr.get("head")) is dict
+            and pr.get("number") == chosen["prNumber"]
+            and pr["head"].get("ref") == chosen["headRef"]
+            and pr["head"].get("sha") == chosen["headSha"]
+            and pr["base"].get("ref") == "main"
+            and pr["base"].get("sha") in {historical_base_sha, live_main_sha}
+            and chosen["originalBasePrefix"] == historical_base_sha[:12],
+            "PR detail diverges from historical or live base/selected candidate")
+    try:
+        original_day = date.fromisoformat(chosen["utcDay"])
+    except ValueError as exc:
+        raise ValueError("stale banner original UTC day invalid") from exc
+    require(original_day <= utc_day, "future banner cannot be stale")
+    require(historical_base_sha != live_main_sha or original_day != utc_day,
+            "candidate is not stale against current main/day")
+    # GitHub is permitted to advance .base.sha in an open PR. Normalize that
+    # one mutable field only after binding the exact historical Git parent,
+    # branch prefix, trusted historical README and immutable proposed blob.
+    original_pr = copy.deepcopy(pr)
+    original_pr["base"]["sha"] = historical_base_sha
+    proved = valid_candidate(
+        pr=original_pr, commit=commit, files=files,
+        accepted_readme=historical_readme,
+        proposed_readme=proposed_readme,
+        base_sha=historical_base_sha,
+        utc_day=original_day, native_app=native_app,
+    )
+    verified_native_ref_leases(
+        main_ref=main_ref, candidate_ref=candidate_ref,
+        base_sha=live_main_sha, head_ref=chosen["headRef"],
+        head_sha=chosen["headSha"],
+    )
+    verified_review_thread_connection(review_threads)
+    require(review_threads["totalCount"] == 0
+            and type(reviews) is list and len(reviews) == 0
+            and type(issue_comments) is list and len(issue_comments) == 0,
+            "reviewed, commented or discussed banner PR cannot auto-close")
+    return {
+        "decision": "stale-banner-candidate-comment-then-close-only",
+        "prNumber": proved["prNumber"],
+        "headRef": chosen["headRef"],
+        "headSha": proved["headSha"],
+        "historicalBaseSha": historical_base_sha,
+        "currentMainSha": live_main_sha,
+        "originalUtcDay": chosen["utcDay"],
+        "currentUtcDay": utc_day.isoformat(),
+    }
+
 def self_test() -> None:
     require(blob_sha("hello\n") == "ce013625030ba8dba906f756967f9e9ca394464a",
             "git blob SHA1 NUL delimiter regression")
@@ -1240,3 +1330,92 @@ def self_test() -> None:
         pass
     else:
         raise ValueError("legacy Actions contract silently admitted native App PR")
+
+    # Historical stale branch is not a disposable orphan until its ORIGINAL
+    # one-commit parent/blob, live main/branch, and absence of user activity
+    # have been independently proved.
+    clean_threads = {
+        "totalCount": 0,
+        "nodes": [],
+        "pageInfo": {"hasNextPage": False, "endCursor": None},
+    }
+    live_sha = "c" * 40
+    advanced_pr = copy.deepcopy(pr)
+    advanced_pr["base"]["sha"] = live_sha
+    stale_now = datetime.combine(
+        day + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc,
+    )
+    latest_readme = approved.propose(
+        source, approved.chosen(day + timedelta(days=1), slots), slots,
+    )
+    stale_fixture = {
+        "open_prs": [advanced_pr], "pr": advanced_pr,
+        "commit": commit, "files": files,
+        "historical_base_sha": base, "historical_readme": source,
+        "proposed_readme": proposed,
+        "live_main_sha": live_sha, "live_main_readme": latest_readme,
+        "utc_day": day + timedelta(days=1),
+        "observed_now": stale_now, "reviews": [], "issue_comments": [],
+        "review_threads": clean_threads,
+        "main_ref": {
+            "ref": "refs/heads/main",
+            "object": {"type": "commit", "sha": live_sha},
+        },
+        "candidate_ref": live_candidate_ref,
+    }
+    safe_stale = verified_stale_banner_close_readiness(**stale_fixture)
+    require(safe_stale["decision"] ==
+            "stale-banner-candidate-comment-then-close-only"
+            and safe_stale["historicalBaseSha"] == base
+            and safe_stale["currentMainSha"] == live_sha,
+            "exact historical and current stale proof did not qualify")
+    for label, overrides in [
+        ("not stale", {
+            "live_main_sha": base,
+            "main_ref": live_main_ref,
+            "utc_day": day,
+            "observed_now": now,
+        }),
+        ("wrong historical base", {"historical_base_sha": "f" * 40}),
+        ("historical source rewritten", {
+            "historical_readme": proposed,
+        }),
+        ("forged parent", {"commit": {
+            **commit, "parents": [{"sha": "f" * 40}],
+        }}),
+        ("changed head", {"candidate_ref": {
+            "ref": "refs/heads/" + advanced_pr["head"]["ref"],
+            "object": {"type": "commit", "sha": "f" * 40},
+        }}),
+        ("main advanced again", {"main_ref": live_main_ref}),
+        ("current README malformed", {
+            "live_main_readme": "unreviewed/current",
+        }),
+        ("user commented", {"issue_comments": [{"id": 5}]}),
+        ("owner reviewed", {"reviews": [owner_review]}),
+        ("unresolved thread", {"review_threads": {
+            "totalCount": 1,
+            "nodes": [{"id": "PRRT_c", "isResolved": False}],
+            "pageInfo": {"hasNextPage": False, "endCursor": None},
+        }}),
+        ("resolved but discussed thread", {"review_threads": {
+            "totalCount": 1,
+            "nodes": [{"id": "PRRT_c", "isResolved": True}],
+            "pageInfo": {"hasNextPage": False, "endCursor": None},
+        }}),
+        ("missing review-thread response", {"review_threads": None}),
+        ("different PR number", {"pr": {**advanced_pr, "number": 101}}),
+        ("different live head", {"pr": {**advanced_pr, "head": {
+            **advanced_pr["head"], "sha": "f" * 40,
+        }}}),
+        ("unbound UTC clock", {"observed_now": stale_now.replace(tzinfo=None)}),
+        ("second stale PR", {"open_prs": [advanced_pr, {
+            **advanced_pr, "number": 27,
+        }]}),
+    ]:
+        try:
+            verified_stale_banner_close_readiness(**{**stale_fixture, **overrides})
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"unsafe stale banner close proof accepted: {label}")
