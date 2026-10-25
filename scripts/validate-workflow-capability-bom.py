@@ -103,8 +103,8 @@ if __name__ == "__main__":
         import tempfile
         from pathlib import Path
 
-        FROZEN_COMMIT = "e83502d5cc09484010174a4650e26a912340b879"
-        FROZEN_TREE = "c5048c6a53d68bcce0f86da8e5c07a2d6051ed1a"
+        FROZEN_COMMIT = "0bb0ca8b2964d5026eee12fb92cf8a866f6a8fda"
+        FROZEN_TREE = "e5b53e24149c404a237d4ffef21458627e5ca0c8"
         with tempfile.TemporaryDirectory(prefix="measure-banner-app-") as dirname:
             candidate = Path(dirname) / "candidate"
             subprocess.run(["git", "init", "-q", str(candidate)], check=True)
