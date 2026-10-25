@@ -1062,6 +1062,7 @@ def self_test() -> None:
     native_now = datetime(2026, 10, 25, 1, 1, tzinfo=timezone.utc)
     installation = {
         "id": 101, "app_id": 202, "app_slug": "portyu9-reviewed-publisher",
+        "repository_selection": "selected",
         "account": {"login": "portyu9"},
         "permissions": {
             "administration": "write",
