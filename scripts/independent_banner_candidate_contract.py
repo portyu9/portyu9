@@ -654,6 +654,104 @@ def select_read_only_banner_candidate(
     return {"decision": state, "currentMainSha": current_main_sha, **chosen}
 
 
+
+def verified_native_banner_review_wake(
+    *, event: Any, pr: Any, native_app: Any,
+    expected_main_sha: str, observed_now: Any,
+) -> dict[str, str | int]:
+    """Read-only bind a native completed PR workflow wake to ONE App PR.
+
+    The trusted reviewer must still independently obtain complete/immutable
+    GitHub check suites, owner approvals, reviews and current refs before
+    granting any owner-only review; a webhook alone grants no authority.
+    No bearer credential, write API, status forgery or PR code is executed.
+    """
+    from datetime import datetime, timezone
+    require(type(expected_main_sha) is str
+            and HEX40.fullmatch(expected_main_sha) is not None
+            and type(observed_now) is datetime
+            and observed_now.tzinfo is not None
+            and observed_now.utcoffset() == timezone.utc.utcoffset(observed_now),
+            "review wake main/time binding invalid")
+    producer = verified_native_banner_app_identity(**native_app)
+    require(type(event) is dict and event.get("action") == "completed"
+            and type(event.get("repository")) is dict
+            and event["repository"].get("full_name") == REPOSITORY
+            and type(event.get("sender")) is dict
+            and type(event["sender"].get("login")) is str
+            and bool(event["sender"]["login"])
+            and type(event.get("workflow_run")) is dict,
+            "review wake event not exact same-repository workflow completion")
+    run = event["workflow_run"]
+    workflow = EXPECTED_PROTECTED_WORKFLOWS.get(run.get("name"))
+    require(workflow is not None and run.get("path") == workflow[0]
+            and run.get("event") == "pull_request"
+            and run.get("head_sha") != expected_main_sha
+            and type(run.get("head_sha")) is str
+            and HEX40.fullmatch(run["head_sha"]) is not None
+            and type(run.get("head_branch")) is str
+            and type(run.get("repository")) is dict
+            and run["repository"].get("full_name") == REPOSITORY
+            and type(run.get("head_repository")) is dict
+            and run["head_repository"].get("full_name") == REPOSITORY
+            and type(run.get("id")) is int and run["id"] > 0
+            and type(run.get("check_suite_id")) is int
+            and run["check_suite_id"] > 0
+            and type(run.get("run_attempt")) is int
+            and run["run_attempt"] == 1
+            and run.get("status") == "completed"
+            and run.get("conclusion") == "success",
+            "untrusted, stale, failed or nonnative banner reviewer wake")
+    created = run.get("created_at")
+    require(type(created) is str and created.endswith("Z"),
+            "review wake creation timestamp is absent")
+    try:
+        created_at = datetime.fromisoformat(created.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("review wake creation timestamp malformed") from exc
+    require(0 <= (observed_now - created_at).total_seconds() <= 7200,
+            "review wake expired or occurred in the future")
+    require(type(pr) is dict and pr.get("state") == "open"
+            and pr.get("draft") is False
+            and type(pr.get("number")) is int and pr["number"] > 0
+            and type(pr.get("user")) is dict
+            and pr["user"].get("login") == producer["login"]
+            and type(pr["user"].get("id")) is int
+            and pr["user"]["id"] == producer["userId"]
+            and type(pr.get("base")) is dict
+            and pr["base"].get("ref") == "main"
+            and pr["base"].get("sha") == expected_main_sha
+            and type(pr.get("head")) is dict
+            and type(pr["head"].get("repo")) is dict
+            and pr["head"]["repo"].get("full_name") == REPOSITORY
+            and pr["head"].get("sha") == run["head_sha"]
+            and pr["head"].get("ref") == run["head_branch"],
+            "review wake did not bind to unique exact App-origin main PR")
+    require(re.fullmatch(
+        r"automation/banner-rotation/\d{4}-\d{2}-\d{2}-[0-9a-f]{12}",
+        run["head_branch"],
+    ) is not None and run["head_branch"].endswith(
+        "-" + expected_main_sha[:12]
+    ), "review wake branch does not bind to accepted main")
+    associated = run.get("pull_requests")
+    require(type(associated) is list and len(associated) == 1
+            and type(associated[0]) is dict
+            and associated[0].get("number") == pr["number"]
+            and type(associated[0].get("head")) is dict
+            and associated[0]["head"].get("sha") == run["head_sha"]
+            and type(associated[0].get("base")) is dict
+            and associated[0]["base"].get("ref") == "main",
+            "native completion does not uniquely bind exactly one banner PR")
+    return {
+        "decision": "exact-native-app-banner-review-wake-read-only",
+        "prNumber": pr["number"],
+        "baseSha": expected_main_sha,
+        "headSha": run["head_sha"],
+        "headRef": run["head_branch"],
+        "sourceWorkflow": run["name"],
+        "sourceRunId": run["id"],
+    }
+
 def verified_stale_banner_close_readiness(
     *, open_prs: Any, pr: Any, commit: Any, files: Any,
     historical_base_sha: str, historical_readme: str,
@@ -1419,3 +1517,110 @@ def self_test() -> None:
             pass
         else:
             raise ValueError(f"unsafe stale banner close proof accepted: {label}")
+
+    # Only fresh native PR workflow-run completions may awaken App reviewer.
+    # Wake acceptance does not grant APPROVED review; the full terminal gate
+    # independently rechecks seven native contexts and current refs.
+    native_run = {
+        "id": 1024, "name": "Profile quality",
+        "path": ".github/workflows/profile-quality.yml",
+        "event": "pull_request", "status": "completed",
+        "conclusion": "success",
+        "head_sha": head, "head_branch": app_pr["head"]["ref"],
+        "repository": {"full_name": REPOSITORY},
+        "head_repository": {"full_name": REPOSITORY},
+        "run_attempt": 1, "check_suite_id": 100,
+        "created_at": stale_now.isoformat().replace("+00:00", "Z"),
+        "pull_requests": [{
+            "number": app_pr["number"],
+            "head": {"sha": head},
+            "base": {"ref": "main"},
+        }],
+    }
+    wake_event = {
+        "action": "completed", "workflow_run": native_run,
+        "repository": {"full_name": REPOSITORY},
+        "sender": {"login": BOT_LOGIN},
+    }
+    wake_fixture = {
+        "event": wake_event, "pr": app_pr,
+        "native_app": public_app_evidence,
+        "expected_main_sha": base,
+        "observed_now": stale_now + timedelta(minutes=10),
+    }
+    admitted = verified_native_banner_review_wake(**wake_fixture)
+    require(admitted["decision"] ==
+            "exact-native-app-banner-review-wake-read-only"
+            and admitted["sourceRunId"] == 1024
+            and admitted["headSha"] == head,
+            "native banner source workflow did not bind")
+    for label, wrong in [
+        ("scheduled event", {"event": {
+            **wake_event, "workflow_run": {**native_run, "event": "schedule"},
+        }}),
+        ("failed run", {"event": {
+            **wake_event, "workflow_run": {**native_run, "conclusion": "failure"},
+        }}),
+        ("second attempt", {"event": {
+            **wake_event, "workflow_run": {**native_run, "run_attempt": 2},
+        }}),
+        ("run from fork", {"event": {
+            **wake_event, "workflow_run": {**native_run,
+                "head_repository": {"full_name": "outsider/fork"},
+            },
+        }}),
+        ("CodeQL path spoof", {"event": {
+            **wake_event, "workflow_run": {
+                **native_run, "name": "CodeQL",
+            },
+        }}),
+        ("wrong run head", {"event": {
+            **wake_event, "workflow_run": {
+                **native_run, "head_sha": "f" * 40,
+            },
+        }}),
+        ("wrong run branch", {"event": {
+            **wake_event, "workflow_run": {
+                **native_run, "head_branch":
+                    "automation/banner-rotation/spoof",
+            },
+        }}),
+        ("foreign event repository", {"event": {
+            **wake_event, "repository": {"full_name": "outsider/fork"},
+        }}),
+        ("review wake action spoof", {"event": {
+            **wake_event, "action": "requested",
+        }}),
+        ("foreign PR author", {"pr": {
+            **app_pr, "user": {"login": BOT_LOGIN, "id": BOT_ID},
+        }}),
+        ("stale owner main", {"expected_main_sha": "f" * 40}),
+        ("old native run", {"observed_now": stale_now + timedelta(hours=3)}),
+        ("future native run", {"observed_now": stale_now - timedelta(seconds=1)}),
+        ("missing native PR", {"event": {
+            **wake_event, "workflow_run": {
+                **native_run, "pull_requests": [],
+            },
+        }}),
+        ("multiple native PRs", {"event": {
+            **wake_event, "workflow_run": {
+                **native_run,
+                "pull_requests": native_run["pull_requests"] * 2,
+            },
+        }}),
+        ("wrong native PR number", {"event": {
+            **wake_event, "workflow_run": {
+                **native_run, "pull_requests": [{
+                    "number": 44, "head": {"sha": head},
+                    "base": {"ref": "main"},
+                }],
+            },
+        }}),
+        ("missing read-only App proof", {"native_app": None}),
+    ]:
+        try:
+            verified_native_banner_review_wake(**{**wake_fixture, **wrong})
+        except (ValueError, TypeError):
+            pass
+        else:
+            raise ValueError(f"unsafe native banner reviewer wake admitted: {label}")
