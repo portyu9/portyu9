@@ -94,4 +94,43 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # Diagnostic only: read-only measure of the immutable open PR #1854
+    # candidate. This code is NOT an authorization or a BOM update.
+    exit_code = main()
+    if exit_code == 0:
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+
+        FROZEN_COMMIT = "e83502d5cc09484010174a4650e26a912340b879"
+        FROZEN_TREE = "c5048c6a53d68bcce0f86da8e5c07a2d6051ed1a"
+        with tempfile.TemporaryDirectory(prefix="measure-banner-app-") as dirname:
+            candidate = Path(dirname) / "candidate"
+            subprocess.run(["git", "init", "-q", str(candidate)], check=True)
+            subprocess.run([
+                "git", "-C", str(candidate), "fetch", "-q", "--depth=1",
+                "https://github.com/portyu9/portyu9.git",
+                "refs/heads/feat/banner-native-app-pr-publisher-20261025",
+            ], check=True)
+            subprocess.run([
+                "git", "-C", str(candidate), "checkout", "-q", "--detach", "FETCH_HEAD",
+            ], check=True)
+            actual_commit = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD"], text=True,
+            ).strip()
+            actual_tree = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD^{tree}"], text=True,
+            ).strip()
+            require(actual_commit == FROZEN_COMMIT and actual_tree == FROZEN_TREE,
+                    "frozen native App producer commit/tree moved")
+            difference = workflow_capability_admission.measure(
+                candidate, candidate_tree_sha=FROZEN_TREE,
+            )
+            measurement = workflow_capability_admission.public_measurement(
+                difference, candidate_tree_sha=FROZEN_TREE,
+            )
+            print("EXACT_BANNER_APP_CAPABILITY_MEASUREMENT=" +
+                  json.dumps(measurement, sort_keys=True, separators=(",", ":")),
+                  flush=True)
+    raise SystemExit(exit_code)
