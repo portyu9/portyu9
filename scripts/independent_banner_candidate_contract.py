@@ -1120,7 +1120,7 @@ def self_test() -> None:
     require(app_result["headSha"] == head, "App-origin candidate did not qualify")
     require(select_read_only_banner_candidate(
         [app_pr], current_main_sha=base, utc_day=day,
-        native_app=app_evidence,
+        native_app=public_app_evidence,
     )["decision"] == "current-banner-candidate-requires-proof",
         "authenticated App-origin open-PR selector did not qualify")
     qualified_banner_candidate(
