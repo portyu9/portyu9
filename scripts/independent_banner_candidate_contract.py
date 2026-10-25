@@ -43,18 +43,125 @@ def expected_branch(day: date, base_sha: str) -> str:
     return f"automation/banner-rotation/{day.isoformat()}-{base_sha[:12]}"
 
 
-def expected_body(base_sha: str, readme_sha256: str) -> str:
+def expected_body(
+    base_sha: str, readme_sha256: str, *, native_app: bool = False,
+) -> str:
+    version = "v8" if native_app else "v7"
     return (
-        "README-only UTC banner rotation using the reviewed approved v7 catalog. "
+        f"README-only UTC banner rotation using the reviewed approved {version} catalog. "
         "Three image surfaces and marker only; external CI evidence unchanged. "
         f"Base {base_sha}. Output SHA256 {readme_sha256}. Requires normal protected checks."
     )
+
+
+ 
+def verified_native_banner_app_identity(
+    *, installation: Any, bot_user: Any,
+    expected_app_id: int, expected_installation_id: int,
+    expected_repository_id: int,
+) -> dict[str, str | int]:
+    """Read-only App bot identity; no JWT or installation token required.
+
+    Caller must bind authenticated responses to THIS repository's native
+    installation endpoint and exact trusted-main expected installation IDs.
+    This cannot authorize PR creation or merge by itself.
+    """
+    require(all(type(n) is int and n > 0 for n in (
+        expected_app_id, expected_installation_id, expected_repository_id,
+    )), "App/install/repository IDs must be positive integers")
+    require(type(installation) is dict and type(bot_user) is dict,
+            "read-only App identity response is malformed")
+    slug = installation.get("app_slug")
+    perms = installation.get("permissions")
+    account = installation.get("account")
+    require(type(installation.get("id")) is int
+            and installation["id"] == expected_installation_id
+            and type(installation.get("app_id")) is int
+            and installation["app_id"] == expected_app_id
+            and installation.get("repository_selection") == "selected"
+            and type(account) is dict
+            and account.get("login") == REPOSITORY.split("/")[0]
+            and type(slug) is str
+            and re.fullmatch(r"[a-z0-9][a-z0-9-]{2,100}", slug) is not None
+            and type(perms) is dict
+            and perms.get("contents") == "write"
+            and perms.get("pull_requests") == "write",
+            "App is not the exact reviewed selected repository installation")
+    require(bot_user.get("login") == slug + "[bot]"
+            and bot_user.get("type") == "Bot"
+            and type(bot_user.get("id")) is int and bot_user["id"] > 0,
+            "App bot user does not match reviewed installation slug")
+    return {
+        "appId": expected_app_id,
+        "installationId": expected_installation_id,
+        "repositoryId": expected_repository_id,
+        "login": bot_user["login"], "userId": bot_user["id"],
+    }
+
+
+def verified_scoped_banner_app(
+    *, installation: Any, token_response: Any, bot_user: Any,
+    expected_app_id: int, expected_installation_id: int,
+    expected_repository_id: int, observed_at: Any,
+) -> dict[str, str | int]:
+    """Validate *authenticated caller-provided* GitHub App producer evidence.
+
+    The caller, NOT this predicate, must independently prove HTTPS response
+    origins and that the installation/token were obtained from the reviewed
+    ruleset-admin App JWT for the verified main. Tokens are never returned,
+    emitted, stored in artifacts or written to logs by this pure function.
+    """
+    from datetime import datetime, timezone
+    proof = verified_native_banner_app_identity(
+        installation=installation, bot_user=bot_user,
+        expected_app_id=expected_app_id,
+        expected_installation_id=expected_installation_id,
+        expected_repository_id=expected_repository_id,
+    )
+    require(type(observed_at) is datetime and observed_at.tzinfo is not None
+            and observed_at.utcoffset() == timezone.utc.utcoffset(observed_at),
+            "App token observation must be UTC aware")
+    require(type(token_response) is dict, "App token response is absent")
+    # Request only two repository-scoped write permissions; refuse the
+    # installation's wider administration/workflow authority in this token.
+    token_permissions = token_response.get("permissions")
+    allowed = {"contents": "write", "pull_requests": "write"}
+    require(type(token_permissions) is dict
+            and {k: v for k, v in token_permissions.items()
+                 if k != "metadata"} == allowed
+            and token_permissions.get("metadata", "read") == "read",
+            "banner publisher token exceeded reviewed content/PR capability")
+    repositories = token_response.get("repositories")
+    require(token_response.get("repository_selection") == "selected"
+            and type(repositories) is list and len(repositories) == 1
+            and type(repositories[0]) is dict
+            and repositories[0].get("full_name") == REPOSITORY
+            and type(repositories[0].get("id")) is int
+            and repositories[0]["id"] == expected_repository_id,
+            "App token is not scoped to exactly the protected profile repository")
+    expiration = token_response.get("expires_at")
+    require(type(expiration) is str and expiration.endswith("Z"),
+            "App token expiry is absent or has changed format")
+    try:
+        expiration_utc = datetime.fromisoformat(
+            expiration.replace("Z", "+00:00")
+        )
+    except ValueError as exc:
+        raise ValueError("App token expiry is malformed") from exc
+    seconds = (expiration_utc - observed_at).total_seconds()
+    require(0 < seconds <= 3600,
+            "App token is expired or exceeds a one-hour publication lease")
+    require(type(token_response.get("token")) is str
+            and len(token_response["token"]) >= 32,
+            "App publication token is not present")
+    return proof
 
 
 def valid_candidate(
     *, pr: Any, commit: Any, files: Any,
     accepted_readme: str, proposed_readme: str,
     base_sha: str, utc_day: date,
+    native_app: Any = None,
 ) -> dict[str, str | int]:
     require(type(base_sha) is str and HEX40.fullmatch(base_sha) is not None,
             "trusted current-main SHA is malformed")
@@ -81,12 +188,17 @@ def valid_candidate(
     require(pr.get("title") ==
             f"chore(profile): independently rotate approved banners for {utc_day.isoformat()}",
             "banner PR title is not exact reviewed producer")
-    require(pr.get("body") == expected_body(base_sha, sha256(proposed_readme)),
+    require(pr.get("body") == expected_body(
+            base_sha, sha256(proposed_readme), native_app=native_app is not None
+        ),
             "banner PR body binds a different base, artwork or source")
     user = pr.get("user")
-    require(type(user) is dict and user.get("login") == BOT_LOGIN
-            and type(user.get("id")) is int and user.get("id") == BOT_ID,
-            "banner PR was not opened by the reviewed Actions identity")
+    producer = ({"login": BOT_LOGIN, "userId": BOT_ID}
+                if native_app is None
+                else verified_native_banner_app_identity(**native_app))
+    require(type(user) is dict and user.get("login") == producer["login"]
+            and type(user.get("id")) is int and user.get("id") == producer["userId"],
+            "banner PR was not opened by the separately verified producer identity")
     base, head = pr.get("base"), pr.get("head")
     require(type(base) is dict and type(head) is dict,
             "banner PR base/head identities are absent")
@@ -109,10 +221,14 @@ def valid_candidate(
             and commit["parents"][0].get("sha") == base_sha,
             "banner candidate commit is not a one-commit exact-main child")
     payload = commit.get("commit")
-    require(type(payload) is dict
-            and payload.get("message") ==
-            f"chore(profile): rotate approved banner triplet for {utc_day.isoformat()} [skip ci]",
-            "banner candidate commit message changed")
+    # App-authored publication needs a native event-eligible commit. The
+    # old Actions path deliberately remains distinguishable and cannot be
+    # passed off as a real native PR-triggering producer.
+    message = f"chore(profile): rotate approved banner triplet for {utc_day.isoformat()}"
+    if native_app is None:
+        message += " [skip ci]"
+    require(type(payload) is dict and payload.get("message") == message,
+            "banner candidate commit message is not exact producer version")
     author, committer = payload.get("author"), payload.get("committer")
     require(type(author) is dict and type(committer) is dict
             and author.get("name") == BOT_LOGIN and committer.get("name") == BOT_LOGIN
@@ -316,6 +432,7 @@ def qualified_banner_candidate(
     accepted_readme: str, proposed_readme: str,
     base_sha: str, utc_day: date,
     check_runs: Any, reviews: Any, workflow_runs: Any,
+    native_app: Any = None,
 ) -> dict[str, str | int]:
     """Compose reviewed artwork/ancestry, genuine-check and owner-veto gates.
 
@@ -326,7 +443,7 @@ def qualified_banner_candidate(
     result = valid_candidate(
         pr=pr, commit=commit, files=files,
         accepted_readme=accepted_readme, proposed_readme=proposed_readme,
-        base_sha=base_sha, utc_day=utc_day,
+        base_sha=base_sha, utc_day=utc_day, native_app=native_app,
     )
     verified_required_check_snapshot(check_runs, str(result["headSha"]))
     verified_required_workflow_runs(
@@ -408,6 +525,7 @@ def terminal_banner_readiness(
     base_sha: str, utc_day: date, observed_now: Any,
     check_runs: Any, workflow_runs: Any, reviews: Any,
     review_threads: Any, main_ref: Any, candidate_ref: Any,
+    native_app: Any = None,
 ) -> dict[str, str | int]:
     """Pure terminal authorization *evidence*; does not authorize a mutation.
 
@@ -429,6 +547,7 @@ def terminal_banner_readiness(
         accepted_readme=accepted_readme, proposed_readme=proposed_readme,
         base_sha=base_sha, utc_day=utc_day,
         check_runs=check_runs, workflow_runs=workflow_runs, reviews=reviews,
+        native_app=native_app,
     )
     verified_native_ref_leases(
         main_ref=main_ref, candidate_ref=candidate_ref,
@@ -454,6 +573,7 @@ def terminal_banner_readiness(
 
 def select_read_only_banner_candidate(
     open_prs: Any, *, current_main_sha: str, utc_day: date,
+    native_app: Any = None,
 ) -> dict[str, Any]:
     """Select zero or one canonical banner PR from a COMPLETE live PR page.
 
@@ -468,6 +588,11 @@ def select_read_only_banner_candidate(
             "banner selection requires exact current main and UTC date")
     require(type(open_prs) is list and len(open_prs) < 100,
             "banner open-PR list missing, oversized or possibly incomplete")
+    # Native App authority requires its own complete installation and
+    # token provenance; never equate any arbitrary "[bot]" actor with trust.
+    producer = ({"login": BOT_LOGIN, "userId": BOT_ID}
+                if native_app is None
+                else verified_native_banner_app_identity(**native_app))
     candidates: list[dict[str, Any]] = []
     pr_numbers: set[int] = set()
     for pr in open_prs:
@@ -495,8 +620,9 @@ def select_read_only_banner_candidate(
         require(type(base_sha) is str and HEX40.fullmatch(base_sha) is not None
                 and type(head_sha) is str and HEX40.fullmatch(head_sha) is not None
                 and head_sha != base_sha
-                and type(actor) is dict and actor.get("login") == BOT_LOGIN
-                and type(actor.get("id")) is int and actor["id"] == BOT_ID
+                and type(actor) is dict and actor.get("login") == producer["login"]
+                and type(actor.get("id")) is int
+                and actor["id"] == producer["userId"]
                 and type(pr["head"].get("repo")) is dict
                 and pr["head"]["repo"].get("full_name") == REPOSITORY
                 and pr["draft"] is False,
@@ -928,3 +1054,189 @@ def self_test() -> None:
             pass
         else:
             raise ValueError(f"banner selector accepted: {label}")
+
+    # The native-event producer must bind an authenticated *installation*,
+    # repository-scoped two-permission token and exact App bot account.
+    # It must never accept the old [skip ci] Actions PR as App-origin.
+    from datetime import datetime, timezone
+    native_now = datetime(2026, 10, 25, 1, 1, tzinfo=timezone.utc)
+    installation = {
+        "id": 101, "app_id": 202, "app_slug": "portyu9-reviewed-publisher",
+        "repository_selection": "selected",
+        "account": {"login": "portyu9"},
+        "permissions": {
+            "administration": "write",
+            "contents": "write", "pull_requests": "write",
+        },
+    }
+    app_user = {
+        "id": 303, "login": "portyu9-reviewed-publisher[bot]", "type": "Bot",
+    }
+    token_response = {
+        "token": "masked-native-lease-" + "a" * 40,
+        "permissions": {
+            "contents": "write", "pull_requests": "write", "metadata": "read",
+        },
+        "repositories": [{"id": 404, "full_name": REPOSITORY}],
+        "repository_selection": "selected",
+        "expires_at": "2026-10-25T01:51:00Z",
+    }
+    app_evidence = {
+        "installation": installation, "token_response": token_response,
+        "bot_user": app_user, "expected_app_id": 202,
+        "expected_installation_id": 101, "expected_repository_id": 404,
+        "observed_at": native_now,
+    }
+    app_proof = verified_scoped_banner_app(**app_evidence)
+    require(app_proof["login"] == app_user["login"]
+            and app_proof["userId"] == app_user["id"]
+            and "token" not in app_proof,
+            "native App provenance did not enforce a non-secret identity")
+    app_pr = copy.deepcopy(pr)
+    app_pr["user"] = {"login": app_user["login"], "id": app_user["id"]}
+    app_pr["body"] = expected_body(base, sha256(proposed), native_app=True)
+    app_commit = copy.deepcopy(commit)
+    app_commit["commit"]["message"] = (
+        f"chore(profile): rotate approved banner triplet for {day.isoformat()}"
+    )
+    # Later reviewer and merge jobs receive NON-SECRET App identity only.
+    public_app_evidence = {
+        key: app_evidence[key] for key in (
+            "installation", "bot_user", "expected_app_id",
+            "expected_installation_id", "expected_repository_id",
+        )
+    }
+    public_proof = verified_native_banner_app_identity(**public_app_evidence)
+    require(public_proof == app_proof,
+            "App identity differed between scoped writer and read-only reviewer")
+    app_fixture = {
+        **fixture, "pr": app_pr, "commit": app_commit,
+        "native_app": public_app_evidence,
+    }
+    require("approved v8 catalog" in app_pr["body"]
+            and "approved v7 catalog" in pr["body"],
+            "native and legacy producer metadata lost explicit catalog versions")
+    app_result = valid_candidate(**app_fixture)
+    require(app_result["headSha"] == head, "App-origin candidate did not qualify")
+    require(select_read_only_banner_candidate(
+        [app_pr], current_main_sha=base, utc_day=day,
+        native_app=public_app_evidence,
+    )["decision"] == "current-banner-candidate-requires-proof",
+        "authenticated App-origin open-PR selector did not qualify")
+    qualified_banner_candidate(
+        **app_fixture, check_runs=checks, workflow_runs=run_fixtures,
+        reviews=[owner_review],
+    )
+    for label, changes in [
+        ("public all-repos app", {"installation": {
+            **installation, "repository_selection": "all",
+        }}),
+        ("public wrong app slug", {"installation": {
+            **installation, "app_slug": "untrusted-service",
+        }}),
+        ("public bot ID boolean", {"bot_user": {**app_user, "id": True}}),
+        ("public app id boolean", {"expected_app_id": True}),
+        ("public missing content permission", {"installation": {
+            **installation, "permissions": {
+                "contents": "read", "pull_requests": "write",
+            },
+        }}),
+    ]:
+        try:
+            verified_native_banner_app_identity(
+                **{**public_app_evidence, **changes}
+            )
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"public App identity witness accepted: {label}")
+    for label, changes in [
+        ("installation id spoof", {"expected_installation_id": 102}),
+        ("app id spoof", {"expected_app_id": 204}),
+        ("repository id spoof", {"expected_repository_id": 405}),
+        ("expired lease", {"observed_at": native_now + timedelta(days=1)}),
+        ("naive observation", {"observed_at": native_now.replace(tzinfo=None)}),
+        ("overlong lease", {"token_response": {
+            **token_response, "expires_at": "2026-10-25T02:30:00Z",
+        }}),
+        ("all repositories", {"token_response": {
+            **token_response, "repository_selection": "all",
+        }}),
+        ("extra token privilege", {"token_response": {
+            **token_response, "permissions": {
+                **token_response["permissions"], "administration": "write",
+            },
+        }}),
+        ("lost PR capability", {"token_response": {
+            **token_response, "permissions": {
+                "contents": "write", "pull_requests": "read",
+            },
+        }}),
+        ("two repositories", {"token_response": {
+            **token_response, "repositories": token_response["repositories"] + [
+                {"id": 405, "full_name": "outsider/other"},
+            ],
+        }}),
+        ("outside repository", {"token_response": {
+            **token_response, "repositories": [
+                {"id": 404, "full_name": "outsider/other"},
+            ],
+        }}),
+        ("fork installation", {"installation": {
+            **installation, "account": {"login": "attacker"},
+        }}),
+        ("app lacks content scope", {"installation": {
+            **installation, "permissions": {
+                "administration": "write", "pull_requests": "write",
+            },
+        }}),
+        ("bot user ID boolean", {"bot_user": {
+            **app_user, "id": True,
+        }}),
+        ("bot user spoof", {"bot_user": {
+            **app_user, "login": "github-actions[bot]",
+        }}),
+        ("secret absent", {"token_response": {
+            **token_response, "token": "",
+        }}),
+    ]:
+        try:
+            verified_scoped_banner_app(**{**app_evidence, **changes})
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"native App authority witness accepted: {label}")
+    for label, app_mutant in [
+        ("legacy v7 manifest", {**app_pr, "body": pr["body"]}),
+        ("legacy GH Actions actor", pr),
+        ("foreign app actor", {**app_pr, "user": {
+            "login": "foreign-app[bot]", "id": app_user["id"],
+        }}),
+        ("spoofed app bot id", {**app_pr, "user": {
+            "login": app_user["login"], "id": True,
+        }}),
+    ]:
+        try:
+            valid_candidate(**{**app_fixture, "pr": app_mutant})
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"native App PR identity accepted: {label}")
+    for label, attempted_message in [
+        ("suppressed native CI", commit_message),
+        ("unreviewed native commit", "chore: native review bypass"),
+    ]:
+        mutate_commit = copy.deepcopy(app_commit)
+        mutate_commit["commit"]["message"] = attempted_message
+        try:
+            valid_candidate(**{**app_fixture, "commit": mutate_commit})
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"native App candidate commit accepted: {label}")
+    try:
+        valid_candidate(**{**fixture, "pr": app_pr, "commit": app_commit})
+    except ValueError:
+        pass
+    else:
+        raise ValueError("legacy Actions contract silently admitted native App PR")
