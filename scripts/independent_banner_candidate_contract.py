@@ -1026,3 +1026,150 @@ def self_test() -> None:
             pass
         else:
             raise ValueError(f"banner selector accepted: {label}")
+
+    # The native-event producer must bind an authenticated *installation*,
+    # repository-scoped two-permission token and exact App bot account.
+    # It must never accept the old [skip ci] Actions PR as App-origin.
+    from datetime import datetime, timezone
+    native_now = datetime(2026, 10, 25, 1, 1, tzinfo=timezone.utc)
+    installation = {
+        "id": 101, "app_id": 202, "app_slug": "portyu9-reviewed-publisher",
+        "account": {"login": "portyu9"},
+        "permissions": {
+            "administration": "write",
+            "contents": "write", "pull_requests": "write",
+        },
+    }
+    app_user = {
+        "id": 303, "login": "portyu9-reviewed-publisher[bot]", "type": "Bot",
+    }
+    token_response = {
+        "token": "masked-native-lease-" + "a" * 40,
+        "permissions": {
+            "contents": "write", "pull_requests": "write", "metadata": "read",
+        },
+        "repositories": [{"id": 404, "full_name": REPOSITORY}],
+        "repository_selection": "selected",
+        "expires_at": "2026-10-25T01:51:00Z",
+    }
+    app_evidence = {
+        "installation": installation, "token_response": token_response,
+        "bot_user": app_user, "expected_app_id": 202,
+        "expected_installation_id": 101, "expected_repository_id": 404,
+        "observed_at": native_now,
+    }
+    app_proof = verified_scoped_banner_app(**app_evidence)
+    require(app_proof["login"] == app_user["login"]
+            and app_proof["userId"] == app_user["id"]
+            and "token" not in app_proof,
+            "native App provenance did not enforce a non-secret identity")
+    app_pr = copy.deepcopy(pr)
+    app_pr["user"] = {"login": app_user["login"], "id": app_user["id"]}
+    app_commit = copy.deepcopy(commit)
+    app_commit["commit"]["message"] = (
+        f"chore(profile): rotate approved banner triplet for {day.isoformat()}"
+    )
+    app_fixture = {
+        **fixture, "pr": app_pr, "commit": app_commit,
+        "native_app": app_evidence,
+    }
+    app_result = valid_candidate(**app_fixture)
+    require(app_result["headSha"] == head, "App-origin candidate did not qualify")
+    require(select_read_only_banner_candidate(
+        [app_pr], current_main_sha=base, utc_day=day,
+        native_app=app_evidence,
+    )["decision"] == "current-banner-candidate-requires-proof",
+        "authenticated App-origin open-PR selector did not qualify")
+    qualified_banner_candidate(
+        **app_fixture, check_runs=checks, workflow_runs=run_fixtures,
+        reviews=[owner_review],
+    )
+    for label, changes in [
+        ("installation id spoof", {"expected_installation_id": 102}),
+        ("app id spoof", {"expected_app_id": 204}),
+        ("repository id spoof", {"expected_repository_id": 405}),
+        ("expired lease", {"observed_at": native_now + timedelta(days=1)}),
+        ("naive observation", {"observed_at": native_now.replace(tzinfo=None)}),
+        ("overlong lease", {"token_response": {
+            **token_response, "expires_at": "2026-10-25T02:30:00Z",
+        }}),
+        ("all repositories", {"token_response": {
+            **token_response, "repository_selection": "all",
+        }}),
+        ("extra token privilege", {"token_response": {
+            **token_response, "permissions": {
+                **token_response["permissions"], "administration": "write",
+            },
+        }}),
+        ("lost PR capability", {"token_response": {
+            **token_response, "permissions": {
+                "contents": "write", "pull_requests": "read",
+            },
+        }}),
+        ("two repositories", {"token_response": {
+            **token_response, "repositories": token_response["repositories"] + [
+                {"id": 405, "full_name": "outsider/other"},
+            ],
+        }}),
+        ("outside repository", {"token_response": {
+            **token_response, "repositories": [
+                {"id": 404, "full_name": "outsider/other"},
+            ],
+        }}),
+        ("fork installation", {"installation": {
+            **installation, "account": {"login": "attacker"},
+        }}),
+        ("app lacks content scope", {"installation": {
+            **installation, "permissions": {
+                "administration": "write", "pull_requests": "write",
+            },
+        }}),
+        ("bot user ID boolean", {"bot_user": {
+            **app_user, "id": True,
+        }}),
+        ("bot user spoof", {"bot_user": {
+            **app_user, "login": "github-actions[bot]",
+        }}),
+        ("secret absent", {"token_response": {
+            **token_response, "token": "",
+        }}),
+    ]:
+        try:
+            verified_scoped_banner_app(**{**app_evidence, **changes})
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"native App authority witness accepted: {label}")
+    for label, app_mutant in [
+        ("legacy GH Actions actor", pr),
+        ("foreign app actor", {**app_pr, "user": {
+            "login": "foreign-app[bot]", "id": app_user["id"],
+        }}),
+        ("spoofed app bot id", {**app_pr, "user": {
+            "login": app_user["login"], "id": True,
+        }}),
+    ]:
+        try:
+            valid_candidate(**{**app_fixture, "pr": app_mutant})
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"native App PR identity accepted: {label}")
+    for label, attempted_message in [
+        ("suppressed native CI", commit_message),
+        ("unreviewed native commit", "chore: native review bypass"),
+    ]:
+        mutate_commit = copy.deepcopy(app_commit)
+        mutate_commit["commit"]["message"] = attempted_message
+        try:
+            valid_candidate(**{**app_fixture, "commit": mutate_commit})
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"native App candidate commit accepted: {label}")
+    try:
+        valid_candidate(**{**fixture, "pr": app_pr, "commit": app_commit})
+    except ValueError:
+        pass
+    else:
+        raise ValueError("legacy Actions contract silently admitted native App PR")
