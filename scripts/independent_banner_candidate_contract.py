@@ -51,10 +51,91 @@ def expected_body(base_sha: str, readme_sha256: str) -> str:
     )
 
 
+ 
+def verified_scoped_banner_app(
+    *, installation: Any, token_response: Any, bot_user: Any,
+    expected_app_id: int, expected_installation_id: int,
+    expected_repository_id: int, observed_at: Any,
+) -> dict[str, str | int]:
+    """Validate *authenticated caller-provided* GitHub App producer evidence.
+
+    The caller, NOT this predicate, must independently prove HTTPS response
+    origins and that the installation/token were obtained from the reviewed
+    ruleset-admin App JWT for the verified main. Tokens are never returned,
+    emitted, stored in artifacts or written to logs by this pure function.
+    """
+    from datetime import datetime, timezone
+    require(all(type(n) is int and n > 0 for n in (
+        expected_app_id, expected_installation_id, expected_repository_id
+    )), "app/install/repository identities must be positive integers")
+    require(type(observed_at) is datetime and observed_at.tzinfo is not None
+            and observed_at.utcoffset() == timezone.utc.utcoffset(observed_at),
+            "app token observation must be UTC aware")
+    require(type(installation) is dict and type(token_response) is dict
+            and type(bot_user) is dict,
+            "native app identity response is missing")
+    account = installation.get("account")
+    permissions = installation.get("permissions")
+    slug = installation.get("app_slug")
+    require(installation.get("id") == expected_installation_id
+            and type(installation.get("id")) is int
+            and installation.get("app_id") == expected_app_id
+            and type(installation.get("app_id")) is int
+            and type(account) is dict
+            and account.get("login") == REPOSITORY.split("/")[0]
+            and type(slug) is str
+            and re.fullmatch(r"[a-z0-9][a-z0-9-]{2,100}", slug) is not None
+            and type(permissions) is dict
+            and permissions.get("contents") == "write"
+            and permissions.get("pull_requests") == "write",
+            "app installation is not the explicitly authorized repository App")
+    require(bot_user.get("login") == slug + "[bot]"
+            and bot_user.get("type") == "Bot"
+            and type(bot_user.get("id")) is int and bot_user["id"] > 0,
+            "native PR author does not bind to the installed App bot identity")
+    # Request only two repository-scoped write permissions; refuse the
+    # installation's wider administration/workflow authority in this token.
+    token_permissions = token_response.get("permissions")
+    allowed = {"contents": "write", "pull_requests": "write"}
+    require(type(token_permissions) is dict
+            and {k: v for k, v in token_permissions.items()
+                 if k != "metadata"} == allowed
+            and token_permissions.get("metadata", "read") == "read",
+            "banner publisher token exceeded reviewed content/PR capability")
+    repositories = token_response.get("repositories")
+    require(token_response.get("repository_selection") == "selected"
+            and type(repositories) is list and len(repositories) == 1
+            and type(repositories[0]) is dict
+            and repositories[0].get("full_name") == REPOSITORY
+            and type(repositories[0].get("id")) is int
+            and repositories[0]["id"] == expected_repository_id,
+            "App token is not scoped to exactly the protected profile repository")
+    expiration = token_response.get("expires_at")
+    require(type(expiration) is str and expiration.endswith("Z"),
+            "App token expiry is absent or has changed format")
+    try:
+        expiration_utc = datetime.fromisoformat(
+            expiration.replace("Z", "+00:00")
+        )
+    except ValueError as exc:
+        raise ValueError("App token expiry is malformed") from exc
+    seconds = (expiration_utc - observed_at).total_seconds()
+    require(0 < seconds <= 3600,
+            "App token is expired or exceeds a one-hour publication lease")
+    require(type(token_response.get("token")) is str
+            and len(token_response["token"]) >= 32,
+            "App publication token is not present")
+    return {"appId": expected_app_id,
+            "installationId": expected_installation_id,
+            "repositoryId": expected_repository_id,
+            "login": bot_user["login"], "userId": bot_user["id"]}
+
+
 def valid_candidate(
     *, pr: Any, commit: Any, files: Any,
     accepted_readme: str, proposed_readme: str,
     base_sha: str, utc_day: date,
+    native_app: Any = None,
 ) -> dict[str, str | int]:
     require(type(base_sha) is str and HEX40.fullmatch(base_sha) is not None,
             "trusted current-main SHA is malformed")
@@ -84,9 +165,12 @@ def valid_candidate(
     require(pr.get("body") == expected_body(base_sha, sha256(proposed_readme)),
             "banner PR body binds a different base, artwork or source")
     user = pr.get("user")
-    require(type(user) is dict and user.get("login") == BOT_LOGIN
-            and type(user.get("id")) is int and user.get("id") == BOT_ID,
-            "banner PR was not opened by the reviewed Actions identity")
+    producer = ({"login": BOT_LOGIN, "userId": BOT_ID}
+                if native_app is None
+                else verified_scoped_banner_app(**native_app))
+    require(type(user) is dict and user.get("login") == producer["login"]
+            and type(user.get("id")) is int and user.get("id") == producer["userId"],
+            "banner PR was not opened by the separately verified producer identity")
     base, head = pr.get("base"), pr.get("head")
     require(type(base) is dict and type(head) is dict,
             "banner PR base/head identities are absent")
@@ -109,10 +193,14 @@ def valid_candidate(
             and commit["parents"][0].get("sha") == base_sha,
             "banner candidate commit is not a one-commit exact-main child")
     payload = commit.get("commit")
-    require(type(payload) is dict
-            and payload.get("message") ==
-            f"chore(profile): rotate approved banner triplet for {utc_day.isoformat()} [skip ci]",
-            "banner candidate commit message changed")
+    # App-authored publication needs a native event-eligible commit. The
+    # old Actions path deliberately remains distinguishable and cannot be
+    # passed off as a real native PR-triggering producer.
+    message = f"chore(profile): rotate approved banner triplet for {utc_day.isoformat()}"
+    if native_app is None:
+        message += " [skip ci]"
+    require(type(payload) is dict and payload.get("message") == message,
+            "banner candidate commit message is not exact producer version")
     author, committer = payload.get("author"), payload.get("committer")
     require(type(author) is dict and type(committer) is dict
             and author.get("name") == BOT_LOGIN and committer.get("name") == BOT_LOGIN
@@ -316,6 +404,7 @@ def qualified_banner_candidate(
     accepted_readme: str, proposed_readme: str,
     base_sha: str, utc_day: date,
     check_runs: Any, reviews: Any, workflow_runs: Any,
+    native_app: Any = None,
 ) -> dict[str, str | int]:
     """Compose reviewed artwork/ancestry, genuine-check and owner-veto gates.
 
@@ -326,7 +415,7 @@ def qualified_banner_candidate(
     result = valid_candidate(
         pr=pr, commit=commit, files=files,
         accepted_readme=accepted_readme, proposed_readme=proposed_readme,
-        base_sha=base_sha, utc_day=utc_day,
+        base_sha=base_sha, utc_day=utc_day, native_app=native_app,
     )
     verified_required_check_snapshot(check_runs, str(result["headSha"]))
     verified_required_workflow_runs(
@@ -408,6 +497,7 @@ def terminal_banner_readiness(
     base_sha: str, utc_day: date, observed_now: Any,
     check_runs: Any, workflow_runs: Any, reviews: Any,
     review_threads: Any, main_ref: Any, candidate_ref: Any,
+    native_app: Any = None,
 ) -> dict[str, str | int]:
     """Pure terminal authorization *evidence*; does not authorize a mutation.
 
@@ -429,6 +519,7 @@ def terminal_banner_readiness(
         accepted_readme=accepted_readme, proposed_readme=proposed_readme,
         base_sha=base_sha, utc_day=utc_day,
         check_runs=check_runs, workflow_runs=workflow_runs, reviews=reviews,
+        native_app=native_app,
     )
     verified_native_ref_leases(
         main_ref=main_ref, candidate_ref=candidate_ref,
@@ -454,6 +545,7 @@ def terminal_banner_readiness(
 
 def select_read_only_banner_candidate(
     open_prs: Any, *, current_main_sha: str, utc_day: date,
+    native_app: Any = None,
 ) -> dict[str, Any]:
     """Select zero or one canonical banner PR from a COMPLETE live PR page.
 
@@ -468,6 +560,11 @@ def select_read_only_banner_candidate(
             "banner selection requires exact current main and UTC date")
     require(type(open_prs) is list and len(open_prs) < 100,
             "banner open-PR list missing, oversized or possibly incomplete")
+    # Native App authority requires its own complete installation and
+    # token provenance; never equate any arbitrary "[bot]" actor with trust.
+    producer = ({"login": BOT_LOGIN, "userId": BOT_ID}
+                if native_app is None
+                else verified_scoped_banner_app(**native_app))
     candidates: list[dict[str, Any]] = []
     pr_numbers: set[int] = set()
     for pr in open_prs:
@@ -495,8 +592,9 @@ def select_read_only_banner_candidate(
         require(type(base_sha) is str and HEX40.fullmatch(base_sha) is not None
                 and type(head_sha) is str and HEX40.fullmatch(head_sha) is not None
                 and head_sha != base_sha
-                and type(actor) is dict and actor.get("login") == BOT_LOGIN
-                and type(actor.get("id")) is int and actor["id"] == BOT_ID
+                and type(actor) is dict and actor.get("login") == producer["login"]
+                and type(actor.get("id")) is int
+                and actor["id"] == producer["userId"]
                 and type(pr["head"].get("repo")) is dict
                 and pr["head"]["repo"].get("full_name") == REPOSITORY
                 and pr["draft"] is False,
