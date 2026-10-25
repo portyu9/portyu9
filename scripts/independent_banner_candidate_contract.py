@@ -55,6 +55,50 @@ def expected_body(
 
 
  
+def verified_native_banner_app_identity(
+    *, installation: Any, bot_user: Any,
+    expected_app_id: int, expected_installation_id: int,
+    expected_repository_id: int,
+) -> dict[str, str | int]:
+    """Read-only App bot identity; no JWT or installation token required.
+
+    Caller must bind authenticated responses to THIS repository's native
+    installation endpoint and exact trusted-main expected installation IDs.
+    This cannot authorize PR creation or merge by itself.
+    """
+    require(all(type(n) is int and n > 0 for n in (
+        expected_app_id, expected_installation_id, expected_repository_id,
+    )), "App/install/repository IDs must be positive integers")
+    require(type(installation) is dict and type(bot_user) is dict,
+            "read-only App identity response is malformed")
+    slug = installation.get("app_slug")
+    perms = installation.get("permissions")
+    account = installation.get("account")
+    require(type(installation.get("id")) is int
+            and installation["id"] == expected_installation_id
+            and type(installation.get("app_id")) is int
+            and installation["app_id"] == expected_app_id
+            and installation.get("repository_selection") == "selected"
+            and type(account) is dict
+            and account.get("login") == REPOSITORY.split("/")[0]
+            and type(slug) is str
+            and re.fullmatch(r"[a-z0-9][a-z0-9-]{2,100}", slug) is not None
+            and type(perms) is dict
+            and perms.get("contents") == "write"
+            and perms.get("pull_requests") == "write",
+            "App is not the exact reviewed selected repository installation")
+    require(bot_user.get("login") == slug + "[bot]"
+            and bot_user.get("type") == "Bot"
+            and type(bot_user.get("id")) is int and bot_user["id"] > 0,
+            "App bot user does not match reviewed installation slug")
+    return {
+        "appId": expected_app_id,
+        "installationId": expected_installation_id,
+        "repositoryId": expected_repository_id,
+        "login": bot_user["login"], "userId": bot_user["id"],
+    }
+
+
 def verified_scoped_banner_app(
     *, installation: Any, token_response: Any, bot_user: Any,
     expected_app_id: int, expected_installation_id: int,
@@ -68,34 +112,16 @@ def verified_scoped_banner_app(
     emitted, stored in artifacts or written to logs by this pure function.
     """
     from datetime import datetime, timezone
-    require(all(type(n) is int and n > 0 for n in (
-        expected_app_id, expected_installation_id, expected_repository_id
-    )), "app/install/repository identities must be positive integers")
+    proof = verified_native_banner_app_identity(
+        installation=installation, bot_user=bot_user,
+        expected_app_id=expected_app_id,
+        expected_installation_id=expected_installation_id,
+        expected_repository_id=expected_repository_id,
+    )
     require(type(observed_at) is datetime and observed_at.tzinfo is not None
             and observed_at.utcoffset() == timezone.utc.utcoffset(observed_at),
-            "app token observation must be UTC aware")
-    require(type(installation) is dict and type(token_response) is dict
-            and type(bot_user) is dict,
-            "native app identity response is missing")
-    account = installation.get("account")
-    permissions = installation.get("permissions")
-    slug = installation.get("app_slug")
-    require(installation.get("id") == expected_installation_id
-            and type(installation.get("id")) is int
-            and installation.get("app_id") == expected_app_id
-            and type(installation.get("app_id")) is int
-            and type(account) is dict
-            and account.get("login") == REPOSITORY.split("/")[0]
-            and type(slug) is str
-            and re.fullmatch(r"[a-z0-9][a-z0-9-]{2,100}", slug) is not None
-            and type(permissions) is dict
-            and permissions.get("contents") == "write"
-            and permissions.get("pull_requests") == "write",
-            "app installation is not the explicitly authorized repository App")
-    require(bot_user.get("login") == slug + "[bot]"
-            and bot_user.get("type") == "Bot"
-            and type(bot_user.get("id")) is int and bot_user["id"] > 0,
-            "native PR author does not bind to the installed App bot identity")
+            "App token observation must be UTC aware")
+    require(type(token_response) is dict, "App token response is absent")
     # Request only two repository-scoped write permissions; refuse the
     # installation's wider administration/workflow authority in this token.
     token_permissions = token_response.get("permissions")
@@ -128,10 +154,7 @@ def verified_scoped_banner_app(
     require(type(token_response.get("token")) is str
             and len(token_response["token"]) >= 32,
             "App publication token is not present")
-    return {"appId": expected_app_id,
-            "installationId": expected_installation_id,
-            "repositoryId": expected_repository_id,
-            "login": bot_user["login"], "userId": bot_user["id"]}
+    return proof
 
 
 def valid_candidate(
@@ -172,7 +195,7 @@ def valid_candidate(
     user = pr.get("user")
     producer = ({"login": BOT_LOGIN, "userId": BOT_ID}
                 if native_app is None
-                else verified_scoped_banner_app(**native_app))
+                else verified_native_banner_app_identity(**native_app))
     require(type(user) is dict and user.get("login") == producer["login"]
             and type(user.get("id")) is int and user.get("id") == producer["userId"],
             "banner PR was not opened by the separately verified producer identity")
@@ -569,7 +592,7 @@ def select_read_only_banner_candidate(
     # token provenance; never equate any arbitrary "[bot]" actor with trust.
     producer = ({"login": BOT_LOGIN, "userId": BOT_ID}
                 if native_app is None
-                else verified_scoped_banner_app(**native_app))
+                else verified_native_banner_app_identity(**native_app))
     candidates: list[dict[str, Any]] = []
     pr_numbers: set[int] = set()
     for pr in open_prs:
@@ -1075,9 +1098,19 @@ def self_test() -> None:
     app_commit["commit"]["message"] = (
         f"chore(profile): rotate approved banner triplet for {day.isoformat()}"
     )
+    # Later reviewer and merge jobs receive NON-SECRET App identity only.
+    public_app_evidence = {
+        key: app_evidence[key] for key in (
+            "installation", "bot_user", "expected_app_id",
+            "expected_installation_id", "expected_repository_id",
+        )
+    }
+    public_proof = verified_native_banner_app_identity(**public_app_evidence)
+    require(public_proof == app_proof,
+            "App identity differed between scoped writer and read-only reviewer")
     app_fixture = {
         **fixture, "pr": app_pr, "commit": app_commit,
-        "native_app": app_evidence,
+        "native_app": public_app_evidence,
     }
     require("approved v8 catalog" in app_pr["body"]
             and "approved v7 catalog" in pr["body"],
@@ -1093,6 +1126,29 @@ def self_test() -> None:
         **app_fixture, check_runs=checks, workflow_runs=run_fixtures,
         reviews=[owner_review],
     )
+    for label, changes in [
+        ("public all-repos app", {"installation": {
+            **installation, "repository_selection": "all",
+        }}),
+        ("public wrong app slug", {"installation": {
+            **installation, "app_slug": "untrusted-service",
+        }}),
+        ("public bot ID boolean", {"bot_user": {**app_user, "id": True}}),
+        ("public app id boolean", {"expected_app_id": True}),
+        ("public missing content permission", {"installation": {
+            **installation, "permissions": {
+                "contents": "read", "pull_requests": "write",
+            },
+        }}),
+    ]:
+        try:
+            verified_native_banner_app_identity(
+                **{**public_app_evidence, **changes}
+            )
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"public App identity witness accepted: {label}")
     for label, changes in [
         ("installation id spoof", {"expected_installation_id": 102}),
         ("app id spoof", {"expected_app_id": 204}),
