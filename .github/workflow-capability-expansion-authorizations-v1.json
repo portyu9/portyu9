@@ -57,17 +57,17 @@
       "rationale": "Authorize frozen PR #1756 exact protected Spotlight source pin, measured by closed diagnostic #1757. Change only approved profile banner selection from eight calendar slots (five reserved fallbacks) to three-day UTC cycling. Historical v3 README markers migrate safely to v4; approved artwork blobs and reserved assets remain unchanged. No workflow, permission, trigger, mutation, secret/OIDC, checks reduction, direct-main write, ruleset/merge authority, or bypass."
     },
     {
-      "id": "cap-approved-iris-slot2-publisher-no-diagnostic-v1",
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "expansionSha256": "7528003fd507cdc9f5389185218320c40fba6e11c285b2430d3154f676649e55",
+      "id": "cap-approved-iris-slot2-publisher-no-diagnostic-v1",
       "rationale": "Prior-review exact trusted-source cleanup for Fractal Iris #1648 after CodeQL flagged an unnecessary temporary CI diagnostic that logged internal digests. The candidate removes logging from its approved-only banner helper and repins the immutable Spotlight publisher source to that corrected helper. The eight-slot original/Fractal Iris selection remains governed by the existing README-only bot transaction, with no workflow, secret, token, API mutation, bypass or permission expansion."
     },
     {
-      "id": "cap-approved-iris-slot2-publisher-v1",
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "expansionSha256": "377577778c3e4c263ee991615bcd63c01fb41285fdba45e7a8ec8708ba90b14d",
+      "id": "cap-approved-iris-slot2-publisher-v1",
       "rationale": "Prior authorization for exact Spotlight trusted-source update in Fractal Iris PR #1648. The reviewed publisher content-pins approved-only eight-slot selector and maintains the existing README-only governed Spotlight merge path. Only original slot 1 and Fractal Iris slot 2 are active; reserved slots fall back to original. No workflow, token, endpoint, permission, direct-main write or bypass authority changes."
     },
     {
@@ -113,10 +113,10 @@
       "rationale": "Authorize #595's exact frozen Spotlight convergence fix: Capability Admission hydrates the unique discovered PR before trusting full-PR metadata, and Spotlight verifies the complete multiline approval comment by exact JSON equality. Bot/current-main/head/title/body proofs remain fail-closed. No trigger, write permission, mutation class, secret, OIDC authority, required-check reduction, merge bypass, or candidate execution is added."
     },
     {
-      "id": "cap-banner-dark-only-v8-source-v1",
       "baseBomSha256": "e7634355b4e825d3be28fd25a942b98f2eaa3e24d35f90da16cc960be53f501d",
       "candidateBomSha256": "e7634355b4e825d3be28fd25a942b98f2eaa3e24d35f90da16cc960be53f501d",
       "expansionSha256": "db793720558363026f5444296de0c3d06ce7e8e291ac146467376aff1b16f704",
+      "id": "cap-banner-dark-only-v8-source-v1",
       "rationale": "Authorize frozen #1820 head 9e8b81a89f502bf47a37cbf911e66d3c0353f7b9/tree b5f5855d652023504e8f90081de71704b545f866 measured by closed unmerged #1821: six dark-only derivatives, immutable historical replay, v8 banner selector, README, Spotlight read-only delegate source pin. One trusted-source expansion / zero reductions; semantic workflow BOM unchanged. No triggers, job/action permissions, tokens, OIDC, endpoints, bypass, merge or direct-main authority added."
     },
     {
@@ -666,10 +666,10 @@
       "rationale": "Authorize #1660 tree 30d09b01e46d323b470ac36d4a6a9bd9a6d65fd8, measured in read-only run 38650043271: five protected-source expansions and no semantic BOM changes. Governed Dependabot updates for actions/upload-artifact and actions/download-artifact preserve bot/head/base identity, immutable release provenance, trusted Action-lock/BOM/validator derivation, required checks and protected merge. No new permission, trigger, mutation, secret, ruleset bypass or direct-main write."
     },
     {
-      "id": "cap-dependabot-atomic-native-graphql-rebase-v1",
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "candidateBomSha256": "3e9a73f4266c60f637e71f8b997f1bda666770edda547b3266ef98c59960ed68",
       "expansionSha256": "c7c56d46cea1491b76297e06aaf968f4be3d8d31ea1d558c7e770fd38dca7ff9",
+      "id": "cap-dependabot-atomic-native-graphql-rebase-v1",
       "rationale": "Authorize frozen #1690 tree 11e02f1a9f1638cef1ed8b6ac3a0c84144fd8a5f measured by accepted-main read-only run 38752687766. Replace unmarked REST PUT Dependabot branch update with PR-node/upstream-SHA-bound GraphQL REBASE, retaining exact-head convergence and negative tests. Five expansions, two reductions; no added trigger, secret, role, OIDC, reduced checks or bypass."
     },
     {
@@ -918,10 +918,10 @@
       "rationale": "Authorize #541's source-only Dependabot identity fix after the live #516 controller proved GitHub may report native dependabot[bot] as CONTRIBUTOR. Exact bot login/ID/node/type/app URLs, same-repo Dependabot head, immutable expected head, and maintainer mutation lock remain authoritative. Only NONE or CONTRIBUTOR association is allowed; OWNER, MEMBER, COLLABORATOR, malformed, and unknown values remain fail-closed."
     },
     {
-      "id": "cap-dependabot-native-rebase-skip-marker-v1",
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "expansionSha256": "c05180c0adeaf99e9d1c05c51708b1427187025c0c64815c2995bb2b0232a5f0",
+      "id": "cap-dependabot-native-rebase-skip-marker-v1",
       "rationale": "Prior-authorize frozen #1674 tree cfeaec393f2f334d7dbfeb9dca1ef89910e79bb8, measured in read-only run 38666264384. Add GitHub-documented [dependabot skip] to the accepted-main controller's exact deterministic governance-derivative commit message, enabling Dependabot to autonomously rebase its own PR branch even after extra trusted commits. Includes positive/negative marker contracts; no new GitHub API mutation, token, workflow trigger, permission, required-check reduction, or ruleset bypass."
     },
     {
@@ -967,10 +967,10 @@
       "rationale": "Authorize frozen #1071's exact replacement of the cross-run Dependabot proof relay with a self-contained PR-native read-only gate. It binds exact PR/base/head, proves Profile Quality bytes unchanged, executes verifier code only from accepted base, treats candidate checkout as inert data, re-proves the immutable CodeQL release, and runs trusted semantic admission locally. Removes checks-read relay authority and polling; adds no write, merge, bypass, OIDC, ruleset, or direct-main authority."
     },
     {
-      "id": "cap-dependabot-pr-snapshot-read-transport-retry-v1",
       "baseBomSha256": "fe6c4b4d975a831b83470bbb9f392885c57a2585698cc00a8c8555f0aa487515",
       "candidateBomSha256": "6fcc576c85747eee12cbb038c02a8b382f0b27144ef5af19edb88c96e07660fe",
       "expansionSha256": "a9e90555b20b95089592fb15b61edadd0610fad7b3d1e0639d0479dc1fe65ba6",
+      "id": "cap-dependabot-pr-snapshot-read-transport-retry-v1",
       "rationale": "Authorize frozen #1348 measured by closed #1349: route five existing Dependabot singleton PR GETs through the accepted bounded authenticated GET-only reader. Preserve the endpoint, #1015 typed response boundary, identity/state checks, convergence, validation binding, CodeQL sequencing, tokens and all mutations. Semantic capability shrinks; no trigger, permission, mutation replay, secret/OIDC, required-check, ruleset, merge, direct-main or bypass authority is added."
     },
     {
@@ -988,10 +988,10 @@
       "rationale": "Authorize frozen #1825 head 41a2dcb29cf289085c0f0c01e4d5a1cd76ddfc4e tree 5b4e21674d4928f8fad8f88d1b291d0d1d194856, measured by read-only #1827: 2 protected source expansions, 0 reductions, TCB SHA256 9043a93e8b961f776ba7c45972ff0b14ee944034f981875f424f350c160b3c53. Only same-PR verified old base may appear in asynchronous GraphQL rebase ACK. Preserve exact main, PR/head identity, fresh REST main convergence, seven protected checks and governance. No permission, token, mutation or bypass change."
     },
     {
-      "id": "cap-dependabot-profile-epoch-hydration-v1",
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "expansionSha256": "8abb6dc3c2a6d482ecba02866e44003aea058ef4edcfbec911196c731203eda7",
+      "id": "cap-dependabot-profile-epoch-hydration-v1",
       "rationale": "Prior-authorize frozen #1671 source tree 5149484c427b79f7d4f730b7de520a1b7a55ef6a measured read-only in run 38663876140. Restore typed exact Git-blob hydration of the changed Profile Stats source-epoch file to the trusted Dependabot controller, matching Capability Admission's existing candidate inventory; add missing-file regression. Fixes live run 38661183787 without new permissions, triggers, secrets, API mutations, reduced required checks or merge bypass."
     },
     {
@@ -1002,10 +1002,10 @@
       "rationale": "Prior-authorize frozen #1697 tree 99bdfb0b68c3018d208ee5c8fb5d47e98e20a548, read-only run 38784543629: one protected controller-source expansion, zero reductions, identical BOM. Expected pre-review Profile Quality failure does not grant clearance; six exact-head checks, owner review, successful review gate and protected merge remain mandatory. Other failures stay terminal. No new API, permission, token, bypass, mutation, or direct-main write."
     },
     {
-      "id": "cap-dependabot-profile-stats-epoch-v1",
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "expansionSha256": "04b6c178e55894e2f1dcfab14e3d444ff1db5512189149fc6b2e9cd3821043ae",
+      "id": "cap-dependabot-profile-stats-epoch-v1",
       "rationale": "Prior-authorize frozen #1665 source tree a10ee74fdc4f00e59e88943b99c28e8d4a8ae5b8 measured in read-only run 38658874344. Adds the deterministic accepted-main-only Profile Stats source-epoch derivation to Action-release reconciliation and trusted candidate hydration. Preserves 63-file byte-exact closure, immutable release proof, required checks and fail-closed validation. No triggers, permissions, secrets, merge bypass or expanded mutation authority."
     },
     {
@@ -1044,10 +1044,10 @@
       "rationale": "Authorize frozen #1493 measured by closed #1494: bind the existing Dependabot reconciled Git-commit response to exact GitHub Actions bot author and GitHub committer identity plus typed dates, while preserving exact tree and one-parent topology. Semantic Workflow Capability is unchanged. Adds no trigger, permission, endpoint/method, mutation, retry, secret/OIDC, required-check reduction, merge/ruleset/direct-main authority, or bypass."
     },
     {
-      "id": "cap-dependabot-relative-source-epoch-root-v1",
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "expansionSha256": "3831fb2a511a0af1f71380faffccd2c5d2587852ca9e4ddf2ba08b3ac16804ed",
+      "id": "cap-dependabot-relative-source-epoch-root-v1",
       "rationale": "Prior-authorize frozen #1669 tree 74c4371e753436e72033697b223f4dade7d83dbe, measured read-only in run 38660233183. Normalize accepted-main checkout root to canonical non-aliased absolute path before executing trusted Profile Stats epoch validator, with positive relative-dot fixture tests for both artifact releases. Fixes live controller failure 38659724993. No new workflow mutation, permissions, triggers, secrets, unsafe candidate execution, reduced required checks or merge bypass."
     },
     {
@@ -1156,10 +1156,10 @@
       "rationale": "Authorize only frozen #1708 tree f32cb7ef61dfe23ae18e251a15fc2f6ca2385a5c, independently measured by trusted read-only run 38822033940. One TCB/source expansion, zero reductions, unchanged BOM. Pure schema and negative fixtures for least-privilege App and token evidence; no secret, token minting, network, rebase, workflow, permission change, or merge path. #1657 still blocked until separate credentials and protected workflow implementation."
     },
     {
-      "id": "cap-dependabot-workflow-singleton-read-transport-retry-v1",
       "baseBomSha256": "6fcc576c85747eee12cbb038c02a8b382f0b27144ef5af19edb88c96e07660fe",
       "candidateBomSha256": "3d9d4099a47f2440dabae7c8f7b0cc63ff69bb87704f77efaaf3ab2c747a3812",
       "expansionSha256": "6f71de6dbcb22b4d14bb27b78289127acd14b3428317e9737285e66460e8c6b2",
+      "id": "cap-dependabot-workflow-singleton-read-transport-retry-v1",
       "rationale": "Authorize frozen #1351 measured by closed #1352: move five existing Dependabot singleton workflow/run-definition GETs to the accepted bounded authenticated GET-only reader. Preserve exact endpoints, typed wake/proof/workflow-definition consumers, helper identity, run-scoped tokens, protected checks, all mutations, and merge sequencing. No trigger, permission, mutation replay, secret/OIDC, required-check reduction, ruleset, merge, direct-main, or bypass authority is added."
     },
     {
@@ -1345,6 +1345,13 @@
       "rationale": "Authorize frozen #1810 tree 9bb8a4b388f5f9ca5f9328bcf99108149d861156, measured by accepted-main compiler in closed #1812. Allow read-only UTC-day selection of three already-approved banner paths, a same-run bound proposal, and a separate terminal README-only PR writer. No new artwork, generated/Ledger/Spotlight write, CI substitution, arbitrary merge/bypass, OIDC, or secret authority."
     },
     {
+      "baseBomSha256": "cc23a41ff115f7a06324797801f3d0f15fdc492db7bd3d4a3da175280c11e9fd",
+      "candidateBomSha256": "fc24dd349726c5535e6728da847427e250b29e3beb07b5eea49c638d4c57cf0c",
+      "expansionSha256": "4086f894c1d65b678e35b04f14e662f9a4ac78555ad88596b31fc428418cba92",
+      "id": "cap-independent-banner-native-app-publisher-v1",
+      "rationale": "Prior-authorize only the exact immutable #1854 native App banner publisher capability measured by the accepted-main compiler in diagnostic #1855: frozen source d60bbcae1fe5373557cd94122d6ecd502d7a175f, tree f4313e8e70517d672913542b6de21ef324b896ff, workflow and aligned Automation Policy plus canonical BOM. The measured delta is 10 expansions and 2 reductions, no trusted-control-source modification. Grants access to the existing ruleset-admin-identity App JWT only inside the separate environment-gated publisher job, mints at most one-repository 60-minute installation token with contents:write and pull_requests:write, and opens one native PR to main carrying an already-approved README-only banner rotation with no skip-ci suppression; lowers workflow GITHUB_TOKEN permissions to read. No ruleset administration, arbitrary code, unreviewed art, generated/activity-metrics mutation, direct-main push, CI fabrication, review authorization, terminal merge, bypass, OIDC or widened scope is approved. Real scheduler, exact-head 7-check native review and protected merge require independently accepted subsequent authorization and production proof."
+    },
+    {
       "baseBomSha256": "7f91352fc1f77fbb890b058b86e71592ff85012777b149fecff0deb378fd37c3",
       "candidateBomSha256": "d1c6dc9d071c5876eeee3b6ad1cd6b42f0f7d5682115b1afe1644b24ca571020",
       "expansionSha256": "76db7100bd3c51f0880a62cab3add50fc86e75bdb15660850492fa4fbf901517",
@@ -1380,10 +1387,10 @@
       "rationale": "Authorize #623's exact PR-native governed-bot review check. Profile Quality adds one read-only PR job that fetches the byte-locked evaluator only from the exact accepted base SHA. Governed bot lanes require the exact marker-bound portyu9 approval and honor manual CHANGES_REQUESTED veto/revocation semantics. Capability expands by one GET surface only; no write permission, candidate checkout, third-party action, review/merge/ref mutation, workflow dispatch, check reduction, or bypass is added."
     },
     {
-      "id": "cap-original-quantum-apex-eight-day-governed-banner-rotation-v2",
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "expansionSha256": "a04f1f293f5060b4247ed3cf48fcf44d3a3b0d5c66dfc86ea3919cc5b25c03a4",
+      "id": "cap-original-quantum-apex-eight-day-governed-banner-rotation-v2",
       "rationale": "Authorize frozen #1638 via trusted-main read-only measurement in closed #1639: 1 protected-source expansion, 0 reductions, unchanged BOM. Restore pinned original Quantum Apex desktop/mobile and Evidence Horizon footer as eighth UTC-day scene; migrate V1 markers to V2 and atomically publish all three surfaces. No new triggers, permissions, APIs, secrets/OIDC, direct-main/ruleset/merge authority, check reductions or bypass."
     },
     {
@@ -1478,10 +1485,10 @@
       "rationale": "Authorize frozen #1300: route the single existing Profile Quality Dependabot changed-file pagination GET through the accepted bounded authenticated paginated read helper. Preserve the exact endpoint, token, array-of-pages evidence, full collection validation, downstream admission, permissions, triggers and mutations. Semantic Workflow Capability only shrinks; no write, secret/OIDC, ruleset, merge or bypass authority is added."
     },
     {
-      "id": "cap-profile-quality-dependabot-file-pages-governed-read-v2",
       "baseBomSha256": "9976c120af0e18762e82ef1a26041c9bde4b825c001f2cbe50b85398c1665da6",
       "candidateBomSha256": "2aa9ce035e5cbc08922756a28180047e097a2b4d26f3448b5868338775bb624c",
       "expansionSha256": "bb3b21d016e11de78c20192f0082be642cdd8b9066c7c1f7c105c3e363b559ff",
+      "id": "cap-profile-quality-dependabot-file-pages-governed-read-v2",
       "rationale": "Correct #1301's stale protected-source measurement for frozen #1300. Current-main production reconstruction proves the same base/candidate BOM pair, exactly two protected-source transitions, one semantic read-surface reduction, and candidate TCB d442f46f749315ed6946ae79c512bef9838c14efe5e0e3d34e6839fa1b4e32ad. No trigger, permission, endpoint, mutation, secret/OIDC, ruleset, merge or bypass authority is added."
     },
     {
