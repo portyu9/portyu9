@@ -113,6 +113,13 @@
       "rationale": "Authorize #595's exact frozen Spotlight convergence fix: Capability Admission hydrates the unique discovered PR before trusting full-PR metadata, and Spotlight verifies the complete multiline approval comment by exact JSON equality. Bot/current-main/head/title/body proofs remain fail-closed. No trigger, write permission, mutation class, secret, OIDC authority, required-check reduction, merge bypass, or candidate execution is added."
     },
     {
+      "baseBomSha256": "fc24dd349726c5535e6728da847427e250b29e3beb07b5eea49c638d4c57cf0c",
+      "candidateBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
+      "expansionSha256": "07ae9668be2305f1108f7b231539b65ac252181c055e172a7eb7cae499e5a1d5",
+      "id": "cap-banner-bounded-utc-day-publisher-retry-v1",
+      "rationale": "Prior-authorize frozen #1864 banner-only bounded daily retry tree d2224302a338eff4a304f18150356680e9139158, measured in closed diagnostic #1865. Four UTC scheduler opportunities (01:11/07:11/13:11/19:11) recover accepted-main races, but deterministic approved same-day README is idempotent and cannot open a duplicate native App PR; exact branch/PR inventory and single main SHA lease remain enforced. No tokens, identities, scopes, catalogs, tests, reviewer or protected merge authority changed."
+    },
+    {
       "baseBomSha256": "e7634355b4e825d3be28fd25a942b98f2eaa3e24d35f90da16cc960be53f501d",
       "candidateBomSha256": "e7634355b4e825d3be28fd25a942b98f2eaa3e24d35f90da16cc960be53f501d",
       "expansionSha256": "db793720558363026f5444296de0c3d06ce7e8e291ac146467376aff1b16f704",
