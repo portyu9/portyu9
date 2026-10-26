@@ -94,4 +94,37 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # DIAGNOSTIC ONLY: never merge this additional read-only measurement caller.
+    outcome = main()
+    if outcome == 0:
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        FROZEN_SHA = "77488f6695848cb0773ea20edb06bcfaedca5b59"
+        FROZEN_TREE = "7314ff9c3646522038f8fc6889863b63ffbdafa9"
+        with tempfile.TemporaryDirectory(prefix="measure-python-31318-") as tmp:
+            candidate = Path(tmp) / "candidate"
+            candidate.mkdir()
+            subprocess.run(["git", "init", "-q", str(candidate)], check=True)
+            subprocess.run(["git", "-C", str(candidate), "fetch", "-q", "--depth=1",
+                            "https://github.com/portyu9/portyu9.git",
+                            "refs/heads/fix/cpython-3-13-18-convergence-20261026"], check=True)
+            subprocess.run(["git", "-C", str(candidate), "checkout", "-q", "--detach", "FETCH_HEAD"], check=True)
+            observed_sha = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD"], text=True
+            ).strip()
+            observed_tree = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD^{tree}"], text=True
+            ).strip()
+            require(observed_sha == FROZEN_SHA and observed_tree == FROZEN_TREE,
+                    "frozen CPython 3.13.18 candidate SHA/tree moved")
+            difference = workflow_capability_admission.measure(
+                candidate, candidate_tree_sha=FROZEN_TREE
+            )
+            measurement = workflow_capability_admission.public_measurement(
+                difference, candidate_tree_sha=FROZEN_TREE
+            )
+            print("EXACT_PYTHON_31318_MEASUREMENT=" +
+                  json.dumps(measurement, sort_keys=True, separators=(",", ":")), flush=True)
+    raise SystemExit(outcome)
