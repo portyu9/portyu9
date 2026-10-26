@@ -19,7 +19,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-import approved_banner_themes as approved
+import approved_banner_rotation as approved
 import independent_banner_candidate_contract as contract
 from automation_governed_bot_review_gate import review_decision, review_marker
 
