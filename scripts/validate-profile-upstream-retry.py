@@ -110,7 +110,10 @@ def validate(text: str) -> None:
         "        id: profile_generator_witness_discovery",
         "        continue-on-error: true",
         "GH_TOKEN: ${{ github.token }}",
-        'python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-generator-compatibility-witness.yml/runs?branch=main&status=success&per_page=100"',
+        'CREATED_SINCE="$(date -u -d "@$((NOW - 21600))" +%Y-%m-%dT%H:%M:%SZ)"',
+        '[[ "$CREATED_SINCE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]',
+        'WITNESS_QUERY="repos/${GITHUB_REPOSITORY}/actions/workflows/profile-generator-compatibility-witness.yml/runs?branch=main&status=success&created=%3E%3D${CREATED_SINCE}&per_page=100"',
+        'python3 scripts/automation_github_read.py "$WITNESS_QUERY"',
         'python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}"',
         'python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100"',
         "python3 scripts/profile_generator_compatibility_witness.py select-run",
@@ -374,14 +377,25 @@ def self_test(text: str) -> None:
         "canonical successful-output selector",
     )
     profile_discovery_transport_drift = text.replace(
-        'python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-generator-compatibility-witness.yml/runs?branch=main&status=success&per_page=100"',
-        'gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-generator-compatibility-witness.yml/runs?branch=main&status=success&per_page=100"',
+        'python3 scripts/automation_github_read.py "$WITNESS_QUERY"',
+        'gh api "$WITNESS_QUERY"',
         1,
     )
     expect_failure(
         profile_discovery_transport_drift,
         "must use exactly three governed GitHub read call sites",
     )
+
+    for forbidden, needle, replacement in (
+        ("lease extension", "NOW - 21600", "NOW - 43200"),
+        ("future window", "NOW - 21600", "NOW + 21600"),
+        ("missing time constraint",
+         "branch=main&status=success&created=%3E%3D${CREATED_SINCE}&per_page=100",
+         "branch=main&status=success&per_page=100"),
+    ):
+        changed = text.replace(needle, replacement, 1)
+        require(changed != text, f"witness creation-window negative control did not mutate {forbidden}")
+        expect_failure(changed, "discovery contract changed")
 
     artifact_visibility_transport_drift = text.replace(
         'python3 scripts/automation_github_read.py \\\n              "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100"',
