@@ -1440,7 +1440,7 @@
       "candidateBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
       "expansionSha256": "65de795405aaec2bf02ec541fdef781c7ce8671dd6f0cc4520323cef8c26e824",
       "id": "cap-privileged-python-31318-convergence-v1",
-      "rationale": "Prior-authorize frozen runtime PR #1871 head 748d5c5b7fa3c29fac049e080dda6c53fc47d55f/tree 6151e7aadd65f3f98433858b414100606d2a5ddc, measured by closed-unmerged diagnostic #1872 under accepted main: exact ten-workflow CPython 3.13.18 runtime pin/source epoch/provenance and trusted-contract identity convergence. Two protected TCB expansions, zero semantic BOM changes or reductions. No new trigger, permission, secret/OIDC, endpoint, mutation, merge/ruleset authority, required-check reduction or bypass."
+      "rationale": "Authorize frozen #1871 head 748d5c5b7fa3c29fac049e080dda6c53fc47d55f/tree 6151e7aadd65f3f98433858b414100606d2a5ddc, measured by closed-unmerged #1872. CPython 3.13.18 ten-workflow pin, provenance, source epoch and frozen contract convergence. Two protected TCB expansions, zero BOM change/reductions. No triggers, permissions, secrets/OIDC, new endpoints, mutations, merge/ruleset authority, reduced checks, direct-main writes or bypass."
     },
     {
       "baseBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
