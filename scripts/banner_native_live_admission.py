@@ -363,6 +363,10 @@ def self_test() -> None:
     no_candidate["completeness"]["openPrs"]["totalCount"] = 0
     require(decide(no_candidate)["decision"] == "no-candidate-read-only",
             "no native banner PR must be a safe idle no-op")
+    # Native REST inventories must be exhausted over pinned authenticated HTTPS,
+    # never inferred from a caller-provided count or unverified Link header.
+    import banner_native_rest_transport
+    banner_native_rest_transport.self_test()
     print("banner native admission: first-attempt, veto and 12 fail-closed probes PASS")
 
 
