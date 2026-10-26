@@ -133,6 +133,12 @@ def self_test() -> None:
     require(approved.propose(correct, approved.chosen(day, slots), slots) == correct,
             "independent banner PR must be idempotent")
     banner_candidate.self_test()
+    # This existing protected-quality self-test entrypoint also exercises the
+    # read-only native reviewer/terminal admission against approved artwork.
+    # Imported lazily: ordinary daily proposal and verification remain isolated
+    # from review snapshot processing and retain zero privileged API access.
+    import banner_native_live_admission
+    banner_native_live_admission.self_test()
 
 
 def main() -> int:
