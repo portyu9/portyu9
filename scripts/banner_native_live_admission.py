@@ -366,7 +366,9 @@ def self_test() -> None:
     # Native REST inventories must be exhausted over pinned authenticated HTTPS,
     # never inferred from a caller-provided count or unverified Link header.
     import banner_native_rest_transport
+    import banner_native_review_threads_transport
     banner_native_rest_transport.self_test()
+    banner_native_review_threads_transport.self_test()
     print("banner native admission: first-attempt, veto and 12 fail-closed probes PASS")
 
 
