@@ -94,4 +94,41 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # DIAGNOSTIC ONLY, NEVER MERGE: measure exactly one frozen candidate
+    # with the *accepted-main* trusted evaluator; output only public digests.
+    outcome = main()
+    if outcome == 0:
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        FROZEN_SHA = "0f2d25ded8a6958a65b927afa66f1705186618e3"
+        FROZEN_TREE = "546f0a425aabd0a35ab0cc00fcbc870cef2fb165"
+        with tempfile.TemporaryDirectory(prefix="bounded-witness-measure-") as tmp:
+            candidate = Path(tmp) / "candidate"
+            candidate.mkdir()
+            subprocess.run(["git", "init", "-q", str(candidate)], check=True)
+            subprocess.run(["git", "-C", str(candidate), "fetch", "-q", "--depth=1",
+                            "https://github.com/portyu9/portyu9.git",
+                            "refs/heads/fix/compat-witness-bounded-created-20261026"],
+                           check=True)
+            subprocess.run(["git", "-C", str(candidate), "checkout", "-q",
+                            "--detach", "FETCH_HEAD"], check=True)
+            observed_sha = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD"], text=True
+            ).strip()
+            observed_tree = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD^{tree}"], text=True
+            ).strip()
+            require(observed_sha == FROZEN_SHA and observed_tree == FROZEN_TREE,
+                    "frozen compatibility witness candidate moved")
+            difference = workflow_capability_admission.measure(
+                candidate, candidate_tree_sha=FROZEN_TREE
+            )
+            measurement = workflow_capability_admission.public_measurement(
+                difference, candidate_tree_sha=FROZEN_TREE
+            )
+            print("EXACT_COMPAT_WITNESS_CREATED_MEASUREMENT=" +
+                  json.dumps(measurement, sort_keys=True, separators=(",", ":")),
+                  flush=True)
+    raise SystemExit(outcome)
