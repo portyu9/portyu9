@@ -1,10 +1,10 @@
 <br>
 
-<!-- banner-rotation:v8 utc-day=2026-10-25 slot=2 slug=02-fractal-iris -->
+<!-- banner-rotation:v8 utc-day=2026-10-26 slot=3 slug=03-chronohedron -->
 <p align="center">
 <picture>
-  <source media="(max-width: 640px)" srcset="assets/profile-banners/approved/02-fractal-iris-top-compact.svg">
-  <img alt="Animated quantum apex signal crown" src="assets/profile-banners/approved/02-fractal-iris-top.svg" width="100%">
+  <source media="(max-width: 640px)" srcset="assets/profile-banners/approved/03-chronohedron-top-compact.svg">
+  <img alt="Animated quantum apex signal crown" src="assets/profile-banners/approved/03-chronohedron-top.svg" width="100%">
 </picture>
 </p>
 
@@ -138,20 +138,20 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 <p align="center"><sub>3 systems · deterministic daily rotation · scoped live <code>main</code>-branch evidence</sub></p>
 
 <!-- spotlight-direct-links:start -->
-<!-- generated-publication-epoch:v1 sequence=81 generated=22dd78e8cbe5244a44b480e8d96f0be69a73ba05 tree=5513e9bad66f02ecbce52b26fba3d240ea5870f7 -->
+<!-- generated-publication-epoch:v1 sequence=82 generated=26794c06808f8eef769f634d9a95aaf8e5fe035c tree=9564fc15fb957c5fdcaa5950b185dbc8c61798aa -->
 <p align="center">
-<a href="https://github.com/portyu9/qa-automation-api-postman-newman"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/22dd78e8cbe5244a44b480e8d96f0be69a73ba05/engineering-spotlight/spotlight-1-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 1" src="https://raw.githubusercontent.com/portyu9/portyu9/22dd78e8cbe5244a44b480e8d96f0be69a73ba05/engineering-spotlight/spotlight-1-light.svg" width="620"></picture></a><br>
-<a href="https://github.com/portyu9/qa-automation-api-postman-newman/actions/workflows/ci.yml"><img alt="Spotlight slot 1 CI" height="24" src="https://github.com/portyu9/qa-automation-api-postman-newman/actions/workflows/ci.yml/badge.svg?branch=main"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-api-postman-newman/actions/workflows/security.yml"><img alt="Spotlight slot 1 security" height="24" src="https://github.com/portyu9/qa-automation-api-postman-newman/actions/workflows/security.yml/badge.svg?branch=main"></a>
+<a href="https://github.com/portyu9/k6-performance-testing-framework"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/26794c06808f8eef769f634d9a95aaf8e5fe035c/engineering-spotlight/spotlight-1-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 1" src="https://raw.githubusercontent.com/portyu9/portyu9/26794c06808f8eef769f634d9a95aaf8e5fe035c/engineering-spotlight/spotlight-1-light.svg" width="620"></picture></a><br>
+<a href="https://github.com/portyu9/k6-performance-testing-framework/actions/workflows/ci.yml"><img alt="Spotlight slot 1 CI" height="24" src="https://github.com/portyu9/k6-performance-testing-framework/actions/workflows/ci.yml/badge.svg?branch=main"></a>&nbsp;<a href="https://github.com/portyu9/k6-performance-testing-framework/actions/workflows/security.yml"><img alt="Spotlight slot 1 security" height="24" src="https://github.com/portyu9/k6-performance-testing-framework/actions/workflows/security.yml/badge.svg?branch=main"></a>
 </p>
 
 <p align="center">
-<a href="https://github.com/portyu9/qa-automation-ui-cypress"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/22dd78e8cbe5244a44b480e8d96f0be69a73ba05/engineering-spotlight/spotlight-2-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 2" src="https://raw.githubusercontent.com/portyu9/portyu9/22dd78e8cbe5244a44b480e8d96f0be69a73ba05/engineering-spotlight/spotlight-2-light.svg" width="620"></picture></a><br>
+<a href="https://github.com/portyu9/qa-automation-ui-cypress"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/26794c06808f8eef769f634d9a95aaf8e5fe035c/engineering-spotlight/spotlight-2-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 2" src="https://raw.githubusercontent.com/portyu9/portyu9/26794c06808f8eef769f634d9a95aaf8e5fe035c/engineering-spotlight/spotlight-2-light.svg" width="620"></picture></a><br>
 <a href="https://github.com/portyu9/qa-automation-ui-cypress/actions/workflows/ci.yml"><img alt="Spotlight slot 2 CI" height="24" src="https://github.com/portyu9/qa-automation-ui-cypress/actions/workflows/ci.yml/badge.svg?branch=main"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-ui-cypress/actions/workflows/security.yml"><img alt="Spotlight slot 2 security" height="24" src="https://github.com/portyu9/qa-automation-ui-cypress/actions/workflows/security.yml/badge.svg?branch=main"></a>
 </p>
 
 <p align="center">
-<a href="https://github.com/portyu9/k6-performance-testing-framework"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/22dd78e8cbe5244a44b480e8d96f0be69a73ba05/engineering-spotlight/spotlight-3-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 3" src="https://raw.githubusercontent.com/portyu9/portyu9/22dd78e8cbe5244a44b480e8d96f0be69a73ba05/engineering-spotlight/spotlight-3-light.svg" width="620"></picture></a><br>
-<a href="https://github.com/portyu9/k6-performance-testing-framework/actions/workflows/ci.yml"><img alt="Spotlight slot 3 CI" height="24" src="https://github.com/portyu9/k6-performance-testing-framework/actions/workflows/ci.yml/badge.svg?branch=main"></a>&nbsp;<a href="https://github.com/portyu9/k6-performance-testing-framework/actions/workflows/security.yml"><img alt="Spotlight slot 3 security" height="24" src="https://github.com/portyu9/k6-performance-testing-framework/actions/workflows/security.yml/badge.svg?branch=main"></a>
+<a href="https://github.com/portyu9/qa-automation-mobile-appium"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/26794c06808f8eef769f634d9a95aaf8e5fe035c/engineering-spotlight/spotlight-3-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 3" src="https://raw.githubusercontent.com/portyu9/portyu9/26794c06808f8eef769f634d9a95aaf8e5fe035c/engineering-spotlight/spotlight-3-light.svg" width="620"></picture></a><br>
+<a href="https://github.com/portyu9/qa-automation-mobile-appium/actions/workflows/ci.yml"><img alt="Spotlight slot 3 CI" height="24" src="https://github.com/portyu9/qa-automation-mobile-appium/actions/workflows/ci.yml/badge.svg?branch=main"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-mobile-appium/actions/workflows/security.yml"><img alt="Spotlight slot 3 security" height="24" src="https://github.com/portyu9/qa-automation-mobile-appium/actions/workflows/security.yml/badge.svg?branch=main"></a>
 </p>
 
 <!-- spotlight-direct-links:end -->
@@ -184,6 +184,6 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 
 <p align="center">
 <picture>
-  <img alt="Animated evidence horizon" src="assets/profile-banners/approved/02-fractal-iris-bottom.svg" width="100%">
+  <img alt="Animated evidence horizon" src="assets/profile-banners/approved/03-chronohedron-bottom.svg" width="100%">
 </picture>
 </p>
