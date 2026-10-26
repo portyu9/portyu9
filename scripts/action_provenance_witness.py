@@ -75,7 +75,7 @@ RUNTIME_FINGERPRINT_VERSION = "github-hosted-runtime-fingerprint-v1"
 RUNNER_LABEL = "ubuntu-24.04"
 RUNNER_OS = "Linux"
 RUNNER_ARCH = "X64"
-PINNED_PYTHON_VERSION = "Python 3.13.17"
+PINNED_PYTHON_VERSION = "Python 3.13.18"
 RUNTIME_TOOL_SPECS = (
     ("bash", ("bash", "--version")),
     ("git", ("git", "--version")),
@@ -513,7 +513,7 @@ def _fixture_runtime_fingerprint() -> dict[str, Any]:
         },
         "python": {
             "version": PINNED_PYTHON_VERSION,
-            "path": "/opt/hostedtoolcache/Python/3.13.17/x64/bin/python3.13",
+            "path": "/opt/hostedtoolcache/Python/3.13.18/x64/bin/python3.13",
             "executableDigest": "sha256:" + "7" * 64,
         },
     }
