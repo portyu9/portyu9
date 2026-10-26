@@ -22,7 +22,7 @@ permissions:
   security-events: write
 
 env:
-  PYTHON_VERSION: "3.13.17"
+  PYTHON_VERSION: "3.13.18"
 
 jobs:
   controller:
