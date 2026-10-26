@@ -7,8 +7,10 @@ approve nor merge PRs. It never manufactures native checks or authorizations.
 """
 from __future__ import annotations
 
+import http.client
 import io
 import json
+import ssl
 import re
 import urllib.parse
 import urllib.request
@@ -59,24 +61,13 @@ def path_parts(path: str) -> tuple[str, dict[str, str]]:
     return value.path, query_pairs(value.query) if value.query else {}
 
 
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Never forward a bearer token to a redirect destination."""
-
-    def redirect_request(self, req: Any, fp: Any, code: int, msg: str,
-                         headers: Any, newurl: str) -> None:
-        return None
-
-
 class ReadOnlyGitHub:
     def __init__(self, token: str, *, opener: Callable[..., Any] | None = None):
         require(type(token) is str and bool(token.strip())
                 and not any(c.isspace() for c in token),
                 "nonempty caller-scoped GitHub read token required")
         self.__token = token
-        self.__opener = (
-            opener if opener is not None
-            else urllib.request.build_opener(NoRedirect()).open
-        )
+        self.__opener = opener
 
     def get(self, path: str) -> tuple[Any, str | None]:
         path_parts(path)
@@ -90,19 +81,35 @@ class ReadOnlyGitHub:
                 "User-Agent": "portyu9-banner-readonly-observer",
             },
         )
-        with self.__opener(request, timeout=20) as response:
-            require(response.geturl() == url and response.status == 200,
-                    "GitHub response redirected or returned non-200")
-            raw = response.read(MAX_BYTES + 1)
-            require(len(raw) <= MAX_BYTES, "GitHub inventory page too large")
+        if self.__opener is None:
+            # Native TLS GET, not urllib redirects: a 3xx cannot forward the token.
+            connection = http.client.HTTPSConnection(
+                "api.github.com", timeout=20, context=ssl.create_default_context()
+            )
             try:
-                data = json.loads(raw.decode("utf-8"))
-            except (UnicodeError, json.JSONDecodeError) as exc:
-                raise ObservationError("GitHub response is not UTF-8 JSON") from exc
-            link = response.headers.get("Link")
-            require(link is None or type(link) is str,
-                    "GitHub Link header type invalid")
-            return data, link
+                connection.request("GET", path, headers=dict(request.header_items()))
+                response = connection.getresponse()
+                require(response.status == 200,
+                        "GitHub REST must respond HTTP 200 without redirects")
+                raw = response.read(MAX_BYTES + 1)
+                link = response.getheader("Link")
+            finally:
+                connection.close()
+        else:
+            # Test-only opener. Still bind final URL so forged transport fails.
+            with self.__opener(request, timeout=20) as response:
+                require(response.geturl() == url and response.status == 200,
+                        "GitHub response redirected or returned non-200")
+                raw = response.read(MAX_BYTES + 1)
+                link = response.headers.get("Link")
+        require(len(raw) <= MAX_BYTES, "GitHub inventory page too large")
+        require(link is None or type(link) is str,
+                "GitHub Link header type invalid")
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise ObservationError("GitHub response is not UTF-8 JSON") from exc
+        return data, link
 
 
 def verified_next(link: str | None, requested: str, page: int) -> bool:
