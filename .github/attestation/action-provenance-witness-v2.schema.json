@@ -125,7 +125,7 @@
               "additionalProperties":false,
               "required":["version","path","executableDigest"],
               "properties":{
-                "version":{"const":"Python 3.13.17"},
+                "version":{"const":"Python 3.13.18"},
                 "path":{"type":"string","minLength":2,"maxLength":512,"pattern":"^/[ -~]+$"},
                 "executableDigest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}
               }
