@@ -3,8 +3,10 @@ name: Rotate approved profile banners independently
 on:
   workflow_dispatch:
   schedule:
-    # Best-effort daily run, offset from the top-of-hour congestion window.
-    - cron: "11 1 * * *"
+    # Four bounded daily UTC retries recover from accepted-main races and
+    # delayed scheduler delivery; the approved UTC-day selector is idempotent.
+    # A successful rotation does not publish again on the same UTC day.
+    - cron: "11 1,7,13,19 * * *"
 
 permissions:
   contents: read
