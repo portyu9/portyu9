@@ -116,7 +116,15 @@ def collect(
     open_prs, open_witness = rest.inventory(
         client, PREFIX + "pulls?state=open&base=main", limit=99,
     )
-    counts = {"openPrs": open_witness}
+    # The admission envelope has a closed inventory-key set even when there
+    # is no candidate. Candidate-specific zeroes below mean no candidate was
+    # selected (not invented GitHub response counts); current candidates
+    # must replace every such value with a fully exhausted native witness.
+    counts = {
+        name: {"totalCount": 0, "hasNextPage": False}
+        for name in admission.INVENTORIES
+    }
+    counts["openPrs"] = open_witness
     selected = contract.select_read_only_banner_candidate(
         open_prs, current_main_sha=main_sha,
         utc_day=observed_now.date(), native_app=native_app,
