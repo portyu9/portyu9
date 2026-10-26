@@ -2738,8 +2738,18 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
     ):
         consumer_transport_drift = dict(texts)
         source = consumer_transport_drift[".github/workflows/profile-quality.yml"]
-        governed = f'python3 scripts/automation_github_read.py "repos/${{GITHUB_REPOSITORY}}/{endpoint}"'
-        direct = f'gh api "repos/${{GITHUB_REPOSITORY}}/{endpoint}"'
+        if label == "Profile generator compatibility witness":
+            governed = 'python3 scripts/automation_github_read.py "$WITNESS_QUERY"'
+            direct = 'gh api "$WITNESS_QUERY"'
+            require(
+                'WITNESS_QUERY="repos/${GITHUB_REPOSITORY}/actions/workflows/'
+                'profile-generator-compatibility-witness.yml/runs?branch=main&'
+                'status=success&created=%3E%3D${CREATED_SINCE}&per_page=100"' in source,
+                "retry-policy witness discovery lost exact six-hour native query",
+            )
+        else:
+            governed = f'python3 scripts/automation_github_read.py "repos/${{GITHUB_REPOSITORY}}/{endpoint}"'
+            direct = f'gh api "repos/${{GITHUB_REPOSITORY}}/{endpoint}"'
         require(governed in source, f"retry-policy self-test fixture missing Profile Quality {label} governed read")
         consumer_transport_drift[".github/workflows/profile-quality.yml"] = source.replace(governed, direct, 1)
         expect_failure(
