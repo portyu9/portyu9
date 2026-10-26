@@ -145,7 +145,7 @@ def self_test() -> None:
         failures.append((label, copy.deepcopy(before), candidate))
 
     for label, value in (
-        ("different main SHA", "a" * 40),
+        ("different main SHA", "e" * 40),
         ("boolean main SHA", True),
     ):
         invalid(label, "mainSha", value)
