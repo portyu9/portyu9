@@ -355,7 +355,14 @@ jobs:
           set -euo pipefail
           NOW="$(date -u +%s)"
           [[ "$NOW" =~ ^[1-9][0-9]*$ ]]
-          python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-generator-compatibility-witness.yml/runs?branch=main&status=success&per_page=100" > profile-generator-compatibility-witness-runs.json
+          # Bound search by the exact six-hour witness lease; GitHub may have
+          # more than 100 historic successful runs, but only fresh runs matter.
+          # The native count is still required to match the complete one-page
+          # response. Overflow or incomplete pages fail closed into live fallback.
+          CREATED_SINCE="$(date -u -d "@$((NOW - 21600))" +%Y-%m-%dT%H:%M:%SZ)"
+          [[ "$CREATED_SINCE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]
+          WITNESS_QUERY="repos/${GITHUB_REPOSITORY}/actions/workflows/profile-generator-compatibility-witness.yml/runs?branch=main&status=success&created=%3E%3D${CREATED_SINCE}&per_page=100"
+          python3 scripts/automation_github_read.py "$WITNESS_QUERY" > profile-generator-compatibility-witness-runs.json
           python3 scripts/profile_generator_compatibility_witness.py select-run \
             --runs profile-generator-compatibility-witness-runs.json \
             --now "$NOW" \
