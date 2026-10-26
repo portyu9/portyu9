@@ -242,19 +242,20 @@ def render_plan(
                     "same generated publication epoch must preserve exact commit and tree identity")
     block, targets = render_block(manifest, generated_sha, publication_sequence, generated_tree_sha)
     proposed = replace_block(readme, block)
-    # Three approved triplets rotate on successive UTC days; reserved slots
-    # remain inaccessible. Validate historical eight-slot v3 markers before
-    # atomic migration to v4 without promoting archived experimental art.
+    # Spotlight controls only its guarded direct-link block. Validate the
+    # accepted approved-banner state on both sides, and prove it is identical:
+    # daily art/marker changes belong exclusively to the independent publisher.
+    # Never silently normalize a historical approved selection to today's slot.
     banner_cycle = reviewed_approved_banner_helper()
     banner_slots = banner_cycle.load_catalog()
     banner_cycle.validate_readme_state(readme, banner_slots)
-    today = datetime.now(timezone.utc).date()
-    selection = banner_cycle.chosen(today, banner_slots)
-    proposed = banner_cycle.propose(proposed, selection, banner_slots)
     banner_cycle.validate_readme_state(proposed, banner_slots)
     require(banner_cycle.referenced(proposed, banner_slots) ==
-            {surface: selection[surface] for surface in banner_cycle.SURFACES},
-            "Spotlight proposed an unapproved or mismatched banner triplet")
+            banner_cycle.referenced(readme, banner_slots),
+            "Spotlight must preserve accepted independent banner surfaces")
+    require(proposed.split("<!-- spotlight-direct-links:start -->", 1)[0] ==
+            readme.split("<!-- spotlight-direct-links:start -->", 1)[0],
+            "Spotlight changed banner marker or header outside its link block")
     plan = {
         "version": VERSION,
         "publication_epoch_version": PUBLICATION_EPOCH_VERSION,
@@ -345,11 +346,14 @@ def self_test() -> None:
     require(again == proposed and second_plan["changed"] is False, "direct-link rendering is not idempotent")
     banner_cycle = reviewed_approved_banner_helper()
     slots = banner_cycle.load_catalog()
-    today_selection = banner_cycle.chosen(datetime.now(timezone.utc).date(), slots)
-    require(banner_cycle.referenced(proposed, slots) ==
-            {surface: today_selection[surface] for surface in banner_cycle.SURFACES},
-            "Spotlight self-test failed to advance approved three-day artwork")
-    corrupted = proposed.replace(today_selection["top"],
+    original_banner = banner_cycle.referenced(readme, slots)
+    require(banner_cycle.referenced(proposed, slots) == original_banner,
+            "Spotlight self-test changed independent approved-banner artwork")
+    # The exact accepted banner marker must remain intact even when a new
+    # published Spotlight epoch is rendered on the same UTC day.
+    require(proposed.split(START, 1)[0] == readme.split(START, 1)[0],
+            "Spotlight self-test changed the standalone banner marker")
+    corrupted = proposed.replace(original_banner["top"],
                                  "assets/profile-banners/daily/01-orbital-relay-top.svg", 1)
     require(corrupted != proposed, "approved-only fixture did not mutate banner")
     try:
