@@ -1443,6 +1443,13 @@
       "rationale": "Authorize frozen #1871 head 748d5c5b7fa3c29fac049e080dda6c53fc47d55f/tree 6151e7aadd65f3f98433858b414100606d2a5ddc, measured by closed-unmerged #1872. CPython 3.13.18 ten-workflow pin, provenance, source epoch and frozen contract convergence. Two protected TCB expansions, zero BOM change/reductions. No triggers, permissions, secrets/OIDC, new endpoints, mutations, merge/ruleset authority, reduced checks, direct-main writes or bypass."
     },
     {
+      "baseBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
+      "candidateBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
+      "expansionSha256": "0f21a17884e904d0569b73c61b497d04426a1b0e911760ac0887c2d4e853991f",
+      "id": "cap-profile-compat-witness-bounded-created-v1",
+      "rationale": "Prior-authorize frozen #1879 head d06682cc1647139c72774a65a1a3a66c207ab132/tree 27bc04dab363c34242de59d88ca85870224c9488 measured in closed #1880. One protected source expansion, zero BOM change/reductions. Limit trusted Profile Quality witness GET to the dynamic six-hour UTC creation window; retain strict native total_count, first-attempt/attested source and live immutable generator fallback. No trigger, permission, secret, endpoint, mutation, status, OIDC, rule, bypass or merge expansion."
+    },
+    {
       "baseBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
       "candidateBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
       "expansionSha256": "2bd48c4cb8b4cabf131c8abb053e1c2e968b4edad6d450a177816a61d978bece",
