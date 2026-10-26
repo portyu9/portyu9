@@ -89,7 +89,7 @@ def observed_utc(value: datetime) -> str:
 
 def collect(
     *, native_app: dict[str, Any], observed_now: datetime,
-    token: str | None = None, client: Any = None,
+    client: Any, token: str | None = None,
     threads_reader: Callable[[str, int], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Read all native evidence before composing a non-authoritative snapshot.
@@ -104,9 +104,8 @@ def collect(
         "expected_installation_id", "expected_repository_id",
     }, "banner native App observation has incomplete trust inputs")
     contract.verified_native_banner_app_identity(**native_app)
-    if client is None:
-        require(token is not None, "native REST collector requires caller-scoped token")
-        client = rest.ReadOnlyGitHub(token)
+    require(client is not None,
+            "native REST collector requires independently authenticated client")
     if threads_reader is None:
         require(token is not None, "native GraphQL collector requires caller-scoped token")
         def threads_reader(repository: str, number: int) -> dict[str, Any]:
