@@ -94,4 +94,43 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # Read-only disposable diagnostic: never merge this modified validator.
+    exit_code = main()
+    if exit_code == 0:
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+
+        FROZEN_COMMIT = "10dcecb03be772e535dce9c729803ddee2f29b25"
+        FROZEN_TREE = "d2224302a338eff4a304f18150356680e9139158"
+        with tempfile.TemporaryDirectory(prefix="measure-banner-daily-retry-") as dirname:
+            candidate = Path(dirname) / "candidate"
+            subprocess.run(["git", "init", "-q", str(candidate)], check=True)
+            subprocess.run([
+                "git", "-C", str(candidate), "fetch", "-q", "--depth=1",
+                "https://github.com/portyu9/portyu9.git",
+                "refs/heads/fix/banner-idempotent-daily-recovery-20261026",
+            ], check=True)
+            subprocess.run(["git", "-C", str(candidate), "checkout", "-q",
+                            "--detach", "FETCH_HEAD"], check=True)
+            got_commit = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD"],
+                text=True,
+            ).strip()
+            got_tree = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD^{tree}"],
+                text=True,
+            ).strip()
+            require(got_commit == FROZEN_COMMIT and got_tree == FROZEN_TREE,
+                    "frozen banner retry candidate changed")
+            diff = workflow_capability_admission.measure(
+                candidate, candidate_tree_sha=FROZEN_TREE,
+            )
+            measured = workflow_capability_admission.public_measurement(
+                diff, candidate_tree_sha=FROZEN_TREE,
+            )
+            print("EXACT_BANNER_DAILY_RETRY_CAPABILITY_MEASUREMENT=" +
+                  json.dumps(measured, sort_keys=True, separators=(",", ":")),
+                  flush=True)
+    raise SystemExit(exit_code)
