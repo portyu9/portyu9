@@ -102,8 +102,8 @@ if __name__ == "__main__":
         import subprocess
         import tempfile
         from pathlib import Path
-        FROZEN_SHA = "0f2d25ded8a6958a65b927afa66f1705186618e3"
-        FROZEN_TREE = "546f0a425aabd0a35ab0cc00fcbc870cef2fb165"
+        FROZEN_SHA = "d06682cc1647139c72774a65a1a3a66c207ab132"
+        FROZEN_TREE = "27bc04dab363c34242de59d88ca85870224c9488"
         with tempfile.TemporaryDirectory(prefix="bounded-witness-measure-") as tmp:
             candidate = Path(tmp) / "candidate"
             candidate.mkdir()
