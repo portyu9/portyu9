@@ -216,7 +216,12 @@ class _FixtureClient:
             require(is_page and params.get("state") == ["open"]
                     and params.get("base") == ["main"],
                     "open PR inventory filter drifted")
-            return copy.deepcopy(self.sample["openPrs"]), None
+            rows = copy.deepcopy(self.sample["openPrs"])
+            # The compact pure-admission fixture omits GitHub REST node IDs;
+            # authentic /pulls responses include their separate numeric id.
+            for row in rows:
+                row["id"] = row["number"] + 10000
+            return rows, None
         if self.sample.get("pr") is None:
             raise ValueError("collector read candidate detail in no-candidate fixture")
         number = self.sample["pr"]["number"]
