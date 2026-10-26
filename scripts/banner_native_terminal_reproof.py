@@ -88,7 +88,8 @@ def evaluate(initial: Any, after_review: Any) -> dict[str, str | int]:
             and type(base) is str and type(head) is str,
             "banner two-phase candidate identity changed")
     new = created[0]
-    require(new.get("user") == {"login": REVIEW_LOGIN}
+    require(type(new.get("user")) is dict
+            and new["user"].get("login") == REVIEW_LOGIN
             and new.get("commit_id") == head
             and new.get("state") == "APPROVED"
             and new.get("body") == review_marker(base, head)
