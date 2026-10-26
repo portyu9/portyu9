@@ -239,7 +239,7 @@ def self_test() -> None:
                 "read-only token/method binding changed")
         page = int(query_pairs(urllib.parse.urlsplit(request.full_url).query)["page"])
         if page == 1:
-            next_url = request.full_url.replace("page=1", "page=2")
+            next_url = request.full_url.replace("&page=1", "&page=2")
             return Response(request.full_url, {
                 "total_count": 101, "check_runs": [{"id": i} for i in range(1, 101)],
             }, f'<{next_url}>; rel="next"')
