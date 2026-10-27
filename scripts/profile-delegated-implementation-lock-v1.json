@@ -11,7 +11,7 @@
     "scripts/json_object_contract.py": "0eed47074ba6f0bd470dff9e814577d1f78eede6",
     "scripts/portfolio-systems-v1.json": "3bf65cb0baea08b4666a113e322f0b55d8a509c5",
     "scripts/portfolio_evidence_helpers.py": "74fedec29539f8a262c48780be26856f5daac8b1",
-    "scripts/portfolio_evidence_ledger.py": "73b9a75a49e83a8fa6bfd92ec1caf5c150beed9b",
+    "scripts/portfolio_evidence_ledger.py": "64bb3a9cf048805e62ad194ae28db1d44cc2dd69",
     "scripts/portfolio_system_registry.py": "32a4d3d3eb924db9377bea9ed1eb98a8a01fd0c1",
     "scripts/validate-engineering-spotlight.py": "388991c414a74569da749867929a97705ad67f9e",
     "scripts/validate-portfolio-evidence-ledger.py": "7b233739d9ed6f255c23a808cb3fd59717801622",
