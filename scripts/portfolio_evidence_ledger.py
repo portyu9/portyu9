@@ -23,12 +23,15 @@ EVIDENCE_SEMANTICS = "execution-result-subject-binding-freshness-v1"
 SHA40_ZERO = "0" * 40
 API_ORIGIN = "https://api.github.com"
 TRUSTED_WORKFLOW_EVENTS = frozenset({"push", "workflow_dispatch"})
-SCHEDULED_NATIVE_MAIN_CI = ("ai-qa-automation", "ci.yml")
+SCHEDULED_NATIVE_AI_QA = frozenset({
+    ("ai-qa-automation", "ci.yml"),
+    ("ai-qa-automation", "security.yml"),
+})
 
 
 def trusted_workflow_events(repo: str | None, workflow: str | None) -> frozenset[str]:
-    """Only the AI QA ordinary CI may use independent native scheduled evidence."""
-    if (repo, workflow) == SCHEDULED_NATIVE_MAIN_CI:
+    """Only AI QA native current-main CI and Security may use scheduled evidence."""
+    if (repo, workflow) in SCHEDULED_NATIVE_AI_QA:
         return TRUSTED_WORKFLOW_EVENTS | frozenset({"schedule"})
     return TRUSTED_WORKFLOW_EVENTS
 
@@ -861,7 +864,7 @@ def workflow_jobs_self_test() -> None:
 
 
 def scheduled_native_main_ci_self_test() -> None:
-    """Scheduled recovery is limited to exact AI QA CI; reject unrelated schedules."""
+    """Scheduled recovery is limited to exact AI QA CI/Security; reject others."""
     subject = "1" * 40
     scheduled = {
         "id": 197,
@@ -875,9 +878,33 @@ def scheduled_native_main_ci_self_test() -> None:
         == frozenset({"push", "workflow_dispatch", "schedule"}),
         "AI QA native schedule admission changed",
     )
+    security = dict(scheduled, id=198, path=".github/workflows/security.yml")
+    require(
+        trusted_workflow_events("ai-qa-automation", "security.yml")
+        == frozenset({"push", "workflow_dispatch", "schedule"}),
+        "AI QA native security schedule admission changed",
+    )
+    require(
+        select_exact_workflow_run([security], subject, "security.yml", repo="ai-qa-automation")
+        == security,
+        "genuine native AI QA Security schedule was discarded",
+    )
+    require(
+        select_exact_workflow_run([scheduled], subject, "security.yml", repo="ai-qa-automation")
+        == {},
+        "CI schedule path was accepted as a Security run",
+    )
+    require(
+        select_exact_workflow_run(
+            [dict(security, head_sha="2" * 40)], subject,
+            "security.yml", repo="ai-qa-automation",
+        ) == {},
+        "Security scheduled evidence accepted a foreign main revision",
+    )
     for repo, workflow in (
         ("qa-automation-ai-agent-evals", "ci.yml"),
-        ("ai-qa-automation", "security.yml"),
+        ("qa-automation-ai-agent-evals", "security.yml"),
+        ("ai-qa-automation", "codeql.yml"),
         ("portyu9", "ci.yml"),
         (None, "ci.yml"),
     ):
@@ -896,8 +923,8 @@ def scheduled_native_main_ci_self_test() -> None:
         "authentic scheduled AI QA CI was rejected",
     )
     require(
-        select_workflow_run([scheduled], subject) == {},
-        "unbound fallback admitted scheduled CI without exact repo/workflow",
+        select_workflow_run([scheduled, security], subject) == {},
+        "unbound fallback admitted scheduled evidence without exact repo/workflow",
     )
 
     requested: list[str] = []
@@ -922,6 +949,29 @@ def scheduled_native_main_ci_self_test() -> None:
         requested == sorted(trusted_workflow_events("ai-qa-automation", "ci.yml")),
         "AI QA exact-subject collector queried unreviewed event types",
     )
+    security_requested: list[str] = []
+
+    def fetch_security(url: str, token: str | None) -> dict[str, Any]:
+        require(token is None, "scheduled Security fixture must not have credentials")
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        require((query.get("head_sha") or [None])[0] == subject,
+                "scheduled Security fixture queried unrelated main SHA")
+        event = (query.get("event") or [None])[0]
+        security_requested.append(str(event))
+        if event == "schedule":
+            return {"total_count": 1, "workflow_runs": [security]}
+        return {"total_count": 0, "workflow_runs": []}
+
+    security_runs = workflow_runs_for_subject(
+        "ai-qa-automation", subject, None,
+        workflow="security.yml", fetcher=fetch_security, sleeper=lambda _: None,
+    )
+    require(security_runs == [security], "native Security schedule exact-subject pagination failed")
+    require(
+        security_requested == sorted(trusted_workflow_events("ai-qa-automation", "security.yml")),
+        "Security collector queried unreviewed event authority",
+    )
+
     try:
         workflow_runs_for_subject_event(
             "qa-automation-ai-agent-evals", subject, "schedule", None,
