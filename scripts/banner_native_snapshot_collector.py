@@ -278,6 +278,11 @@ class _FixtureClient:
         raise ValueError(f"fixture received unexpected native endpoint: {suffix}")
 
 
+def fixture_client(sample: dict[str, Any]) -> Any:
+    """Test-only factory; never accepts caller credentials or network authority."""
+    return _FixtureClient(sample)
+
+
 def self_test() -> None:
     sample = admission.fixture()
     clock = datetime.fromisoformat(
