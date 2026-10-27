@@ -369,10 +369,12 @@ def self_test() -> None:
     import banner_native_review_threads_transport
     import banner_native_snapshot_collector
     import banner_native_terminal_reproof
+    import banner_native_observer_cli
     banner_native_rest_transport.self_test()
     banner_native_review_threads_transport.self_test()
     banner_native_snapshot_collector.self_test()
     banner_native_terminal_reproof.self_test()
+    banner_native_observer_cli.self_test()
     print("banner native admission: first-attempt, veto and 12 fail-closed probes PASS")
 
 
