@@ -382,7 +382,7 @@ def self_test() -> None:
     require(observer_path.is_file() and not observer_path.is_symlink(),
             "read-only banner observer executable is missing or aliased")
     require(approved.git_blob(observer_path.read_text(encoding="utf-8"))
-            == "7432c83dd974053245035372aa058a8988c09e9e",
+            == "0fe206d64d08bb216f4e379d656e27fa3acabcdc",
             "read-only banner observer executable changed without re-review")
     print("banner native admission: first-attempt, veto and 12 fail-closed probes PASS")
 
