@@ -45,7 +45,7 @@ def unique_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 def read_bounded(path: Path) -> Any:
     require(type(path) is Path, "banner observer input needs a concrete file path")
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
     descriptor = os.open(path, flags)
     try:
         details = os.fstat(descriptor)
@@ -79,7 +79,7 @@ def write_exclusive(path: Path, evidence: Any) -> None:
     content = encode_bounded(evidence)
     flags = (
         os.O_WRONLY | os.O_CREAT | os.O_EXCL
-        | getattr(os, "O_NOFOLLOW", 0)
+        | os.O_NOFOLLOW
     )
     descriptor = os.open(path, flags, 0o600)
     completed = False
