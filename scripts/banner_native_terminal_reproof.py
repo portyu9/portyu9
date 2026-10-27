@@ -133,7 +133,8 @@ def self_test() -> None:
         "baseSha": before["mainSha"],
         "headSha": before["pr"]["head"]["sha"],
         "headRef": before["pr"]["head"]["ref"],
-        "utcDay": "2026-10-27", "ownerReviewId": 517,
+        "utcDay": admission.exact_utc(before["observedAt"]).date().isoformat(),
+        "ownerReviewId": 517,
     }, "approved two-phase reviewer proof returned ambiguous subject")
 
     # Build independent mutated observations so even a nested data mutation
@@ -151,9 +152,13 @@ def self_test() -> None:
         invalid(label, "mainSha", value)
     invalid("different repository", "repository", "attacker/repo")
     invalid("extra token in response", "token", "not-allowed")
-    invalid("stale terminal clock", "observedAt", "2026-10-27T12:11:00Z")
-    invalid("UTC reversal", "observedAt", "2026-10-27T11:59:00Z")
-    invalid("different day", "observedAt", "2026-10-28T00:00:00Z")
+    invalid("stale terminal clock", "observedAt",
+            before["observedAt"].replace("T12:00:00Z", "T12:11:00Z"))
+    invalid("UTC reversal", "observedAt",
+            before["observedAt"].replace("T12:00:00Z", "T11:59:00Z"))
+    invalid("different day", "observedAt",
+            (admission.exact_utc(before["observedAt"]) + timedelta(days=1))
+            .isoformat(timespec="seconds").replace("+00:00", "Z"))
 
     for label, rewrite in (
         ("changed branch", lambda x: x["pr"]["head"].update(ref="other")),
