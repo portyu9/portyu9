@@ -136,7 +136,7 @@ def self_test() -> None:
     }
     initial, first = observe(
         **kwargs, observed_now=initial_time,
-        client=collector.fixture_client(initial_fixture),
+        client=collector._FixtureClient(initial_fixture),
         threads_reader=lambda _repo, _pr: copy.deepcopy(
             initial_fixture["reviewThreads"],
         ),
@@ -157,7 +157,7 @@ def self_test() -> None:
     after_fixture["completeness"]["reviews"]["totalCount"] = 1
     after, second = observe(
         **kwargs, observed_now=initial_time + timedelta(minutes=3),
-        client=collector.fixture_client(after_fixture),
+        client=collector._FixtureClient(after_fixture),
         threads_reader=lambda _repo, _pr: copy.deepcopy(
             after_fixture["reviewThreads"],
         ),
