@@ -369,12 +369,21 @@ def self_test() -> None:
     import banner_native_review_threads_transport
     import banner_native_snapshot_collector
     import banner_native_terminal_reproof
-    import banner_native_observer_cli
     banner_native_rest_transport.self_test()
     banner_native_review_threads_transport.self_test()
     banner_native_snapshot_collector.self_test()
     banner_native_terminal_reproof.self_test()
-    banner_native_observer_cli.self_test()
+    # Profile Quality's transitive validator-purity firewall intentionally
+    # forbids executing a CLI that opens network/local file descriptors.
+    # Freeze the exact separately runnable observer executable instead; its
+    # reused live collector and two-phase proof remain dynamically exercised
+    # above. Any observer implementation change requires reviewed re-lock.
+    observer_path = Path(__file__).with_name("banner_native_observer_cli.py")
+    require(observer_path.is_file() and not observer_path.is_symlink(),
+            "read-only banner observer executable is missing or aliased")
+    require(approved.git_blob(observer_path.read_text(encoding="utf-8"))
+            == "7432c83dd974053245035372aa058a8988c09e9e",
+            "read-only banner observer executable changed without re-review")
     print("banner native admission: first-attempt, veto and 12 fail-closed probes PASS")
 
 
