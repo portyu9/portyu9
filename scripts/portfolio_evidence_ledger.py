@@ -23,6 +23,14 @@ EVIDENCE_SEMANTICS = "execution-result-subject-binding-freshness-v1"
 SHA40_ZERO = "0" * 40
 API_ORIGIN = "https://api.github.com"
 TRUSTED_WORKFLOW_EVENTS = frozenset({"push", "workflow_dispatch"})
+SCHEDULED_NATIVE_MAIN_CI = ("ai-qa-automation", "ci.yml")
+
+
+def trusted_workflow_events(repo: str | None, workflow: str | None) -> frozenset[str]:
+    """Only the AI QA ordinary CI may use independent native scheduled evidence."""
+    if (repo, workflow) == SCHEDULED_NATIVE_MAIN_CI:
+        return TRUSTED_WORKFLOW_EVENTS | frozenset({"schedule"})
+    return TRUSTED_WORKFLOW_EVENTS
 
 API_ATTEMPTS = automation_github_read.ATTEMPTS
 API_TIMEOUT_SECONDS = automation_github_read.TIMEOUT_SECONDS
@@ -177,7 +185,9 @@ def select_workflow_run(runs: Any, subject: str | None) -> dict[str, Any]:
     return trusted[0] if trusted else {}
 
 
-def select_exact_workflow_run(runs: Any, subject: str, workflow: str) -> dict[str, Any]:
+def select_exact_workflow_run(
+    runs: Any, subject: str, workflow: str, *, repo: str | None = None
+) -> dict[str, Any]:
     """Select only trusted evidence for one workflow on the exact requested subject."""
     expected_path = f".github/workflows/{workflow}"
     if not isinstance(runs, list):
@@ -188,7 +198,7 @@ def select_exact_workflow_run(runs: Any, subject: str, workflow: str) -> dict[st
         and run.get("head_sha") == subject
         and run.get("path") == expected_path
         and isinstance(run.get("event"), str)
-        and run["event"] in TRUSTED_WORKFLOW_EVENTS
+        and run["event"] in trusted_workflow_events(repo, workflow)
         and isinstance(run.get("created_at"), str)
         and bool(run["created_at"])
     ]
@@ -204,13 +214,14 @@ def workflow_runs_for_subject_event(
     *,
     fetcher: Callable[[str, str | None], dict[str, Any]] | None = None,
     sleeper: Callable[[float], None] = time.sleep,
+    workflow: str | None = None,
 ) -> list[dict[str, Any]]:
     """Fetch one complete exact-head snapshot for one already-trusted Actions event."""
     require(
         len(subject) == 40 and all(ch in "0123456789abcdef" for ch in subject),
         f"{repo}: workflow-run subject SHA is malformed",
     )
-    require(event in TRUSTED_WORKFLOW_EVENTS, f"{repo}: workflow-run event is not trusted: {event}")
+    require(event in trusted_workflow_events(repo, workflow), f"{repo}: workflow-run event is not trusted: {event}")
     fetch_page = fetcher or fetch_json
     base = f"https://api.github.com/repos/{OWNER}/{repo}/actions/runs"
     encoded_event = urllib.parse.quote(event, safe="")
@@ -309,11 +320,12 @@ def workflow_runs_for_subject(
     *,
     fetcher: Callable[[str, str | None], dict[str, Any]] | None = None,
     sleeper: Callable[[float], None] = time.sleep,
+    workflow: str | None = None,
 ) -> list[dict[str, Any]]:
     """Merge independently complete exact-head snapshots for only trusted Actions events."""
     collected: list[dict[str, Any]] = []
     seen_ids: set[int] = set()
-    for event in sorted(TRUSTED_WORKFLOW_EVENTS):
+    for event in sorted(trusted_workflow_events(repo, workflow)):
         event_runs = workflow_runs_for_subject_event(
             repo,
             subject,
@@ -321,6 +333,7 @@ def workflow_runs_for_subject(
             token,
             fetcher=fetcher,
             sleeper=sleeper,
+            workflow=workflow,
         )
         for run in event_runs:
             run_id = run.get("id")
@@ -340,8 +353,8 @@ def latest_workflow_run(repo: str, workflow: str, subject: str, token: str | Non
     encoded = urllib.parse.quote(workflow, safe="")
     base = f"https://api.github.com/repos/{OWNER}/{repo}/actions/workflows/{encoded}/runs"
     if subject != SHA40_ZERO:
-        exact_runs = workflow_runs_for_subject(repo, subject, token)
-        selected = select_exact_workflow_run(exact_runs, subject, workflow)
+        exact_runs = workflow_runs_for_subject(repo, subject, token, workflow=workflow)
+        selected = select_exact_workflow_run(exact_runs, subject, workflow, repo=repo)
         if selected:
             return selected
     recent = fetch_json(f"{base}?branch=main&per_page=20", token)
@@ -847,6 +860,79 @@ def workflow_jobs_self_test() -> None:
             raise ValueError(f"workflow jobs pagination self-test accepted malformed pagination: {expected}")
 
 
+def scheduled_native_main_ci_self_test() -> None:
+    """Scheduled recovery is limited to exact AI QA CI; reject unrelated schedules."""
+    subject = "1" * 40
+    scheduled = {
+        "id": 197,
+        "path": ".github/workflows/ci.yml",
+        "head_sha": subject,
+        "event": "schedule",
+        "created_at": "2026-10-27T23:13:00Z",
+    }
+    require(
+        trusted_workflow_events("ai-qa-automation", "ci.yml")
+        == frozenset({"push", "workflow_dispatch", "schedule"}),
+        "AI QA native schedule admission changed",
+    )
+    for repo, workflow in (
+        ("qa-automation-ai-agent-evals", "ci.yml"),
+        ("ai-qa-automation", "security.yml"),
+        ("portyu9", "ci.yml"),
+        (None, "ci.yml"),
+    ):
+        require(
+            "schedule" not in trusted_workflow_events(repo, workflow),
+            "unrelated schedule acquired trusted evidence authority",
+        )
+        require(
+            select_exact_workflow_run([scheduled], subject, workflow, repo=repo) == {},
+            "unrelated system accepted native scheduled AI QA CI evidence",
+        )
+    require(
+        select_exact_workflow_run(
+            [scheduled], subject, "ci.yml", repo="ai-qa-automation"
+        ) == scheduled,
+        "authentic scheduled AI QA CI was rejected",
+    )
+    require(
+        select_workflow_run([scheduled], subject) == {},
+        "unbound fallback admitted scheduled CI without exact repo/workflow",
+    )
+
+    requested: list[str] = []
+
+    def fetch(url: str, token: str | None) -> dict[str, Any]:
+        require(token is None, "scheduled proof fixture unexpectedly has credentials")
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        require((query.get("head_sha") or [None])[0] == subject,
+                "scheduled proof collector lost exact-head API filtering")
+        event = (query.get("event") or [None])[0]
+        requested.append(str(event))
+        if event == "schedule":
+            return {"total_count": 1, "workflow_runs": [scheduled]}
+        return {"total_count": 0, "workflow_runs": []}
+
+    result = workflow_runs_for_subject(
+        "ai-qa-automation", subject, None,
+        workflow="ci.yml", fetcher=fetch, sleeper=lambda _: None,
+    )
+    require(result == [scheduled], "AI QA schedule evidence pagination lost native run")
+    require(
+        requested == sorted(trusted_workflow_events("ai-qa-automation", "ci.yml")),
+        "AI QA exact-subject collector queried unreviewed event types",
+    )
+    try:
+        workflow_runs_for_subject_event(
+            "qa-automation-ai-agent-evals", subject, "schedule", None,
+            workflow="ci.yml",
+        )
+    except ValueError:
+        pass
+    else:
+        raise ValueError("unrelated repository was allowed to request scheduled evidence")
+
+
 def binding_state(subject: str, head_sha: str, has_run: bool) -> str:
     if not has_run:
         return "UNAVAILABLE"
@@ -977,6 +1063,7 @@ def build_ledger(day: dt.date, token: str | None, offline: bool) -> dict[str, An
     transport_self_test()
     workflow_run_primitive_self_test()
     workflow_runs_for_subject_self_test()
+    scheduled_native_main_ci_self_test()
     workflow_jobs_self_test()
     evidence.self_test()
     reviewed = registry.systems()
