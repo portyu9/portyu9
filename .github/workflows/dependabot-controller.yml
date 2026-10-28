@@ -411,7 +411,7 @@ jobs:
           CANDIDATE_TAG="$(jq -r .after.tag probe.json)"
           CANDIDATE_SHA="$(jq -r .after.sha probe.json)"
           case "$DEPENDENCY_REPOSITORY" in
-            github/codeql-action|actions/upload-artifact|actions/download-artifact) ;;
+            github/codeql-action|actions/upload-artifact|actions/download-artifact|actions/setup-python) ;;
             *) echo "ERROR: unsupported Dependabot dependency Action repository" >&2; exit 1 ;;
           esac
           [[ "$CANDIDATE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]
@@ -1351,7 +1351,7 @@ jobs:
           CANDIDATE_TAG="$(jq -r .after.tag probe.json)"
           CANDIDATE_SHA="$(jq -r .after.sha probe.json)"
           case "$DEPENDENCY_REPOSITORY" in
-            github/codeql-action|actions/upload-artifact|actions/download-artifact) ;;
+            github/codeql-action|actions/upload-artifact|actions/download-artifact|actions/setup-python) ;;
             *) echo "ERROR: unsupported Dependabot dependency Action repository" >&2; exit 1 ;;
           esac
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
