@@ -862,6 +862,13 @@
       "rationale": "Authorize #556's exact incremental immutable workflow-run wake binding after the already-accepted duplicate-check convergence. The controller may GET the triggering Actions run by immutable run ID, then fail closed on workflow identity, event, repository, head repository, branch, and SHA before any bot-PR approval or merge logic runs. This adds one read-only trusted wake surface only; existing approval, required checks, provenance, and exact-head merge authority are unchanged."
     },
     {
+      "baseBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
+      "candidateBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
+      "expansionSha256": "be624829dd4ddc0a539e50ef1eeac86e2215f5683d07b622a6100a7dbc15f7b3",
+      "id": "cap-dependabot-isolated-app-rebase-prior-base-v1",
+      "rationale": "Prior-authorize ONLY frozen source #1896 head a71a9fd0eabb886dc82b0873f5c7a0726365bf96 tree 4e28b3440c2491fb83c5d2fcece40b3873465288, independently measured by closed UNMERGED diagnostic #1897 native run 40709619276: exactly one trusted-source expansion, zero reductions, unchanged semantic BOM, measured TCB SHA256 a4674ba003035cacf259f8f3d216de18d79375a9b5abb37f3384332e1c0e1c22. The scoped Ruleset App's existing GraphQL REBASE parser now receives the formerly authenticated exact PR base SHA it already validates in its primary lane; it continues to reject all other bases, stale refs, changed heads and unexpected PR identities. No new permission, trigger, App credential, API mutation, actor, required-check reduction, bypass, direct-main write, owner-review change, or candidate-controlled execution."
+    },
+    {
       "baseBomSha256": "d25d34d36eeeb89f02bbe204a5dc38857e8964ebf01158bb68e160f5ed3ef201",
       "candidateBomSha256": "d25d34d36eeeb89f02bbe204a5dc38857e8964ebf01158bb68e160f5ed3ef201",
       "expansionSha256": "4688c965f7e199f07770bc4ef2f4bd614b60aaaf3522affa8ea879f5cc2f8ffb",
