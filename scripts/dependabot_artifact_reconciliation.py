@@ -169,6 +169,30 @@ def update_privileged_identity(
     return output if output != original else None
 
 
+def update_privileged_action_literals(
+    original: str, updated_identity: str | None, proof: Mapping[str, Any],
+) -> str | None:
+    """Carry an attested setup-python SHA into every privileged validator check.
+
+    The workflow blob references are derived separately from trusted workflow
+    bytes. This stage must also advance the same pinned Action identity in the
+    source validator or its immutable runtime checks would reject the correctly
+    updated workflows. A missing or ambiguous old pin fails closed.
+    """
+    repo, before, after, _ = exact_release(proof)
+    if repo != "actions/setup-python":
+        return updated_identity
+    require(before["sha"] in original,
+            "privileged identity has no authenticated prior setup-python pin")
+    rewritten = update_literal_references(
+        updated_identity if updated_identity is not None else original,
+        before, after, PRIVILEGED_IDENTITY,
+    )
+    require(before["sha"] not in rewritten and after["sha"] in rewritten,
+            "privileged identity setup-python pin migration is incomplete")
+    return rewritten
+
+
 def update_profile_source_epoch(
     *, trusted_root: Path, base_workflows: Mapping[str, str],
     candidate_workflows: Mapping[str, str], derivatives: Mapping[str, str],
@@ -294,6 +318,7 @@ def derive(
 
     original = (trusted_root / PRIVILEGED_IDENTITY).read_text(encoding="utf-8")
     updated = update_privileged_identity(original, base_workflows, candidate_workflows)
+    updated = update_privileged_action_literals(original, updated, proof)
     if updated is not None:
         output[PRIVILEGED_IDENTITY] = updated
 
@@ -362,6 +387,31 @@ def self_test() -> None:
     require(update_literal_references(python_uses, prior, next_release, "setup-fixture") ==
             f'uses: actions/setup-python@{"b"*40} # v7.0.2\n',
             "setup-python release tag and immutable SHA did not move together")
+    privileged_fixture = (
+        f'CHECK = "actions/setup-python@{"a"*40}"\n'
+        f'LEASE = "actions/setup-python@{"a"*40}"\n'
+        f'PLAN = "actions/setup-python@{"a"*40}"\n'
+    )
+    refreshed_privileged = update_privileged_action_literals(
+        privileged_fixture, None, python_proof,
+    )
+    require(refreshed_privileged is not None
+            and refreshed_privileged.count("b" * 40) == 3
+            and "a" * 40 not in refreshed_privileged,
+            "trusted setup-python derivative omitted privileged validator pins")
+    require(update_privileged_action_literals(
+        privileged_fixture, None, proof,
+    ) is None, "unrelated artifact Action changed privileged validator pins")
+    for bad_privileged in (
+        'NO_ACTION_PIN = "unchanged"\n',
+        f'DUPLICATE = "{"a"*40} {"a"*40}"\n',
+    ):
+        try:
+            update_privileged_action_literals(bad_privileged, None, python_proof)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("invalid privileged setup-python pin source was admitted")
     try:
         exact_release({**proof, "dependencyRepository": "actions/checkout"})
     except ValueError:
