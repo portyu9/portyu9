@@ -1121,6 +1121,13 @@
       "rationale": "Prior-authorize #1718 frozen head 6450466be04ed73c39f1f13b3efabfc2f9d7f2a3, tree 81baa14a423fe115adbec380902382396611e85f, measured by closed read-only #1721 run 38900923878: six expansions, zero reductions; TCB SHA256 528abdd49d9a0f2d98897eff231a7540e7718dd09a7cdf63875d57fe42fd2b56. Scope existing Ruleset App token to this repo with Contents, PRs and Workflows write but no Administration; one bound native rebase. No bypass, direct-main write or new App/secrets."
     },
     {
+      "id": "cap-dependabot-setup-python-signed-control-boundary-1917-v1",
+      "baseBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
+      "candidateBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
+      "expansionSha256": "61c38d8f938cd5f14d830de2f634eeb20491d7ebfcbbd4b4d8ef5f086d816d68",
+      "rationale": "Prior-authorize exactly frozen production #1917 head 99f20801465412685ac8ccce46756d1266e5562d, Git tree 6b0ea03bb16ba1443a75c069bb4e8c62c0c518b0, independently measured by disposable closed-unmerged #1918 native Profile Quality run 40778769281: one trusted-source expansion, zero reductions, unchanged workflow capability BOM and candidate TCB SHA256 c32486beeae3f7a3e5b9361b916a3bdf28eeba453a185ec072c9ded07e02aac3. Source-only signed setup-python admission control boundary allows one exactly proven SHA-pin change inside the existing capability-admission workflow, rejects all non-pin changes and unrelated Action repositories; updates exact Profile Quality and validator byte identities. No new permission, trigger, endpoint, API write, secret, check, owner-veto/merge authority or bypass. Normal 7-check protected merge required."
+    },
+    {
       "baseBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
       "candidateBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
       "expansionSha256": "842e3ef45027f32131d6cc0b8c07bb638b45acb24c44241df26ef7cf3cfa288f",
