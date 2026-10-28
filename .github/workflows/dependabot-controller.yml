@@ -155,6 +155,17 @@ jobs:
             exit 0
           fi
 
+          # Scheduled recovery must not repeatedly select the same blocked PR.
+          # Rotate only the already-validated native Dependabot candidate array;
+          # PR-specific workflow_run wakes keep exact head affinity. The selected
+          # branch is still re-fetched and checked before any mutation.
+          if [ "$EVENT_NAME" = "schedule" ] && [ "$COUNT" -gt 1 ]; then
+            [[ "$GITHUB_RUN_NUMBER" =~ ^[1-9][0-9]*$ ]]
+            ROTATION_INDEX="$((GITHUB_RUN_NUMBER % COUNT))"
+            MATCHES="$(jq -c --argjson offset "$ROTATION_INDEX" '.[$offset:] + .[:$offset]' <<<"$MATCHES")"
+            test "$(jq 'length' <<<"$MATCHES")" = "$COUNT"
+          fi
+
           PR_NUMBER="$(jq -r '.[0].number' <<<"$MATCHES")"
           [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
           python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json
