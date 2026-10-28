@@ -36,6 +36,8 @@ SHA40 = re.compile(r"^[0-9a-f]{40}$")
 LOCK_PATH = ".github/action-lock.json"
 BOM_PATH = ".github/workflow-capability-bom-v1.json"
 PRIVILEGED_IDENTITY = "scripts/validate-privileged-workflow-identity.py"
+CAPABILITY_ADMISSION_WORKFLOW = ".github/workflows/capability-admission.yml"
+CAPABILITY_ADMISSION_CONTRACT = "scripts/capability_admission_workflow_contract.py"
 SOURCE_EPOCH_PATH = "scripts/profile-stats-source-epoch-v1.json"
 SOURCE_EPOCH_COMPILER = "scripts/validate-profile-stats-trigger-contract.py"
 PROFILE_STATS_WORKFLOW = ".github/workflows/profile-stats.yml"
@@ -147,6 +149,33 @@ def update_literal_references(text: str, before: Mapping[str, Any],
 def git_blob_sha(value: str) -> str:
     data = value.encode("utf-8")
     return hashlib.sha1(f"blob {len(data)}\0".encode("ascii") + data).hexdigest()
+
+
+def update_capability_admission_blob(
+    original: str, base_workflows: Mapping[str, str],
+    candidate_workflows: Mapping[str, str],
+) -> str | None:
+    """Rebind the exact admission workflow Git blob after its signed pin migration.
+
+    Source is only the accepted-main contract and exact candidate workflow
+    bytes; never run candidate-authored Python. No wildcard byte authority.
+    """
+    path = CAPABILITY_ADMISSION_WORKFLOW
+    require(path in base_workflows and path in candidate_workflows,
+            "capability admission workflow is missing from authenticated corpus")
+    before = git_blob_sha(base_workflows[path])
+    after = git_blob_sha(candidate_workflows[path])
+    old_literal = f'EXPECTED_GIT_BLOB = "{before}"'
+    require(original.count("EXPECTED_GIT_BLOB = ") == 1
+            and original.count(old_literal) == 1,
+            "trusted capability admission contract lost exact accepted workflow Git blob")
+    if before == after:
+        return None
+    output = original.replace(old_literal, f'EXPECTED_GIT_BLOB = "{after}"', 1)
+    require(output.count(f'EXPECTED_GIT_BLOB = "{after}"') == 1
+            and old_literal not in output,
+            "signed Action candidate left a stale capability admission byte lock")
+    return output
 
 
 def update_privileged_identity(
@@ -308,6 +337,15 @@ def derive(
         original = (trusted_root / relative).read_text(encoding="utf-8")
         if before["sha"] in original:
             output[relative] = update_literal_references(original, before, after, relative)
+    # The action literal and whole-workflow Git blob lock must advance
+    # together; a signed setup-python pin changes both distinct identities.
+    contract_base = (trusted_root / CAPABILITY_ADMISSION_CONTRACT).read_text(encoding="utf-8")
+    contract_candidate = output.get(CAPABILITY_ADMISSION_CONTRACT, contract_base)
+    contract_update = update_capability_admission_blob(
+        contract_candidate, base_workflows, candidate_workflows,
+    )
+    if contract_update is not None:
+        output[CAPABILITY_ADMISSION_CONTRACT] = contract_update
     old_sha = before["sha"]
     for path in (trusted_root / "scripts").glob("*.py"):
         relative = path.relative_to(trusted_root).as_posix()
@@ -412,6 +450,40 @@ def self_test() -> None:
             pass
         else:
             raise ValueError("invalid privileged setup-python pin source was admitted")
+    # Exact whole-workflow identity is independently proved from the signed
+    # candidate bytes; an old, missing or duplicated lock must fail closed.
+    old_workflow = 'name: Capability admission\nuses: actions/setup-python@' + "a" * 40 + '\n'
+    new_workflow = 'name: Capability admission\nuses: actions/setup-python@' + "b" * 40 + '\n'
+    before_oid = git_blob_sha(old_workflow)
+    after_oid = git_blob_sha(new_workflow)
+    lock_text = f'EXPECTED_GIT_BLOB = "{before_oid}"\n'
+    refreshed = update_capability_admission_blob(
+        lock_text,
+        {CAPABILITY_ADMISSION_WORKFLOW: old_workflow},
+        {CAPABILITY_ADMISSION_WORKFLOW: new_workflow},
+    )
+    require(refreshed == f'EXPECTED_GIT_BLOB = "{after_oid}"\n',
+            "signed setup-python derivative left old immutable admission workflow bytes")
+    require(update_capability_admission_blob(
+        lock_text,
+        {CAPABILITY_ADMISSION_WORKFLOW: old_workflow},
+        {CAPABILITY_ADMISSION_WORKFLOW: old_workflow},
+    ) is None, "unchanged workflow caused unapproved derivative")
+    for malformed in (
+        'EXPECTED_GIT_BLOB = "' + "f" * 40 + '"\n',
+        lock_text + lock_text,
+        'WORKFLOW_BYTE_GUARD = "disabled"\n',
+    ):
+        try:
+            update_capability_admission_blob(
+                malformed,
+                {CAPABILITY_ADMISSION_WORKFLOW: old_workflow},
+                {CAPABILITY_ADMISSION_WORKFLOW: new_workflow},
+            )
+        except ValueError:
+            pass
+        else:
+            raise ValueError("malformed exact admission workflow lock was accepted")
     try:
         exact_release({**proof, "dependencyRepository": "actions/checkout"})
     except ValueError:
