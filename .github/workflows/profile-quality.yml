@@ -850,7 +850,7 @@ jobs:
           test "$(git -C candidate-source rev-parse HEAD)" = "$HEAD_SHA"
           test -z "$(git -C trusted-base status --porcelain)"
           test -z "$(git -C candidate-source status --porcelain)"
-          test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_capability_admission.py)" = "57fbfff4321955e92008923529fe01b436cca42a"
+          test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_capability_admission.py)" = "c8cc65991d16e003047fc2595c240891917f0936"
           test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_controller.py)" = "1162773d64283eedac2f473736b902d81bb886e0"
           test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_release.py)" = "229faaf9eadb7f187b71ce5c25809258cbf0c23a"
           test "$(git -C trusted-base rev-parse HEAD:scripts/workflow_capability_api_collection.py)" = "fd111c3aae1ecaf704e522f17a998118978aa994"
