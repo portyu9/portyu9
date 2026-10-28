@@ -412,10 +412,12 @@ def self_test() -> None:
         "path": "", "ref": "b" * 40, "step": "Unapproved",
     })
     reject_setup_control(extra_remote_action, "changed beyond one signed Action pin")
+    wrong_artifact_control = copy.deepcopy(artifact_diff)
+    wrong_artifact_control["expansions"].append(copy.deepcopy(control_entry))
     try:
-        _validate_semantic_bounds(setup_diff, artifact_proof, approved_derivatives)
+        _validate_semantic_bounds(wrong_artifact_control, artifact_proof, approved_derivatives)
     except ValueError as exc:
-        require("unproved Action" in str(exc) or "exclusive to signed setup-python" in str(exc),
+        require("exclusive to signed setup-python" in str(exc),
                 f"artifact negative control test failed at wrong boundary: {exc}")
     else:
         raise ValueError("artifact control-boundary bypass was accepted")
