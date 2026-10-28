@@ -297,7 +297,10 @@ def validate_controller_scheduled_fairness_contract(text: str) -> None:
         'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json',
     )
     for marker in order:
-        require(section.count(marker) == 1,
+        # The same governed PR singleton GET is repeated after a successful
+        # exact-head rebase; both reads are already separately contracted.
+        required = 2 if marker == order[-1] else 1
+        require(section.count(marker) == required,
                 f"Scheduled Dependabot recovery lost immutable selection step: {marker}")
     positions = [section.index(marker) for marker in order]
     require(positions == sorted(positions),
