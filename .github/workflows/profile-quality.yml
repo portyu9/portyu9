@@ -816,7 +816,7 @@ jobs:
               old = parse_uses(before, f"base:{number}")
               new = parse_uses(after, f"head:{number}")
               action = old["action"]
-              if action not in {"actions/upload-artifact", "actions/download-artifact"}:
+              if action not in {"actions/upload-artifact", "actions/download-artifact", "actions/setup-python"}:
                   raise ValueError("untrusted candidate changed protected Profile Quality source")
               if (new["action"] != action or old["prefix"] != new["prefix"]
                       or old["comment"] != new["comment"] or old["suffix"] != new["suffix"]):

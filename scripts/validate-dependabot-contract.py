@@ -3060,6 +3060,39 @@ def self_test() -> None:
             fail(f"Action-pin self-test accepted forbidden reference: {bad.strip()}")
 
 
+def self_test_profile_quality_setup_python_pin_gate(text: str) -> None:
+    """Only the native bot may propose a forward pin-only setup-python release."""
+    start = text.index("\n  dependabot_admission:")
+    end = text.index("\n  governed_bot_review:", start)
+    block = text[start:end]
+    allowed = 'if action not in {"actions/upload-artifact", "actions/download-artifact", "actions/setup-python"}:'
+    require(block.count(allowed) == 1, "native signed setup-python allowed actions changed")
+    guards = (
+        'test "$PR_AUTHOR" = "dependabot[bot]"',
+        'test "$HEAD_REPOSITORY" = "$TARGET_REPOSITORY"',
+        'test "$BASE_REF" = "main"',
+        'validate_dependabot_pr_object "$PR"',
+        'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
+        'old = parse_uses(before, f"base:{number}")',
+        'new = parse_uses(after, f"head:{number}")',
+        'lock = load_action_lock(Path("trusted-base/.github/action-lock.json"))',
+        'new["action"] != action or old["prefix"] != new["prefix"]',
+        'lock[action]["sha"] == old["sha"]',
+        'lock[action]["tag"] == old["tag"]',
+        'compare_semver(new["tag"], old["tag"]) > 0',
+        'python3 trusted-base/scripts/dependabot_capability_admission.py',
+    )
+    for guard in guards:
+        require(guard in block, f"signed native setup-python proof lost: {guard}")
+    require(block.index('validate_dependabot_pr_object "$PR"') <
+            block.index(allowed) <
+            block.index("- name: Evaluate exact accepted-base semantic admission"),
+            "native action gate escaped bot identity or independent admission")
+    for illegal in ("actions/checkout", "actions/cache"):
+        require(allowed.replace("actions/setup-python", illegal) not in block,
+                "native setup-python provisional gate expanded to unrelated Action")
+
+
 def self_test_profile_quality_native_bytecode_guard(text: str) -> None:
     """Prevent a native bot PR from hiding a default-bytecode clean-tree failure."""
     guard = 'PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts" python3 -B - \\'
@@ -3120,6 +3153,7 @@ def main() -> int:
         self_test_controller_approval_comment_contract(controller_text)
         validate_approval_comment_helper_contract(APPROVAL_COMMENT_HELPER.read_text(encoding="utf-8"))
         self_test_profile_quality_native_bytecode_guard(QUALITY.read_text(encoding="utf-8"))
+        self_test_profile_quality_setup_python_pin_gate(QUALITY.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
 
         print(
