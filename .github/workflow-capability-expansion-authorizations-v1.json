@@ -806,6 +806,13 @@
       "rationale": "Authorize frozen #1054's exact protected-source-only token wiring for the delegated Dependabot release reproof step plus its static regression contract. Semantic Workflow Capability is unchanged; the job already had read-only checks/contents/pull-request permissions and github.token reference. No endpoint, trigger, mutation, candidate execution, merge authority, required-check weakening, ruleset, direct-main write, OIDC, secret or bypass capability is added."
     },
     {
+      "baseBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
+      "candidateBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
+      "expansionSha256": "75f238bb0a6479d9ef1baae2cb4f0a9d7800a88c73ad09948f1319e877f5e179",
+      "id": "cap-dependabot-delegated-setup-python-allowlist-1902-v1",
+      "rationale": "Authorize revised frozen #1902 head a802c7456a20fd441433c9d5f81fa83fa36d5df0, tree 25d3b6ac66f06bbbc3143ec41c54ac3d6e9f369d, native #1904 run 40725652105. Exactly one trusted-source expansion, zero reductions, unchanged BOM; TCB SHA256 276cd6becd2c045bd374c2779eed67cd0660dc3aae6afeda43b7b41149e1b8e0. Restore signed setup-python allowlist parity and exact read-only recovery fixtures. Preserve original release proofs, reviewer veto, checks, normal merge; no secret/permission/mutation bypass."
+    },
+    {
       "baseBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
       "candidateBomSha256": "ec827e2c3a3e8961de5f2da50d5bf7d1208dd229b1dc6760ba5b455ec0d42f52",
       "expansionSha256": "de763ed76f5fa1c826116e0c28f0ac8fe5d2babed4544b74a49be6d47a632bba",
