@@ -280,20 +280,20 @@ def self_test_controller_wake_affinity_contract(text: str) -> None:
 
 def validate_controller_scheduled_fairness_contract(text: str) -> None:
     """Keep scheduled bot recovery live without widening immutable PR authority."""
-    begin = "      - name: Bind current main and one native Dependabot candidate\\n"
-    end = "      - name: Assemble exact candidate tree as data\\n"
+    begin = "      - name: Bind current main and one native Dependabot candidate\n"
+    end = "      - name: Assemble exact candidate tree as data\n"
     require(text.count(begin) == text.count(end) == 1,
             "Scheduled Dependabot candidate selection boundaries changed")
     section = text.split(begin, 1)[1].split(end, 1)[0]
     order = (
-        "COUNT=\\\"$(jq 'length' <<<\\\"$MATCHES\\\")\\\"",
+        "COUNT=\"$(jq 'length' <<<\"$MATCHES\")\"",
         'if [ "$COUNT" = "0" ]; then',
         'if [ "$EVENT_NAME" = "schedule" ] && [ "$COUNT" -gt 1 ]; then',
         '[[ "$GITHUB_RUN_NUMBER" =~ ^[1-9][0-9]*$ ]]',
         'ROTATION_INDEX="$((GITHUB_RUN_NUMBER % COUNT))"',
-        'MATCHES="$(jq -c --argjson offset "$ROTATION_INDEX" \\'.[$offset:] + .[:$offset]\\' <<<"$MATCHES")"',
-        'test "$(jq \\'length\\' <<<"$MATCHES")" = "$COUNT"',
-        'PR_NUMBER="$(jq -r \\'.[0].number\\' <<<"$MATCHES")"',
+        'MATCHES="$(jq -c --argjson offset "$ROTATION_INDEX" \'.[$offset:] + .[:$offset]\' <<<"$MATCHES")"',
+        'test "$(jq \'length\' <<<"$MATCHES")" = "$COUNT"',
+        'PR_NUMBER="$(jq -r \'.[0].number\' <<<"$MATCHES")"',
         'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"',
     )
     for marker in order:
@@ -329,7 +329,7 @@ def self_test_controller_scheduled_fairness_contract(text: str) -> None:
         ('.[$offset:] + .[:$offset]', '.[0:1]'),
         ('[[ "$GITHUB_RUN_NUMBER" =~ ^[1-9][0-9]*$ ]]',
          'true'),
-        ('test "$(jq \\'length\\' <<<"$MATCHES")" = "$COUNT"',
+        ('test "$(jq \'length\' <<<"$MATCHES")" = "$COUNT"',
          'true'),
     )
     for source, replacement in mutations:
