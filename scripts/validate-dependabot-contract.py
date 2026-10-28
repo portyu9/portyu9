@@ -294,7 +294,7 @@ def validate_controller_scheduled_fairness_contract(text: str) -> None:
         'MATCHES="$(jq -c --argjson offset "$ROTATION_INDEX" \'.[$offset:] + .[:$offset]\' <<<"$MATCHES")"',
         'test "$(jq \'length\' <<<"$MATCHES")" = "$COUNT"',
         'PR_NUMBER="$(jq -r \'.[0].number\' <<<"$MATCHES")"',
-        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"',
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json',
     )
     for marker in order:
         require(section.count(marker) == 1,
