@@ -1751,6 +1751,13 @@
       "rationale": "Authorize frozen #1713 at head e71b6c18db59f877b3f521526d0e845680859811, tree 97d20eb18a4db990a7c93aba3bbb0dfbb3c61a9a, measured by #1714 run 38831948696. Three trusted-source expansions; zero reductions; TCB SHA256 d20bf49570646c6be97c08d81d08e409a45e2fc614ba88ce48e0ea86b20b449f. Explicit old/new App installation permissions only; ruleset token stays administration-only and rebase token remains administration-free. No new mutation, secret, required-check reduction, bypass or direct-main write."
     },
     {
+      "baseBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
+      "candidateBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
+      "expansionSha256": "b7b7daa955a73df05ef2fa6841218f8fb6903dcc2d4a3f97ae0cafeb25901707",
+      "id": "cap-scoped-dependabot-setup-python-v1",
+      "rationale": "Prior-authorize frozen owner #1893 head 628566f05fdc6a8460bbbc849e7ad1ef2807f769 tree 3ffc948273dec346fc1a0b3312fa04f7f9e30d8d, exactly measured by disposable #1894: 2 trusted source expansions, no semantic BOM change or reduction, TCB digest ec5cd2075ab54dd577bea18f52cb259794d95e2b724d5a136905f00ef802540e. Permit only signed actions/setup-python atomic release reconciliation, retaining all frozen workflow/source locks, independent owner review, protected checks and normal merge."
+    },
+    {
       "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
       "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
       "expansionSha256": "df9d96f5397051e0922b56443d08b777d70439d0a745c2aa88b40f36f0dcd663",
