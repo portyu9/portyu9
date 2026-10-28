@@ -190,7 +190,21 @@ def fixture() -> dict[str, Any]:
     before = (root / "README.md").read_text(encoding="utf-8")
     slots = approved.load_catalog()
     approved.validate_readme_state(before, slots)
-    day = date(2026, 10, 27)
+    # Rebase synthetic evidence on the already validated README date. The
+    # production monotonic selector must reject every historical rollback,
+    # including after the next real UTC banner publication.
+    marker = approved.MARKER.search(before)
+    day = date.fromisoformat(marker.group(2)) if marker else approved.EPOCH
+    if marker:
+        try:
+            approved.propose(
+                before, approved.chosen(day - timedelta(days=1), slots), slots,
+            )
+        except ValueError as exc:
+            require("UTC-day rollback forbidden" in str(exc),
+                    "historical banner rollback rejected for the wrong reason")
+        else:
+            raise AssertionError("approved banner rollback was accepted")
     for offset in range(30):
         candidate_day = day + timedelta(days=offset)
         after = approved.propose(
