@@ -94,4 +94,42 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # Disposable read-only measurement carrier. Never merge this changed verifier.
+    # The candidate commit and tree are frozen and only inert data to trusted code.
+    exit_code = main()
+    if exit_code == 0:
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        frozen_sha = "628566f05fdc6a8460bbbc849e7ad1ef2807f769"
+        frozen_tree = "3ffc948273dec346fc1a0b3312fa04f7f9e30d8d"
+        with tempfile.TemporaryDirectory(prefix="measure-1893-setup-python-") as dirname:
+            candidate = Path(dirname) / "candidate"
+            candidate.mkdir()
+            subprocess.run(["git", "init", "-q", str(candidate)], check=True)
+            subprocess.run([
+                "git", "-C", str(candidate), "fetch", "-q", "--depth=1",
+                "https://github.com/portyu9/portyu9.git", frozen_sha,
+            ], check=True)
+            subprocess.run(["git", "-C", str(candidate), "checkout", "-q",
+                            "--detach", "FETCH_HEAD"], check=True)
+            actual_sha = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD"],
+                text=True,
+            ).strip()
+            actual_tree = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD^{tree}"],
+                text=True,
+            ).strip()
+            require(actual_sha == frozen_sha and actual_tree == frozen_tree,
+                    "diagnostic candidate commit or tree changed")
+            diff = workflow_capability_admission.measure(
+                candidate, candidate_tree_sha=frozen_tree,
+            )
+            measurement = workflow_capability_admission.public_measurement(
+                diff, candidate_tree_sha=frozen_tree,
+            )
+            print("EXACT_SETUP_PYTHON_SOURCE_1893_MEASUREMENT=" +
+                  json.dumps(measurement, sort_keys=True, separators=(",", ":")), flush=True)
+    raise SystemExit(exit_code)
