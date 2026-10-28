@@ -102,8 +102,8 @@ if __name__ == "__main__":
         import tempfile
         from pathlib import Path
 
-        frozen_sha = "38ac84c3198eff3a8881811e724613aaef42ad92"
-        frozen_tree = "b52c5d6b4993ee13434ee66ce16ffa805249250c"
+        frozen_sha = "2e2a6e547547f88d96c857c2e66ac0d3ed61d406"
+        frozen_tree = "3e772c85784217095c5d31256c93df7b34ba283b"
         with tempfile.TemporaryDirectory(prefix="measure-1917-") as dirname:
             candidate = Path(dirname) / "candidate"
             candidate.mkdir()
