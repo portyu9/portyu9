@@ -65,7 +65,7 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         "name: Verify exact accepted-base admission source identity",
         'test "$(git -C trusted-base rev-parse HEAD)" = "$BASE_SHA"',
         'test "$(git -C candidate-source rev-parse HEAD)" = "$HEAD_SHA"',
-        'HEAD:scripts/dependabot_capability_admission.py)" = "ba08a271986dd523b1386f41eeb5bc28b06b5cd8"',
+        'HEAD:scripts/dependabot_capability_admission.py)" = "c8cc65991d16e003047fc2595c240891917f0936"',
         'HEAD:scripts/dependabot_controller.py)" = "1162773d64283eedac2f473736b902d81bb886e0"',
         'HEAD:scripts/dependabot_release.py)" = "229faaf9eadb7f187b71ce5c25809258cbf0c23a"',
         'HEAD:scripts/workflow_capability_api_collection.py)" = "fd111c3aae1ecaf704e522f17a998118978aa994"',
@@ -229,7 +229,7 @@ def self_test_profile_quality_dependabot_admission_evidence(block: str) -> None:
             "forbidden relay/candidate/write/direct-singleton surface",
         ),
         (
-            'HEAD:scripts/dependabot_capability_admission.py)" = "ba08a271986dd523b1386f41eeb5bc28b06b5cd8"',
+            'HEAD:scripts/dependabot_capability_admission.py)" = "c8cc65991d16e003047fc2595c240891917f0936"',
             'HEAD:scripts/dependabot_capability_admission.py)" = "' + ("0" * 40) + '"',
             "contract is missing",
         ),
