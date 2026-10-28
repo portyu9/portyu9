@@ -278,6 +278,71 @@ def self_test_controller_wake_affinity_contract(text: str) -> None:
             raise ValueError("Dependabot wake-affinity regression admitted unsafe candidate routing")
 
 
+def validate_controller_scheduled_fairness_contract(text: str) -> None:
+    """Keep scheduled bot recovery live without widening immutable PR authority."""
+    begin = "      - name: Bind current main and one native Dependabot candidate\n"
+    end = "      - name: Assemble exact candidate tree as data\n"
+    require(text.count(begin) == text.count(end) == 1,
+            "Scheduled Dependabot candidate selection boundaries changed")
+    section = text.split(begin, 1)[1].split(end, 1)[0]
+    order = (
+        "COUNT=\"$(jq 'length' <<<\"$MATCHES\")\"",
+        'if [ "$COUNT" = "0" ]; then',
+        'if [ "$EVENT_NAME" = "schedule" ] && [ "$COUNT" -gt 1 ]; then',
+        '[[ "$GITHUB_RUN_NUMBER" =~ ^[1-9][0-9]*$ ]]',
+        'ROTATION_INDEX="$((GITHUB_RUN_NUMBER % COUNT))"',
+        'MATCHES="$(jq -c --argjson offset "$ROTATION_INDEX" \'.[$offset:] + .[:$offset]\' <<<"$MATCHES")"',
+        'test "$(jq \'length\' <<<"$MATCHES")" = "$COUNT"',
+        'PR_NUMBER="$(jq -r \'.[0].number\' <<<"$MATCHES")"',
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json',
+    )
+    for marker in order:
+        require(section.count(marker) == 1,
+                f"Scheduled Dependabot recovery lost immutable selection step: {marker}")
+    positions = [section.index(marker) for marker in order]
+    require(positions == sorted(positions),
+            "Scheduled candidate rotation moved outside validated zero-check/PR re-fetch")
+    require(section.count('MATCHES="$(jq -c --arg main "$MAIN_SHA"') == 1,
+            "Scheduled candidate rotation lost accepted-main prioritized source array")
+    require(section.count('if [ "$EVENT_NAME" = "workflow_run" ] && [ "$WAKE_HEAD_BRANCH" != "main" ]; then') == 1,
+            "Scheduled rotation lost exact PR wake lane affinity")
+    for count in range(2, 8):
+        winners = set()
+        original = tuple(range(count))
+        for sequence in range(count):
+            offset = sequence % count
+            rotated = original[offset:] + original[:offset]
+            require(sorted(rotated) == list(original),
+                    "Scheduled recovery rotation changed candidate membership")
+            winners.add(rotated[0])
+        require(winners == set(original),
+                "Scheduled recovery rotation starves an eligible candidate")
+
+
+def self_test_controller_scheduled_fairness_contract(text: str) -> None:
+    validate_controller_scheduled_fairness_contract(text)
+    mutations = (
+        ('if [ "$EVENT_NAME" = "schedule" ] && [ "$COUNT" -gt 1 ]; then',
+         'if [ "$COUNT" -gt 1 ]; then'),
+        ('ROTATION_INDEX="$((GITHUB_RUN_NUMBER % COUNT))"',
+         'ROTATION_INDEX="0"'),
+        ('.[$offset:] + .[:$offset]', '.[0:1]'),
+        ('[[ "$GITHUB_RUN_NUMBER" =~ ^[1-9][0-9]*$ ]]',
+         'true'),
+        ('test "$(jq \'length\' <<<"$MATCHES")" = "$COUNT"',
+         'true'),
+    )
+    for source, replacement in mutations:
+        require(text.count(source) == 1, "Scheduled fairness negative fixture lost anchor")
+        tampered = text.replace(source, replacement, 1)
+        try:
+            validate_controller_scheduled_fairness_contract(tampered)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("Scheduled fairness negative fixture admitted unsafe routing")
+
+
 def validate_controller_native_rebase_permission_defer_contract(text: str) -> None:
     """Current-main recovery must rebase, never leave a non-skippable merge commit."""
     start = "      - name: Bind current main and one native Dependabot candidate\n"
@@ -3026,6 +3091,7 @@ def main() -> int:
         validate_controller_wake_contract(controller_text)
         self_test_isolated_rebase_main_push_wake_contract(controller_text)
         self_test_controller_wake_affinity_contract(controller_text)
+        self_test_controller_scheduled_fairness_contract(controller_text)
         self_test_controller_native_rebase_permission_defer_contract(controller_text)
         validate_trusted_reference_hydration(controller_text)
         self_test_native_dependabot_rebase_marker(controller_text)
