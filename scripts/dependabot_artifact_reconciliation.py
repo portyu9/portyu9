@@ -28,6 +28,9 @@ import workflow_capability_bom
 REPOSITORIES = frozenset({
     "actions/upload-artifact",
     "actions/download-artifact",
+    # Setup Python may be promoted only by exactly the same signed-release,
+    # atomic-all-occurrences and trusted-derivative pipeline as artifacts.
+    "actions/setup-python",
 })
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 LOCK_PATH = ".github/action-lock.json"
@@ -51,6 +54,12 @@ REFERENCE_SOURCES = (
     "scripts/workflow_authority_contract_item11_core.py",
     "scripts/spotlight_ui_merge_authorization_item10_core.py",
     "scripts/profile_generator_compatibility_witness.py",
+    # Immutable admission/lease/Spotlight bootstraps also reference the pinned
+    # Python setup action. Never leave stale TCB source after a release.
+    "scripts/automation_leases.py",
+    "scripts/validate-workflow-authority-contract.py",
+    "scripts/capability_admission_workflow_contract.py",
+    "scripts/spotlight_merge_authorization_item9_core.py",
     "scripts/validate-spotlight-ui-merge-authorization.py",
 )
 
@@ -339,6 +348,20 @@ def self_test() -> None:
         pass
     else:
         raise ValueError("artifact reconciler allowed mismatched trusted lock coverage")
+    python_proof = {
+        **proof,
+        "dependencyRepository": "actions/setup-python",
+        "actions": ["actions/setup-python"],
+    }
+    python_lock = {"version": "github-actions-identity-lock-v2",
+                   "actions": {"actions/setup-python": prior}}
+    python_update = update_lock(json.dumps(python_lock) + "\n", python_proof)
+    require(json.loads(python_update)["actions"]["actions/setup-python"] == next_release,
+            "exact setup-python release was not admitted as a closed action identity")
+    python_uses = f'uses: actions/setup-python@{"a"*40} # v7.0.1\n'
+    require(update_literal_references(python_uses, prior, next_release, "setup-fixture") ==
+            f'uses: actions/setup-python@{"b"*40} # v7.0.2\n',
+            "setup-python release tag and immutable SHA did not move together")
     try:
         exact_release({**proof, "dependencyRepository": "actions/checkout"})
     except ValueError:
