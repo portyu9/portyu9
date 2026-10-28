@@ -1698,18 +1698,30 @@ def self_test_recovery_acceptance() -> None:
         workflow_text = workflow_text.replace(identity_anchor, repaired_identity, 1)
         workflow_path.write_text(workflow_text, encoding="utf-8")
 
-        # Git blob identities for the exact accepted workflow and this one-line
-        # physical fixture repair. The fixture never computes a cryptographic digest.
-        base_blob = "ea15e7db32b66ba648cb99eb5c4d50c3a5ac610b"
-        candidate_blob = "ffefc39da6c1b79d6aa992e89c20d4ec9461dc4c"
-
+        # Exact Git blob identities for reviewed workflow versions and their
+        # single-newline physical fixture repairs. No digest is derived from
+        # candidate-controlled bytes and no other source identity is accepted.
+        fixture_blobs = {
+            # Accepted main: actions/setup-python v7.0.0.
+            "ea15e7db32b66ba648cb99eb5c4d50c3a5ac610b":
+                "ffefc39da6c1b79d6aa992e89c20d4ec9461dc4c",
+            # Native Dependabot #1891: signed actions/setup-python v7.1.0.
+            "53a504ccb40f839a6643495ee8a240bb8f87f659":
+                "616d9db76781c6e98b577a6f40f7d8ba1a304413",
+        }
         companion_path = positive_root / companion_relative
         companion_text = companion_path.read_text(encoding="utf-8")
-        blob_anchor = f'EXPECTED_GIT_BLOB = "{base_blob}"'
+        observed_pairs = [
+            (base, repaired)
+            for base, repaired in fixture_blobs.items()
+            if companion_text.count(f'EXPECTED_GIT_BLOB = "{base}"') == 1
+        ]
         require(
-            companion_text.count(blob_anchor) == 1,
+            len(observed_pairs) == 1,
             "recovery acceptance companion blob anchor changed",
         )
+        base_blob, candidate_blob = observed_pairs[0]
+        blob_anchor = f'EXPECTED_GIT_BLOB = "{base_blob}"'
         companion_text = companion_text.replace(
             blob_anchor,
             f'EXPECTED_GIT_BLOB = "{candidate_blob}"',
