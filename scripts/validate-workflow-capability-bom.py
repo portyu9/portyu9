@@ -94,4 +94,38 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # Disposable read-only source measurement; NEVER merge.
+    exit_code = main()
+    if exit_code == 0:
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        frozen_sha = "a802c7456a20fd441433c9d5f81fa83fa36d5df0"
+        frozen_tree = "25d3b6ac66f06bbbc3143ec41c54ac3d6e9f369d"
+        with tempfile.TemporaryDirectory(prefix="measure-1902-revised-") as dirname:
+            candidate = Path(dirname) / "candidate"
+            candidate.mkdir()
+            subprocess.run(["git", "init", "-q", str(candidate)], check=True)
+            subprocess.run(["git", "-C", str(candidate), "fetch", "-q", "--depth=1",
+                            "https://github.com/portyu9/portyu9.git", frozen_sha], check=True)
+            subprocess.run(["git", "-C", str(candidate), "checkout", "-q",
+                            "--detach", "FETCH_HEAD"], check=True)
+            actual_sha = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD"], text=True,
+            ).strip()
+            actual_tree = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD^{tree}"], text=True,
+            ).strip()
+            require(actual_sha == frozen_sha and actual_tree == frozen_tree,
+                    "frozen revised source commit or tree mismatch")
+            diff = workflow_capability_admission.measure(
+                candidate, candidate_tree_sha=frozen_tree,
+            )
+            measurement = workflow_capability_admission.public_measurement(
+                diff, candidate_tree_sha=frozen_tree,
+            )
+            print("EXACT_REVISED_1902_MEASUREMENT=" +
+                  json.dumps(measurement, sort_keys=True, separators=(",", ":")),
+                  flush=True)
+    raise SystemExit(exit_code)
