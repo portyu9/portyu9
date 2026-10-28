@@ -831,7 +831,7 @@
       "baseBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
       "candidateBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
       "expansionSha256": "fbb27437d89f5703882597ab39977d32852676405338332fad3b59d9793e76ff",
-      "rationale": "Authorize exact frozen PR #1906 tree 5e3d5dbd7d39c44763998a6b5abebe424a84c772, measured in closed diagnostic #1907. Scheduled Dependabot controller rotates only the already authenticated native bot PR array by workflow run-number modulo exact count, with negative fixture tests. Identical semantic BOM; no new token, trigger, permission, API endpoint/mutation, signed-release authority, required-check, owner review, protected merge, or veto bypass."
+      "rationale": "Authorize exact frozen PR #1906 tree 036406a85acb76e0e840cab7ebeecedccb59579a, measured in closed diagnostic #1909. Scheduled Dependabot controller rotates only the already authenticated native bot PR array by workflow run-number modulo exact count, with negative fixture tests. Identical semantic BOM; no new token, trigger, permission, API endpoint/mutation, signed-release authority, required-check, owner review, protected merge, or veto bypass."
     },
     {
       "baseBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
