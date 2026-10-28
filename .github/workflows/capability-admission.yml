@@ -755,7 +755,7 @@ jobs:
           CANDIDATE_TAG="$(jq -r .after.tag dependabot-probe.json)"
           CANDIDATE_SHA="$(jq -r .after.sha dependabot-probe.json)"
           case "$DEPENDENCY_REPOSITORY" in
-            github/codeql-action|actions/upload-artifact|actions/download-artifact) ;;
+            github/codeql-action|actions/upload-artifact|actions/download-artifact|actions/setup-python) ;;
             *) echo "ERROR: Capability Admission delegated release repository is unapproved" >&2; exit 1 ;;
           esac
           [[ "$CANDIDATE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]
