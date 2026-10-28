@@ -3061,20 +3061,42 @@ def self_test() -> None:
 
 
 def self_test_profile_quality_setup_python_pin_gate(text: str) -> None:
-    """Allow only signed forward pin-only setup-python in native Dependabot lane."""
+    """Only native Dependabot can enter the signed setup-python preliminary check."""
     start = text.index("\n  dependabot_admission:")
     end = text.index("\n  governed_bot_review:", start)
     block = text[start:end]
     allowed = 'if action not in {"actions/upload-artifact", "actions/download-artifact", "actions/setup-python"}:'
-    require(block.count(allowed) == 1,
-            "PR-native signed setup-python pin-only gate is absent or duplicated")
-    for guard in (
+    require(block.count(allowed) == 1, "native action allowlist must be exactly scoped")
+    required = (
         'test "$PR_AUTHOR" = "dependabot[bot]"',
         'test "$HEAD_REPOSITORY" = "$TARGET_REPOSITORY"',
         'test "$BASE_REF" = "main"',
         'validate_dependabot_pr_object "$PR"',
         'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
-        'validate_git_ref_object "$HEAD_REF_RESPONSE" "refs/heads/    """Prevent a native bot PR from hiding a default-bytecode clean-tree failure."""
+        'old = parse_uses(before, f"base:{number}")',
+        'new = parse_uses(after, f"head:{number}")',
+        'lock = load_action_lock(Path("trusted-base/.github/action-lock.json"))',
+        'new["action"] != action or old["prefix"] != new["prefix"]',
+        'lock[action]["sha"] == old["sha"]',
+        'lock[action]["tag"] == old["tag"]',
+        'compare_semver(new["tag"], old["tag"]) > 0',
+        'python3 trusted-base/scripts/dependabot_capability_admission.py',
+    )
+    for marker in required:
+        require(marker in block,
+                f"native signed setup-python authorization guard lost: {marker}")
+    require(block.index('validate_dependabot_pr_object "$PR"') <
+            block.index(allowed) <
+            block.index("- name: Evaluate exact accepted-base semantic admission"),
+            "native setup-python preliminary gate escaped authenticated identity")
+    for illegal in ("actions/checkout", "actions/cache"):
+        widened = allowed.replace("actions/setup-python", illegal)
+        require(widened not in block,
+                "native setup-python preliminary gate includes unrelated action")
+
+
+def self_test_profile_quality_native_bytecode_guard(text: str) -> None:
+    """Prevent a native bot PR from hiding a default-bytecode clean-tree failure."""
     guard = 'PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts" python3 -B - \\'
     unsafe = 'PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts" python3 - \\'
     require(text.count(guard) == 1, "PR-native clean-checkout guard fixture changed")
