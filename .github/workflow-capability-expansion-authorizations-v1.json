@@ -827,6 +827,13 @@
       "rationale": "Authorize #556's exact trusted-controller source change for duplicate required-check convergence. The semantic capability BOM is unchanged. The controller now accepts one or more exact-head GitHub Actions runs for each required context only when every returned latest run is from app 15368, bound to the exact candidate head, completed, and successful. Any missing, pending, failed, mismatched, or foreign duplicate still blocks convergence and merge."
     },
     {
+      "id": "cap-dependabot-fair-scheduled-candidates-1906-v1",
+      "baseBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
+      "candidateBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
+      "expansionSha256": "fbb27437d89f5703882597ab39977d32852676405338332fad3b59d9793e76ff",
+      "rationale": "Authorize exact frozen PR #1906 tree 036406a85acb76e0e840cab7ebeecedccb59579a, measured in closed diagnostic #1909. Scheduled Dependabot controller rotates only the already authenticated native bot PR array by workflow run-number modulo exact count, with negative fixture tests. Identical semantic BOM; no new token, trigger, permission, API endpoint/mutation, signed-release authority, required-check, owner review, protected merge, or veto bypass."
+    },
+    {
       "baseBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
       "candidateBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
       "expansionSha256": "02c59f008515a33bed8986b4578fc6fb0df4f8c914c99948ff325b729b1899d3",
