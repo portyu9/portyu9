@@ -3061,13 +3061,13 @@ def self_test() -> None:
 
 
 def self_test_profile_quality_setup_python_pin_gate(text: str) -> None:
-    """Only native Dependabot can enter the signed setup-python preliminary check."""
+    """Only the native bot may propose a forward pin-only setup-python release."""
     start = text.index("\n  dependabot_admission:")
     end = text.index("\n  governed_bot_review:", start)
     block = text[start:end]
     allowed = 'if action not in {"actions/upload-artifact", "actions/download-artifact", "actions/setup-python"}:'
-    require(block.count(allowed) == 1, "native action allowlist must be exactly scoped")
-    required = (
+    require(block.count(allowed) == 1, "native signed setup-python allowed actions changed")
+    guards = (
         'test "$PR_AUTHOR" = "dependabot[bot]"',
         'test "$HEAD_REPOSITORY" = "$TARGET_REPOSITORY"',
         'test "$BASE_REF" = "main"',
@@ -3082,17 +3082,15 @@ def self_test_profile_quality_setup_python_pin_gate(text: str) -> None:
         'compare_semver(new["tag"], old["tag"]) > 0',
         'python3 trusted-base/scripts/dependabot_capability_admission.py',
     )
-    for marker in required:
-        require(marker in block,
-                f"native signed setup-python authorization guard lost: {marker}")
+    for guard in guards:
+        require(guard in block, f"signed native setup-python proof lost: {guard}")
     require(block.index('validate_dependabot_pr_object "$PR"') <
             block.index(allowed) <
             block.index("- name: Evaluate exact accepted-base semantic admission"),
-            "native setup-python preliminary gate escaped authenticated identity")
+            "native action gate escaped bot identity or independent admission")
     for illegal in ("actions/checkout", "actions/cache"):
-        widened = allowed.replace("actions/setup-python", illegal)
-        require(widened not in block,
-                "native setup-python preliminary gate includes unrelated action")
+        require(allowed.replace("actions/setup-python", illegal) not in block,
+                "native setup-python provisional gate expanded to unrelated Action")
 
 
 def self_test_profile_quality_native_bytecode_guard(text: str) -> None:
@@ -3156,119 +3154,6 @@ def main() -> int:
         validate_approval_comment_helper_contract(APPROVAL_COMMENT_HELPER.read_text(encoding="utf-8"))
         self_test_profile_quality_native_bytecode_guard(QUALITY.read_text(encoding="utf-8"))
         self_test_profile_quality_setup_python_pin_gate(QUALITY.read_text(encoding="utf-8"))
-        validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
-
-        print(
-            "Dependabot governance validation passed: canonical discovery/grouping remains locked; exact native bot identity, "
-            "atomic single-repository pin closure, forward SemVer, public release tag-to-SHA provenance, deterministic governance "
-            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, exact HTTP-201-validated reviewer requests, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology with exact HTTP-201/200 transport proof, exact HTTP-201-validated protected-run approvals, exact HTTP-204-validated repository and workflow dispatches, mirrored canonical/delegated public release reproof, typed terminal merge success evidence with exact HTTP-204-validated post-merge CodeQL dispatch, trusted-actor exact HTTP-201-validated automation-approval comment evidence, delegated CodeQL-only capability admission, single-snapshot exact protected checks, governed residual collection/snapshot reads, and exact-head merge are all "
-            "self-tested while every external action remains pinned to one immutable commit SHA."
-        )
-        return 0
-    except (OSError, ValueError) as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        return 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
- + '{HEAD_REF}" "$HEAD_SHA"',
-        'old = parse_uses(before, f"base:{number}")',
-        'new = parse_uses(after, f"head:{number}")',
-        'lock = load_action_lock(Path("trusted-base/.github/action-lock.json"))',
-        'new["action"] != action or old["prefix"] != new["prefix"]',
-        'lock[action]["sha"] == old["sha"]',
-        'lock[action]["tag"] == old["tag"]',
-        'compare_semver(new["tag"], old["tag"]) > 0',
-        '- name: Evaluate exact accepted-base semantic admission',
-        'python3 trusted-base/scripts/dependabot_capability_admission.py',
-    ):
-        require(guard in block,
-                f"signed native setup-python candidate lost independent guard: {guard}")
-    require(block.index('validate_dependabot_pr_object "$PR"') <
-            block.index(allowed) <
-            block.index('- name: Evaluate exact accepted-base semantic admission'),
-            "PR-native setup-python preliminary gate escaped bot identity or full admission")
-    for malformed in (
-        allowed.replace('"actions/setup-python"', '"actions/checkout"'),
-        allowed.replace('"actions/setup-python"', '"actions/setup-python", "actions/checkout"'),
-    ):
-        changed = text.replace(allowed, malformed, 1)
-        try:
-            self_test_profile_quality_setup_python_pin_gate_internal(changed, allowed)
-        except ValueError:
-            pass
-        else:
-            raise ValueError("native setup-python gate admitted unauthorized action replacement")
-
-
-def self_test_profile_quality_setup_python_pin_gate_internal(text: str, allowed: str) -> None:
-    begin = text.index("\n  dependabot_admission:")
-    end = text.index("\n  governed_bot_review:", begin)
-    require(text[begin:end].count(allowed) == 1,
-            "native setup-python pin authorization list changed")
-
-
-def self_test_profile_quality_native_bytecode_guard(text: str) -> None:
-    """Prevent a native bot PR from hiding a default-bytecode clean-tree failure."""
-    guard = 'PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts" python3 -B - \\'
-    unsafe = 'PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts" python3 - \\'
-    require(text.count(guard) == 1, "PR-native clean-checkout guard fixture changed")
-    validate_quality_contract(text)
-    weakened = text.replace(guard, unsafe, 1)
-    require(weakened != text, "PR-native clean-checkout negative fixture did not mutate")
-    try:
-        validate_quality_contract(weakened)
-    except ValueError as exc:
-        require(
-            "must disable bytecode writes" in str(exc),
-            f"PR-native bytecode negative fixture failed at wrong trust boundary: {exc}",
-        )
-    else:
-        raise ValueError("PR-native admission accepted untracked bytecode generation")
-
-
-def main() -> int:
-    try:
-        for path in (DEPENDABOT, QUALITY, CONTROLLER, GOVERNANCE, APPROVAL_COMMENT_HELPER):
-            require(path.is_file(), f"Dependabot governance input is missing: {path.relative_to(ROOT)}")
-
-        self_test()
-        validate_dependabot(DEPENDABOT.read_text(encoding="utf-8"))
-        validate_all_workflow_pins()
-        controller_text = CONTROLLER.read_text(encoding="utf-8")
-        validate_controller_wake_contract(controller_text)
-        self_test_isolated_rebase_main_push_wake_contract(controller_text)
-        self_test_controller_wake_affinity_contract(controller_text)
-        self_test_controller_scheduled_fairness_contract(controller_text)
-        self_test_controller_native_rebase_permission_defer_contract(controller_text)
-        validate_trusted_reference_hydration(controller_text)
-        self_test_native_dependabot_rebase_marker(controller_text)
-        validate_controller_read_ref_response_contract(controller_text)
-        validate_controller_protected_workflow_evidence_contract(controller_text)
-        self_test_controller_workflow_run_approval_status(controller_text)
-        self_test_controller_profile_review_deadlock_contract(controller_text)
-        validate_controller_pr_response_contract(controller_text)
-        self_test_controller_update_branch_status_contract(controller_text)
-        self_test_controller_reviewer_request_status(controller_text)
-        validate_controller_collection_contract(controller_text)
-        validate_controller_required_check_snapshot_contract(controller_text)
-        self_test_controller_delegated_proof_collection_contract(controller_text)
-        validate_controller_residual_read_transport_contract(controller_text)
-        validate_controller_git_read_response_contract(controller_text)
-        validate_controller_git_mutation_response_contract(controller_text)
-        self_test_controller_git_mutation_status_contract(controller_text)
-        self_test_controller_repository_dispatch_status(controller_text)
-        self_test_controller_workflow_dispatch_status(controller_text)
-        validate_dispatch_codeql_static_checkout_contract(controller_text)
-        self_test_dispatch_codeql_static_checkout_contract(controller_text)
-        validate_release_resolution_parity_contract(controller_text)
-        validate_validation_contract_provenance_token_contract(controller_text)
-        self_test_validation_contract_provenance_token_contract(controller_text)
-        self_test_controller_merge_success_response_contract(controller_text)
-        self_test_controller_approval_comment_contract(controller_text)
-        validate_approval_comment_helper_contract(APPROVAL_COMMENT_HELPER.read_text(encoding="utf-8"))
-        self_test_profile_quality_native_bytecode_guard(QUALITY.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
 
         print(
