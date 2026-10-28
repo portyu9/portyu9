@@ -827,6 +827,13 @@
       "rationale": "Authorize #556's exact trusted-controller source change for duplicate required-check convergence. The semantic capability BOM is unchanged. The controller now accepts one or more exact-head GitHub Actions runs for each required context only when every returned latest run is from app 15368, bound to the exact candidate head, completed, and successful. Any missing, pending, failed, mismatched, or foreign duplicate still blocks convergence and merge."
     },
     {
+      "id": "cap-dependabot-exact-setup-python-pr-native-1910-v1",
+      "baseBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
+      "candidateBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
+      "expansionSha256": "e609c7d8c79e9a0441e2c6ce88f26df77aec1f7d34f455eb7b6036804828752b",
+      "rationale": "Authorize frozen #1910 tree d6bcfe41d95543e354af70a4d0fda7683c624c09, independently measured by closed diagnostic #1911: allow signed setup-python only through exact native bot identity, immutable lock, forward SemVer and separate public release proof; derive immutable admission workflow blob from candidate bytes with fail-closed negative tests. One TCB expansion, zero reductions, unchanged semantic BOM. No new permission, API, secret, required-check, reviewer or merge authority."
+    },
+    {
       "id": "cap-dependabot-fair-scheduled-candidates-1906-v1",
       "baseBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
       "candidateBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
