@@ -94,4 +94,42 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # Disposable read-only measurement only. This verifier mutation MUST NEVER merge.
+    # Treat frozen owner source as inert data and enforce its commit/tree identities.
+    exit_code = main()
+    if exit_code == 0:
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        frozen_sha = "a71a9fd0eabb886dc82b0873f5c7a0726365bf96"
+        frozen_tree = "4e28b3440c2491fb83c5d2fcece40b3873465288"
+        with tempfile.TemporaryDirectory(prefix="measure-1896-rebase-") as dirname:
+            candidate = Path(dirname) / "candidate"
+            candidate.mkdir()
+            subprocess.run(["git", "init", "-q", str(candidate)], check=True)
+            subprocess.run([
+                "git", "-C", str(candidate), "fetch", "-q", "--depth=1",
+                "https://github.com/portyu9/portyu9.git", frozen_sha,
+            ], check=True)
+            subprocess.run(["git", "-C", str(candidate), "checkout", "-q",
+                            "--detach", "FETCH_HEAD"], check=True)
+            actual_sha = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD"], text=True,
+            ).strip()
+            actual_tree = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD^{tree}"],
+                text=True,
+            ).strip()
+            require(actual_sha == frozen_sha and actual_tree == frozen_tree,
+                    "diagnostic exact source commit or tree changed")
+            diff = workflow_capability_admission.measure(
+                candidate, candidate_tree_sha=frozen_tree,
+            )
+            measurement = workflow_capability_admission.public_measurement(
+                diff, candidate_tree_sha=frozen_tree,
+            )
+            print("EXACT_DEPENDABOT_REBASE_1896_MEASUREMENT=" +
+                  json.dumps(measurement, sort_keys=True, separators=(",", ":")),
+                  flush=True)
+    raise SystemExit(exit_code)
