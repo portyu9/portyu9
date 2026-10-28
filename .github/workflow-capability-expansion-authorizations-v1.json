@@ -1124,8 +1124,8 @@
       "id": "cap-dependabot-setup-python-signed-control-boundary-1917-v1",
       "baseBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
       "candidateBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
-      "expansionSha256": "61c38d8f938cd5f14d830de2f634eeb20491d7ebfcbbd4b4d8ef5f086d816d68",
-      "rationale": "Prior-authorize exactly frozen production #1917 head 99f20801465412685ac8ccce46756d1266e5562d, Git tree 6b0ea03bb16ba1443a75c069bb4e8c62c0c518b0, independently measured by disposable closed-unmerged #1918 native Profile Quality run 40778769281: one trusted-source expansion, zero reductions, unchanged workflow capability BOM and candidate TCB SHA256 c32486beeae3f7a3e5b9361b916a3bdf28eeba453a185ec072c9ded07e02aac3. Source-only signed setup-python admission control boundary allows one exactly proven SHA-pin change inside the existing capability-admission workflow, rejects all non-pin changes and unrelated Action repositories; updates exact Profile Quality and validator byte identities. No new permission, trigger, endpoint, API write, secret, check, owner-veto/merge authority or bypass. Normal 7-check protected merge required."
+      "expansionSha256": "c8182e860b5faca34b67d612e2e0b4548f40bbded5dc57e6d002e24952b2c834",
+      "rationale": "Authorize frozen #1917 head 38ac84c3198eff3a8881811e724613aaef42ad92, tree b52c5d6b4993ee13434ee66ce16ffa805249250c; independent #1918 run 40779584428 measured 1 protected source expansion, 0 reductions, unchanged semantic BOM, TCB SHA256 562bd5a7945136e5c2e110f33f0f19cbbb7e803987ab88346e2513c5d03601f6. Permit only the exact signed setup-python ref inside Capability Admission and associated byte locks; no new permission, check, owner veto, direct-main or merge bypass."
     },
     {
       "baseBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
