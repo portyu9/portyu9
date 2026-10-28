@@ -1946,6 +1946,7 @@ jobs:
             --response "$RUNNER_TEMP/workflow-rebase-response.json" \
             --expected-pr-id "$NODE_ID" --expected-number "$PR_NUMBER" \
             --expected-main-sha "$TRUSTED_MAIN_SHA" \
+            --expected-previous-base-sha "$(jq -er .base.sha "$RUNNER_TEMP/workflow-rebase-final-pr.json")" \
             --out "$RUNNER_TEMP/workflow-rebase-normalized.json"
           test "$(jq -r .nodeId "$RUNNER_TEMP/workflow-rebase-normalized.json")" = "$NODE_ID"
           echo "One native head-bound REBASE accepted; existing governed controller will validate/merge independently."
