@@ -1006,7 +1006,7 @@
       "candidateBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
       "expansionSha256": "4c9d1129e5b0d3ddbebc8b1eee3294ad9fbf576aa2092713814eccfc011492ef",
       "id": "cap-dependabot-privileged-setup-python-pins-1899-v1",
-      "rationale": "Prior-authorize unchanged frozen source #1899 head 4c962bb1aad4b682106db6fd89d1384821afb0bd, tree b8f4f8e60492e2e1213aac9b96a72ea3b56e1118, measured by disposable closed-unmerged #1900 native Profile Quality 40722459697: one accepted-main trusted-source expansion only, zero reductions, identical semantic BOM, TCB SHA256 82e9da87c3689c189e4052197d5e3d73af8d8289a3779e4e8031e2afa2f17b20. Correct exactly three privileged validator setup-python runtime Action SHA references as deterministic derivatives of a proven authentic signed upstream release, retaining original protected workflow blob checks, owner-veto review, exact-head required checks and ordinary protected merge. No independent release authority, execution of candidate code, broader secrets, permissions, mutation endpoints, check bypass, direct-main write or manual signed Dependabot merge."
+      "rationale": "Authorize frozen #1899 head 4c962bb1aad4b682106db6fd89d1384821afb0bd, tree b8f4f8e60492e2e1213aac9b96a72ea3b56e1118, measured by closed-unmerged #1900 native run 40722459697: one trusted-source expansion, zero reductions, unchanged BOM, TCB SHA256 82e9da87c3689c189e4052197d5e3d73af8d8289a3779e4e8031e2afa2f17b20. Migrate exactly three privileged validator setup-python pins from signed release. Preserve protected checks, owner veto, workflow locks, normal merge; no new secrets, writes or bypass."
     },
     {
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
