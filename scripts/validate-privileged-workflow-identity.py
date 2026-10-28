@@ -20,7 +20,7 @@ import privileged_workflow_identity_v21_core as v21
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v161"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "be42a02457df9b7f2a4a10b16c0f2c22f61e3b88",
+    ".github/workflows/bot-pr-user-approval.yml": "7153412c8251538028c1e7911c266c0f6c87f429",
     ".github/workflows/profile-quality.yml": "64f3eb526aa7378875f67bd628ad91262812be1f",
     ".github/workflows/profile-stats.yml": "224216657d093aa5fc26b345dc7ea098615d138f",
     ".github/workflows/spotlight-link-sync.yml": "74d81f100aaaf1b81f3d711fd294ca5670f308db",
@@ -4841,6 +4841,34 @@ def self_test_main_check_cancellation_isolation(bot_review: str, spotlight: str)
 
 
 
+def validate_dependabot_prereconciliation_wake_isolation(bot_review: str) -> None:
+    """Owner-secret entry must never run on a raw, unreconciled Dependabot PR.
+
+    The trusted controller alone issues a candidate-bound repository_dispatch
+    wake after its independent exact-head admission and CI prerequisites.
+    CodeQL Autofix / Spotlight keep their native PR-event review wakes.
+    """
+    anchor = "  approve:\n    if: >-\n"
+    terminator = "    name: exact-head-portyu9-review\n"
+    require(bot_review.count(anchor) == 1 and bot_review.count(terminator) == 1,
+            "governed bot reviewer entry guard has ambiguous boundaries")
+    guard = bot_review.split(anchor, 1)[1].split(terminator, 1)[0]
+    premature = "startsWith(github.event.workflow_run.head_branch, 'dependabot/github_actions/')"
+    require(premature not in guard,
+            "native Dependabot raw PR event must not enter owner-secret reviewer before reconciliation")
+    for required in (
+        "github.event.workflow_run.event == 'pull_request'",
+        "startsWith(github.event.workflow_run.head_branch, 'codeql-autofix/alert-')",
+        "startsWith(github.event.workflow_run.head_branch, 'automation/spotlight-links/')",
+        "github.event.action == 'dependabot-review-wake'",
+        "github.event.sender.login == 'github-actions[bot]'",
+        "github.event.client_payload.lane == 'dependabot'",
+        "github.ref == 'refs/heads/main'",
+    ):
+        require(required in guard,
+                f"bot reviewer lost mandatory exact native or controller wake guard: {required}")
+
+
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
     validate_bot_review_prior_attempt_run_schema(bot_review)
     bot_review = project_bot_reviewer_shell_reads_to_raw(bot_review)
@@ -4935,7 +4963,6 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         "github.event.workflow_run.event == 'pull_request'",
         "github.event.workflow_run.head_branch != 'main'",
         "github.event.workflow_run.head_repository.full_name == github.repository",
-        "startsWith(github.event.workflow_run.head_branch, 'dependabot/github_actions/')",
         "startsWith(github.event.workflow_run.head_branch, 'codeql-autofix/alert-')",
         "startsWith(github.event.workflow_run.head_branch, 'automation/spotlight-links/')",
         "github.event_name == 'repository_dispatch'",
@@ -7789,6 +7816,19 @@ def main() -> int:
         validate_codeql_autofix_read_singleton_evidence(autofix)
         validate_codeql_autofix_approval_comment_evidence(autofix)
         validate_bot_review_liveness(bot_review, dependabot, autofix, spotlight)
+        validate_dependabot_prereconciliation_wake_isolation(bot_review)
+        unsafe = bot_review.replace(
+            "startsWith(github.event.workflow_run.head_branch, 'codeql-autofix/alert-')",
+            "startsWith(github.event.workflow_run.head_branch, 'dependabot/github_actions/') ||\n"
+            "            startsWith(github.event.workflow_run.head_branch, 'codeql-autofix/alert-')",
+            1,
+        )
+        require(unsafe != bot_review, "native prereconciliation wake negative fixture did not mutate source")
+        _expect_property_failure(
+            lambda: validate_dependabot_prereconciliation_wake_isolation(unsafe),
+            "unreconciled Dependabot owner-secret wake",
+            "native Dependabot raw PR event must not enter owner-secret reviewer",
+        )
         self_test_native_dependabot_app_rebase_admission(capability)
         validate_spotlight_event_admission(spotlight, capability)
         validate_spotlight_terminal_required_check_collection(spotlight)
