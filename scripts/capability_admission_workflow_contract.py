@@ -10,7 +10,7 @@ import automation_pr_closing_directive_guard
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
 CLOSING_GUARD = ROOT / "scripts/automation_pr_closing_directive_guard.py"
-EXPECTED_GIT_BLOB = "c375a4d86ef3572df9dd426936237b84300238a7"
+EXPECTED_GIT_BLOB = "ea15e7db32b66ba648cb99eb5c4d50c3a5ac610b"
 EXPECTED_CLOSING_GUARD_GIT_BLOB = "f006aba7f00e860039b1c0f5f5372ab69eb06406"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
@@ -685,6 +685,10 @@ def validate_text(text: str) -> None:
     delegated_release_step_end = text.index("\n      - name:", delegated_release_step_start + 8)
     delegated_release_step = text[delegated_release_step_start:delegated_release_step_end]
     require(
+        delegated_release_step.count("github/codeql-action|actions/upload-artifact|actions/download-artifact|actions/setup-python) ;;") == 1,
+        "trusted Capability Admission delegated Dependabot proof allowlist must include only the already authorized setup-python release exactly once",
+    )
+    require(
         delegated_release_step.count("python3 scripts/automation_github_repository_read.py") == 1
         and delegated_release_step.count("python3 scripts/automation_github_read.py") == 1,
         "trusted Capability Admission delegated release proof must use exactly one repository-root and one canonical governed JSON read",
@@ -751,7 +755,7 @@ def validate_text(text: str) -> None:
         "--out dependabot-changed-paths.txt",
         'for PATH_VALUE in "${SUPPLEMENTAL_PATHS[@]}"; do',
         "python3 scripts/dependabot_controller.py probe",
-        'github/codeql-action|actions/upload-artifact|actions/download-artifact) ;;',
+        'github/codeql-action|actions/upload-artifact|actions/download-artifact|actions/setup-python) ;;',
         'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git"',
         "python3 scripts/dependabot_release.py",
         'python3 scripts/automation_github_repository_read.py "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json',
@@ -1591,7 +1595,7 @@ def self_test() -> None:
         'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}"',
         "must use exactly one governed singleton JSON read call site",
     )
-    expect_failure(text, 'github/codeql-action|actions/upload-artifact|actions/download-artifact) ;;',
+    expect_failure(text, 'github/codeql-action|actions/upload-artifact|actions/download-artifact|actions/setup-python) ;;',
                    'test -n "$DEPENDENCY_REPOSITORY"', "delegated Dependabot proof")
     expect_failure(
         text,
