@@ -1002,6 +1002,13 @@
       "rationale": "Authorize frozen #1825 head 41a2dcb29cf289085c0f0c01e4d5a1cd76ddfc4e tree 5b4e21674d4928f8fad8f88d1b291d0d1d194856, measured by read-only #1827: 2 protected source expansions, 0 reductions, TCB SHA256 9043a93e8b961f776ba7c45972ff0b14ee944034f981875f424f350c160b3c53. Only same-PR verified old base may appear in asynchronous GraphQL rebase ACK. Preserve exact main, PR/head identity, fresh REST main convergence, seven protected checks and governance. No permission, token, mutation or bypass change."
     },
     {
+      "baseBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
+      "candidateBomSha256": "20424851012ee112262fe3cdf34d07130cad8ab4cec73897e00f3138e86d7f77",
+      "expansionSha256": "4c9d1129e5b0d3ddbebc8b1eee3294ad9fbf576aa2092713814eccfc011492ef",
+      "id": "cap-dependabot-privileged-setup-python-pins-1899-v1",
+      "rationale": "Authorize frozen #1899 head 4c962bb1aad4b682106db6fd89d1384821afb0bd, tree b8f4f8e60492e2e1213aac9b96a72ea3b56e1118, measured by closed-unmerged #1900 native run 40722459697: one trusted-source expansion, zero reductions, unchanged BOM, TCB SHA256 82e9da87c3689c189e4052197d5e3d73af8d8289a3779e4e8031e2afa2f17b20. Migrate exactly three privileged validator setup-python pins from signed release. Preserve protected checks, owner veto, workflow locks, normal merge; no new secrets, writes or bypass."
+    },
+    {
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "expansionSha256": "8abb6dc3c2a6d482ecba02866e44003aea058ef4edcfbec911196c731203eda7",
