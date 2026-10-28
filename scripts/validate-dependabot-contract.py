@@ -3093,6 +3093,37 @@ def self_test_profile_quality_setup_python_pin_gate(text: str) -> None:
                 "native setup-python provisional gate expanded to unrelated Action")
 
 
+def self_test_profile_quality_signed_repository_inventory(text: str) -> None:
+    """Only the four reviewed signed Action repositories may enter release proof."""
+    begin = text.index("\n  dependabot_admission:")
+    end = text.index("\n  governed_bot_review:", begin)
+    block = text[begin:end]
+    signed_case = "github/codeql-action|actions/upload-artifact|actions/download-artifact|actions/setup-python) ;;"
+    require(block.count(signed_case) == 1,
+            "native signed release repository inventory changed")
+    guards = (
+        'DEPENDENCY_REPOSITORY="$(jq -r .dependencyRepository "$RUNNER_TEMP/dependabot-probe.json")"',
+        'CANDIDATE_TAG="$(jq -r .after.tag "$RUNNER_TEMP/dependabot-probe.json")"',
+        'CANDIDATE_SHA="$(jq -r .after.sha "$RUNNER_TEMP/dependabot-probe.json")"',
+        'case "$DEPENDENCY_REPOSITORY" in',
+        'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git"',
+        'python3 trusted-base/scripts/dependabot_release.py',
+        'python3 trusted-base/scripts/dependabot_capability_admission.py',
+    )
+    for marker in guards:
+        require(marker in block, f"native signed release proof lost: {marker}")
+    require(block.index('case "$DEPENDENCY_REPOSITORY" in') <
+            block.index(signed_case) <
+            block.index('git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git"') <
+            block.index("python3 trusted-base/scripts/dependabot_release.py") <
+            block.index("python3 trusted-base/scripts/dependabot_capability_admission.py"),
+            "native signed release proof ordering changed")
+    for rogue in ("actions/checkout", "actions/cache", "thirdparty/random-action"):
+        changed = block.replace(signed_case, signed_case.replace("actions/setup-python", rogue), 1)
+        require(signed_case not in changed,
+                "native signed release allowlist negative fixture remained unchanged")
+
+
 def self_test_profile_quality_native_bytecode_guard(text: str) -> None:
     """Prevent a native bot PR from hiding a default-bytecode clean-tree failure."""
     guard = 'PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts" python3 -B - \\'
@@ -3154,6 +3185,7 @@ def main() -> int:
         validate_approval_comment_helper_contract(APPROVAL_COMMENT_HELPER.read_text(encoding="utf-8"))
         self_test_profile_quality_native_bytecode_guard(QUALITY.read_text(encoding="utf-8"))
         self_test_profile_quality_setup_python_pin_gate(QUALITY.read_text(encoding="utf-8"))
+        self_test_profile_quality_signed_repository_inventory(QUALITY.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
 
         print(
