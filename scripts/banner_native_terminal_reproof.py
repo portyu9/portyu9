@@ -192,6 +192,7 @@ def self_test() -> None:
     # native review submitted_at only after the owner's receipt was captured.
     # This is not a PR file/body/ref mutation; every other field stays pinned.
     clock_reviewed = copy.deepcopy(after)
+    start = admission.exact_utc(before["observedAt"])
     creation_clock = start - timedelta(minutes=3)
     origin = creation_clock.isoformat(timespec="seconds").replace("+00:00", "Z")
     approval_clock = (start + timedelta(minutes=2)).isoformat(
