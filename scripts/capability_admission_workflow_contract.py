@@ -10,10 +10,10 @@ import automation_pr_closing_directive_guard
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
 CLOSING_GUARD = ROOT / "scripts/automation_pr_closing_directive_guard.py"
-EXPECTED_GIT_BLOB = "ea15e7db32b66ba648cb99eb5c4d50c3a5ac610b"
+EXPECTED_GIT_BLOB = "53a504ccb40f839a6643495ee8a240bb8f87f659"
 EXPECTED_CLOSING_GUARD_GIT_BLOB = "f006aba7f00e860039b1c0f5f5372ab69eb06406"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
-SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
+SETUP_PYTHON = "actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0"
 
 ORDINARY_EVALUATOR = """            python3 scripts/workflow_capability_admission.py \\
               candidate-capability-source \\

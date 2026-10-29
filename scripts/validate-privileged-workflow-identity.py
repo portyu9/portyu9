@@ -21,9 +21,9 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v161"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7153412c8251538028c1e7911c266c0f6c87f429",
-    ".github/workflows/profile-quality.yml": "64f3eb526aa7378875f67bd628ad91262812be1f",
-    ".github/workflows/profile-stats.yml": "224216657d093aa5fc26b345dc7ea098615d138f",
-    ".github/workflows/spotlight-link-sync.yml": "74d81f100aaaf1b81f3d711fd294ca5670f308db",
+    ".github/workflows/profile-quality.yml": "79621110320f0074b479e2c9cb9bf49a19ea0e14",
+    ".github/workflows/profile-stats.yml": "eb9af8f63d4db7b35306ebf3c38f5004e7e1c0a8",
+    ".github/workflows/spotlight-link-sync.yml": "c323bd3a29d4dd4d62ad564879bb0b2bc8339128",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
@@ -195,7 +195,7 @@ def validate_spotlight_budget_artifact_history(spotlight: str) -> None:
             "Spotlight mutation-budget must retain exact governed read authority")
     require(
         budget.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 1
-        and budget.count("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97") == 1,
+        and budget.count("actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0") == 1,
         "Spotlight mutation-budget governed runtime surface changed",
     )
     require("ref: main" in budget and "ref: ${{ github.sha }}" not in budget,
@@ -538,7 +538,7 @@ def validate_leases(profile: str, spotlight: str) -> None:
     require("permissions:\n      actions: read\n      contents: read" in profile_lease,
             "Profile Stats lease must remain actions/contents read-only")
     require(profile_lease.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 1
-            and profile_lease.count("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97") == 1,
+            and profile_lease.count("actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0") == 1,
             "Profile Stats lease trusted governed-read runtime surface changed")
     require('test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"' in profile_lease,
             "Profile Stats lease lost exact governed-read helper identity")
@@ -7430,7 +7430,7 @@ def validate_profile_stats_spotlight_dispatch_evidence(
     require("permissions:\n      actions: read\n      contents: read" in plan,
             "Profile Stats Spotlight dispatch plan must remain actions/contents read-only")
     require(plan.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 1
-            and plan.count("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97") == 1,
+            and plan.count("actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0") == 1,
             "Profile Stats Spotlight dispatch-plan trusted runtime surface changed")
     require('test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"' in plan,
             "Profile Stats Spotlight dispatch plan lost exact governed-read helper identity")

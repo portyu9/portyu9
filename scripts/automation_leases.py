@@ -195,7 +195,7 @@ def validate_workflow_source(workflow_id: str, workflow: dict[str, Any], text: s
         for fragment in (
             "permissions:\n      actions: read\n      contents: read",
             "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-            "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
+            "actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
             expected_checkout_ref,
             'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
         ):
@@ -360,7 +360,7 @@ def self_test(policy: dict[str, Any], root: Path) -> None:
           test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 

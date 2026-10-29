@@ -35,10 +35,10 @@
     },
     "actions/setup-python": {
       "repositoryId": 192625525,
-      "releaseId": 356486059,
-      "sha": "5fda3b95a4ea91299a34e894583c3862153e4b97",
-      "tag": "v7.0.0",
-      "tagRefSha": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+      "releaseId": 420259920,
+      "sha": "6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+      "tag": "v7.1.0",
+      "tagRefSha": "6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
       "tagRefType": "commit"
     },
     "actions/upload-artifact": {
