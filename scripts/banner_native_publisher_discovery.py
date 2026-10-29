@@ -107,11 +107,13 @@ def select(*, listing: Any, artifacts: dict[int, Any], main_sha: str,
         require(len(matching) <= 1, "duplicated native App-origin artifacts")
         if not matching:
             continue
-        # An old, artifact-less retry is historical evidence, not a
-        # candidate. Never weaken freshness of an actual App-origin source.
-        require(observed_at - created <= TTL,
-                "selected App-origin publisher run is stale")
+        # A prior scheduled App artifact can be valid historical evidence
+        # on the same UTC day even after accepted main moves. Audit the
+        # complete native artifact and its *own* immutable source identity
+        # before classifying it. Never bind historical evidence to the new
+        # main or let it veto an independently current publisher.
         item = matching[0]
+        run_head = run.get("head_sha")
         changed = utc(run.get("updated_at"))
         made = utc(item.get("created_at"))
         expires = utc(item.get("expires_at"))
@@ -121,7 +123,8 @@ def select(*, listing: Any, artifacts: dict[int, Any], main_sha: str,
                 and run.get("conclusion") == "success"
                 and type(run.get("run_attempt")) is int
                 and run["run_attempt"] == 1
-                and run.get("head_sha") == main_sha
+                and type(run_head) is str
+                and SHA.fullmatch(run_head) is not None
                 and type(run.get("head_repository")) is dict
                 and run["head_repository"].get("full_name") == "portyu9/portyu9"
                 and type(run.get("actor")) is dict
@@ -133,7 +136,7 @@ def select(*, listing: Any, artifacts: dict[int, Any], main_sha: str,
                 and observed_at < expires
                 and type(identity) is dict
                 and identity.get("id") == run["id"]
-                and identity.get("head_sha") == main_sha
+                and identity.get("head_sha") == run_head
                 and identity.get("head_branch") == "main"
                 and identity.get("repository_id") == repository_id
                 and identity.get("head_repository_id") == repository_id
@@ -143,7 +146,12 @@ def select(*, listing: Any, artifacts: dict[int, Any], main_sha: str,
                 and type(digest) is str and DIGEST.fullmatch(digest) is not None
                 and item.get("archive_download_url") ==
                     f"https://api.github.com/repos/portyu9/portyu9/actions/artifacts/{item['id']}/zip",
-                "publisher artifact was not a genuine current-main first-attempt schedule")
+                "publisher artifact was not a genuine authenticated first-attempt schedule")
+        # Authenticated older artifacts are read-only history, never the
+        # selected owner-review source. This is essential when a fresh
+        # same-day schedule runs after Spotlight or another accepted merge.
+        if run_head != main_sha or observed_at - created > TTL:
+            continue
         candidates.append({
             "producerRunId": run["id"],
             "artifactId": item["id"],
@@ -297,6 +305,83 @@ def self_test() -> None:
         pass
     else:
         raise AssertionError("stale App-origin source was accepted as history")
+    # Real October 29 scenario: the previously successful scheduled App
+    # publisher ran against old main; a later first-attempt schedule creates
+    # a new signed App artifact against *current* main. Historical source
+    # must be individually authenticated, but never veto the single fresh
+    # current-main owner-review provenance.
+    old_app = copy.deepcopy(good)
+    old_run = copy.deepcopy(run)
+    old_run.update(
+        id=810, head_sha="f" * 40,
+        created_at="2026-10-29T08:00:00Z",
+        updated_at="2026-10-29T08:03:00Z",
+    )
+    old_item = copy.deepcopy(item)
+    old_item.update(
+        id=700, created_at="2026-10-29T08:02:00Z",
+        expires_at="2026-10-30T08:02:00Z",
+        archive_download_url=(
+            "https://api.github.com/repos/portyu9/portyu9/actions/artifacts/700/zip"
+        ),
+    )
+    old_item["workflow_run"].update(id=810, head_sha="f" * 40)
+    old_app["listing"]["workflow_runs"].append(old_run)
+    old_app["listing"]["total_count"] = 2
+    old_app["artifacts"][810] = {
+        "total_count": 1, "artifacts": [old_item],
+    }
+    require(select(**old_app) == proof,
+            "authentic historical App artifact vetoed fresh current-main source")
+    # Even a recent (within six hours) artifact must be ignored if its
+    # signed scheduled-run head belongs to a previously accepted main.
+    recent_old = copy.deepcopy(old_app)
+    recent_old_run = recent_old["listing"]["workflow_runs"][1]
+    recent_old_run.update(
+        created_at="2026-10-29T09:01:00Z",
+        updated_at="2026-10-29T09:03:00Z",
+    )
+    recent_old_item = recent_old["artifacts"][810]["artifacts"][0]
+    recent_old_item.update(
+        created_at="2026-10-29T09:02:00Z",
+        expires_at="2026-10-30T09:02:00Z",
+    )
+    require(select(**recent_old) == proof,
+            "recent historical App-origin artifact vetoed exact new main")
+    # The historical exemption must not permit forged App artifacts,
+    # failed/replayed publisher runs or an incorrect source association.
+    for label, mutate in (
+        ("historical actor", lambda x:
+         x["listing"]["workflow_runs"][1]["actor"].update(login="intruder")),
+        ("historical replay", lambda x:
+         x["listing"]["workflow_runs"][1].update(run_attempt=2)),
+        ("historical artifact binding", lambda x:
+         x["artifacts"][810]["artifacts"][0]["workflow_run"].update(
+             head_sha="b" * 40)),
+        ("historical digest", lambda x:
+         x["artifacts"][810]["artifacts"][0].update(digest="invalid")),
+        ("historical run failure", lambda x:
+         x["listing"]["workflow_runs"][1].update(conclusion="failure")),
+    ):
+        poisoned = copy.deepcopy(recent_old)
+        mutate(poisoned)
+        try:
+            select(**poisoned)
+        except (ValueError, TypeError, KeyError):
+            pass
+        else:
+            raise AssertionError("untrusted historical App artifact: " + label)
+    # Two independently genuine *current* main artifacts remain
+    # ambiguous; only one unique first-attempt publisher may authorize.
+    ambiguous = copy.deepcopy(old_app)
+    ambiguous["listing"]["workflow_runs"][1]["head_sha"] = main
+    ambiguous["artifacts"][810]["artifacts"][0]["workflow_run"]["head_sha"] = main
+    try:
+        select(**ambiguous)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("multiple current-main App artifacts were accepted")
     def reject(label: str, mutation: Callable[[dict[str, Any]], None]) -> None:
         bad = copy.deepcopy(good)
         mutation(bad)
