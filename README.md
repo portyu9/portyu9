@@ -1,10 +1,10 @@
 <br>
 
-<!-- banner-rotation:v8 utc-day=2026-10-27 slot=4 slug=04-lagrange-tides -->
+<!-- banner-rotation:v8 utc-day=2026-10-29 slot=2 slug=02-fractal-iris -->
 <p align="center">
 <picture>
-  <source media="(max-width: 640px)" srcset="assets/profile-banners/approved/04-lagrange-tides-v3-kinetic-top-compact-dark-only.svg">
-  <img alt="Animated quantum apex signal crown" src="assets/profile-banners/approved/04-lagrange-tides-v3-kinetic-top-dark-only.svg" width="100%">
+  <source media="(max-width: 640px)" srcset="assets/profile-banners/approved/02-fractal-iris-top-compact.svg">
+  <img alt="Animated quantum apex signal crown" src="assets/profile-banners/approved/02-fractal-iris-top.svg" width="100%">
 </picture>
 </p>
 
@@ -184,6 +184,6 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 
 <p align="center">
 <picture>
-  <img alt="Animated evidence horizon" src="assets/profile-banners/approved/04-lagrange-tides-v3-kinetic-bottom-dark-only.svg" width="100%">
+  <img alt="Animated evidence horizon" src="assets/profile-banners/approved/02-fractal-iris-bottom.svg" width="100%">
 </picture>
 </p>
