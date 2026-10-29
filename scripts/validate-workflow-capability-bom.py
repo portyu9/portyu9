@@ -94,4 +94,61 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # DISPOSABLE READ-ONLY INDEPENDENT PROOF. DO NOT MERGE.
+    code = main()
+    if code == 0:
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+
+        frozen_sha = "a3bb80e31bab7b047324bf012217a5e8d67ff4b2"
+        frozen_tree = "8c0f114ab90ef5ed42efa5011ddfa1207f63e15c"
+        with tempfile.TemporaryDirectory(prefix="measure-1937-") as folder:
+            candidate = Path(folder) / "candidate"
+            candidate.mkdir()
+            subprocess.run(["git", "init", "-q", str(candidate)], check=True)
+            subprocess.run(
+                ["git", "-C", str(candidate), "fetch", "-q", "--depth=1",
+                 "https://github.com/portyu9/portyu9.git", frozen_sha],
+                check=True, timeout=120,
+            )
+            subprocess.run(
+                ["git", "-C", str(candidate), "checkout", "-q", "--detach",
+                 "FETCH_HEAD"], check=True,
+            )
+            observed_sha = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD"],
+                text=True,
+            ).strip()
+            observed_tree = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD^{tree}"],
+                text=True,
+            ).strip()
+            require(
+                observed_sha == frozen_sha and observed_tree == frozen_tree,
+                "immutable candidate commit/tree mismatch",
+            )
+            test = subprocess.run(
+                ["python3", str(candidate / "scripts/banner_native_observer_cli.py"),
+                 "--self-test"],
+                cwd=candidate, check=True, text=True,
+                capture_output=True, timeout=90,
+            )
+            require(
+                "banner observer CLI: read-only" in test.stdout,
+                "frozen candidate did not pass native wake observer self-test",
+            )
+            print("EXACT_1937_NATIVE_WAKE_SELF_TEST=PASS", flush=True)
+            measured = workflow_capability_admission.measure(
+                candidate, candidate_tree_sha=frozen_tree,
+            )
+            public = workflow_capability_admission.public_measurement(
+                measured, candidate_tree_sha=frozen_tree,
+            )
+            print(
+                "EXACT_1937_MEASUREMENT=" +
+                json.dumps(public, sort_keys=True, separators=(",", ":")),
+                flush=True,
+            )
+    raise SystemExit(code)
