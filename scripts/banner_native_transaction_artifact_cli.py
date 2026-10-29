@@ -65,6 +65,8 @@ def compile_transaction(operation: str, documents: Any) -> dict[str, Any]:
         # artifact or issue a review on its own.
         app_identity = documents["appIdentity"]
         reviewer_identity = documents["ownerIdentity"]
+        require(type(before) is dict,
+                "banner dual identity intent requires one native snapshot object")
         require(type(app_identity) is dict and
                 set(app_identity) == {
                     "installation", "bot_user", "expected_app_id",
@@ -137,7 +139,7 @@ def self_test() -> None:
     # future privileged owner writer; neither source is a bearer credential.
     app_identity = copy.deepcopy(before["nativeApp"])
     reviewer_identity = {
-        "login": "portyu9", "userId": 35150859,
+        "login": "portyu9", "userId": 9922,
         "repositoryId": app_identity["expected_repository_id"],
         "repository": "portyu9/portyu9", "defaultBranch": "main",
     }
@@ -221,6 +223,9 @@ def self_test() -> None:
         raise AssertionError("unsafe transaction envelope admitted: " + label)
 
     # Fail closed before any future owner HTTP writer can be invoked.
+    bad_binding = copy.deepcopy(dual)
+    bad_binding["initial"] = []
+    reject("non-object initial snapshot", "authenticated-review-request", bad_binding)
     bad_binding = copy.deepcopy(dual)
     bad_binding["ownerIdentity"]["userId"] = True
     reject("boolean owner user ID", "authenticated-review-request", bad_binding)
