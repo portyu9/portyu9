@@ -45,7 +45,7 @@ FRESH_TTL = timedelta(seconds=75)
 
 def read_bounded_source_zip(path: Path) -> bytes:
     """Read one untrusted archive without symlink traversal or unbounded I/O."""
-    require(type(path) is Path and path.is_file() and not path.is_symlink(),
+    require(isinstance(path, Path) and path.is_file() and not path.is_symlink(),
             "scheduled publisher ZIP source is not a regular non-symlink file")
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(path, flags)
