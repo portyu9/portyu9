@@ -32,6 +32,10 @@ SCHEMAS = {
     "review-receipt": frozenset({
         "initial", "reviewed", "ownerStatus", "ownerResponse",
     }),
+    "authenticated-review-receipt": frozenset({
+        "initial", "appIdentity", "ownerIdentity",
+        "reviewed", "ownerStatus", "ownerResponse",
+    }),
     "merge-request": frozenset({
         "initial", "reviewed", "ownerStatus", "ownerResponse",
     }),
@@ -107,6 +111,38 @@ def compile_transaction(operation: str, documents: Any) -> dict[str, Any]:
             initial=before, after=reviewed,
             status_line=status, response=response,
         )
+    if operation == "authenticated-review-receipt":
+        # A genuine review must be bound to the independently authenticated
+        # owner numeric ID, not just an easily copied user.login string.
+        intent = compile_transaction("authenticated-review-request", {
+            "initial": before,
+            "appIdentity": documents["appIdentity"],
+            "ownerIdentity": documents["ownerIdentity"],
+        })
+        required_user_id = intent["identityBinding"]["ownerUserId"]
+        require(type(response) is dict
+                and type(response.get("user")) is dict
+                and type(response["user"].get("id")) is int
+                and response["user"]["id"] == required_user_id,
+                "review HTTP response user ID is not authenticated owner")
+        verified = owner.verify_submission(
+            initial=before, after=reviewed,
+            status_line=status, response=response,
+        )
+        matching = [
+            value for value in reviewed["reviews"]
+            if type(value) is dict and value.get("id") == verified["ownerReviewId"]
+        ]
+        require(len(matching) == 1
+                and type(matching[0].get("user")) is dict
+                and type(matching[0]["user"].get("id")) is int
+                and matching[0]["user"]["id"] == required_user_id,
+                "native review inventory user ID does not match owner token")
+        return {
+            **verified,
+            "ownerUserId": required_user_id,
+            "decision": "dual-source-banner-owner-review-receipt-no-merge",
+        }
     if operation == "merge-request":
         return merge.exact_merge_request(
             initial=before, reviewed=reviewed,
@@ -177,6 +213,26 @@ def self_test() -> None:
             and receipt["decision"] ==
                 "exact-native-banner-owner-review-observed-no-merge",
             "review receipt was not exact actor/head/native response")
+
+    # Re-prove actual owner *numeric* identity independently in both
+    # authenticated GitHub HTTP review and fresh native GET review inventory.
+    authenticated_transaction = {
+        **transaction,
+        "appIdentity": app_identity,
+        "ownerIdentity": reviewer_identity,
+    }
+    authenticated_transaction["ownerResponse"] = copy.deepcopy(approval)
+    authenticated_transaction["ownerResponse"]["user"]["id"] = 9922
+    authenticated_transaction["reviewed"] = copy.deepcopy(after)
+    authenticated_transaction["reviewed"]["reviews"][0]["user"]["id"] = 9922
+    verified_owner = compile_transaction(
+        "authenticated-review-receipt", authenticated_transaction,
+    )
+    require(verified_owner["ownerUserId"] == 9922
+            and verified_owner["ownerReviewId"] == approval["id"]
+            and verified_owner["decision"]
+                == "dual-source-banner-owner-review-receipt-no-merge",
+            "independent numeric owner review receipt did not bind")
     request = compile_transaction("merge-request", transaction)
     require(request["method"] == "PUT"
             and request["request"] == {
@@ -221,6 +277,32 @@ def self_test() -> None:
         except (KeyError, TypeError, ValueError):
             return
         raise AssertionError("unsafe transaction envelope admitted: " + label)
+
+    # A matching login alone never suffices for a real owner review.
+    bad_receipt = copy.deepcopy(authenticated_transaction)
+    bad_receipt["ownerResponse"]["user"]["id"] = 9923
+    reject("forged owner HTTP user ID", "authenticated-review-receipt", bad_receipt)
+    bad_receipt = copy.deepcopy(authenticated_transaction)
+    bad_receipt["ownerResponse"]["user"].pop("id")
+    reject("missing owner HTTP ID", "authenticated-review-receipt", bad_receipt)
+    bad_receipt = copy.deepcopy(authenticated_transaction)
+    bad_receipt["ownerResponse"]["user"]["id"] = True
+    reject("boolean review actor ID", "authenticated-review-receipt", bad_receipt)
+    bad_receipt = copy.deepcopy(authenticated_transaction)
+    bad_receipt["reviewed"]["reviews"][0]["user"]["id"] = 9923
+    reject("GET reviews differs from owner HTTP", "authenticated-review-receipt", bad_receipt)
+    bad_receipt = copy.deepcopy(authenticated_transaction)
+    bad_receipt["reviewed"]["reviews"][0]["user"].pop("id")
+    reject("missing native review inventory owner ID", "authenticated-review-receipt", bad_receipt)
+    bad_receipt = copy.deepcopy(authenticated_transaction)
+    bad_receipt["ownerIdentity"]["userId"] = 9923
+    reject("independent owner source was swapped", "authenticated-review-receipt", bad_receipt)
+    bad_receipt = copy.deepcopy(authenticated_transaction)
+    bad_receipt["ownerResponse"]["state"] = "CHANGES_REQUESTED"
+    reject("owner veto as false approval", "authenticated-review-receipt", bad_receipt)
+    bad_receipt = copy.deepcopy(authenticated_transaction)
+    bad_receipt["token"] = "must-never-cross"
+    reject("smuggled credential in cross-job artifact", "authenticated-review-receipt", bad_receipt)
 
     # Fail closed before any future owner HTTP writer can be invoked.
     bad_binding = copy.deepcopy(dual)
