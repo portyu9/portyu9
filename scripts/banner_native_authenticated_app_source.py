@@ -246,8 +246,6 @@ def main() -> int:
     require(app_jwt is not None and read_token is not None
             and app_jwt != read_token,
             "independent App JWT and public-read identities required")
-    slug = "[a-z0-9][a-z0-9-]{2,100}"
-    require(bool(slug), "reviewed bot slug pattern must be present")
     app = FixedOriginRead(
         app_jwt, frozenset({f"/app/installations/{args.installation_id}"})
     )
