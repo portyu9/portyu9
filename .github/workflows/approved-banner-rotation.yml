@@ -152,10 +152,6 @@ jobs:
           # after independently minted scoped App identity below. Never skip
           # all future UTC rotations merely because an old PR remains open.
           BRANCH="automation/banner-rotation/${UTC_DAY}-${SOURCE_SHA:0:12}"
-          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BRANCH}" >/dev/null 2>&1; then
-            echo "Banner branch already exists without an open PR; refuse orphan/duplicate."
-            exit 1
-          fi
           cp banner-candidate/README.md source/README.md
           git -C source config user.name 'github-actions[bot]'
           git -C source config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -310,6 +306,12 @@ jobs:
           rm -f "$APP_INSTALL" "$APP_BOT" "$RUNNER_TEMP/banner-app-evidence.json" \
             "$RUNNER_TEMP/banner-stale-decision.json" "$RUNNER_TEMP/banner-stale-reproof.json"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)" = "$SOURCE_SHA"
+          # Only now is a no-open-candidate verdict available. Keep the
+          # orphan-ref guard, but do not reject an already-open current PR.
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BRANCH}" >/dev/null 2>&1; then
+            echo "Banner ref exists without a qualified open current-day PR; fail closed."
+            exit 1
+          fi
           AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$PUBLISH_TOKEN" | base64 -w0)"
           created=false
           opened=false
