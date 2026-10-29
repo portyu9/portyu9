@@ -1507,7 +1507,7 @@ def self_test() -> None:
     # from #1969, and the comment-before-close operation must retain proof.
     reviewed_stale = copy.deepcopy(owner_review)
     reviewed_stale["submitted_at"] = (
-        stale_now - timedelta(days=1, minutes=20)
+        stale_now - timedelta(minutes=20)
     ).isoformat(timespec="seconds").replace("+00:00", "Z")
     reviewed_result = verified_stale_banner_close_readiness(
         **{**stale_fixture, "reviews": [reviewed_stale]})
