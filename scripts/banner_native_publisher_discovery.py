@@ -281,6 +281,16 @@ def self_test() -> None:
     with_stale_artifact["artifacts"][811] = {
         "total_count": 1, "artifacts": [forged],
     }
+    # Make the old artifact the *only* candidate and satisfy every other
+    # source criterion. The six-hour bound must be the sole rejection reason,
+    # not a failed historical run, changed main or competing fresh artifact.
+    with_stale_artifact["listing"]["workflow_runs"][1].update(
+        head_sha=main, conclusion="success",
+    )
+    forged["workflow_run"]["head_sha"] = main
+    with_stale_artifact["artifacts"][812] = {
+        "total_count": 0, "artifacts": [],
+    }
     try:
         select(**with_stale_artifact)
     except ValueError:
