@@ -70,8 +70,8 @@ def collect(*, get_owner: Callable[[str], Any],
 
 
 def self_test() -> None:
-    repository_id = 1355082509
-    user_id = 35150859
+    repository_id = 8811
+    user_id = 9922
     owner = {"id": user_id, "login": REVIEW_LOGIN, "type": "User"}
     repo = {
         "id": repository_id, "full_name": "portyu9/portyu9",
