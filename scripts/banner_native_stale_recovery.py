@@ -159,7 +159,7 @@ def self_test() -> None:
             "changed accepted main did not mark old PR stale")
     for rewrite in (
         lambda rows: rows[0].update(draft=True),
-        lambda rows: rows[0]["head"].update(ref="arbitrary-branch"),
+        lambda rows: rows[0]["head"].update(ref="automation/banner-rotation/invalid"),
         lambda rows: rows.append(copy.deepcopy(rows[0])),
         lambda rows: rows[0]["user"].update(login="attacker"),
     ):
