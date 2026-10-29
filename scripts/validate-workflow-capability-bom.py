@@ -94,4 +94,42 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # DISPOSABLE independent capability-only measurement. NEVER MERGE.
+    code = main()
+    if code == 0:
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        frozen_commit = "70a028f5b1f22b916ca4b8f5297deef9e658599b"
+        frozen_tree = "a127e2c0554a8963ce6bbbe06480c946ab090154"
+        with tempfile.TemporaryDirectory(prefix="banner-eight-window-measure-") as tmp:
+            candidate = Path(tmp) / "candidate"
+            candidate.mkdir()
+            subprocess.run(["git", "init", "-q", str(candidate)], check=True)
+            subprocess.run([
+                "git", "-C", str(candidate), "fetch", "-q", "--depth=1",
+                "https://github.com/portyu9/portyu9.git", frozen_commit,
+            ], check=True)
+            subprocess.run([
+                "git", "-C", str(candidate), "checkout", "-q", "--detach",
+                "FETCH_HEAD",
+            ], check=True)
+            observed_commit = subprocess.check_output([
+                "git", "-C", str(candidate), "rev-parse", "HEAD",
+            ], text=True).strip()
+            observed_tree = subprocess.check_output([
+                "git", "-C", str(candidate), "rev-parse", "HEAD^{tree}",
+            ], text=True).strip()
+            require(observed_commit == frozen_commit and observed_tree == frozen_tree,
+                    "diagnostic frozen eight-window source commit/tree changed")
+            measured = workflow_capability_admission.measure(
+                candidate, candidate_tree_sha=frozen_tree,
+            )
+            public = workflow_capability_admission.public_measurement(
+                measured, candidate_tree_sha=frozen_tree,
+            )
+            print("EXACT_BANNER_EIGHT_WINDOW_MEASUREMENT="
+                  + json.dumps(public, sort_keys=True, separators=(",", ":")),
+                  flush=True)
+    raise SystemExit(code)
