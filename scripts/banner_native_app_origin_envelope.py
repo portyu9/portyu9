@@ -24,7 +24,7 @@ from independent_banner_candidate_contract import (
 )
 
 INPUT = frozenset({
-    "installation", "bot_user", "expected_app_id",
+    "installation", "bot_user", "repository", "expected_app_id",
     "expected_installation_id", "expected_repository_id",
 })
 FORBIDDEN = frozenset({
@@ -57,7 +57,16 @@ def minimize(raw: Any) -> dict[str, Any]:
     require(type(raw) is dict and set(raw) == INPUT,
             "App origin has missing, duplicate or unreviewed top-level fields")
     no_credentials(raw)
-    identity = verified_native_banner_app_identity(**raw)
+    repository = raw["repository"]
+    require(type(repository) is dict
+            and type(repository.get("id")) is int
+            and repository["id"] == raw["expected_repository_id"]
+            and repository.get("full_name") == "portyu9/portyu9"
+            and type(repository.get("owner")) is dict
+            and repository["owner"].get("login") == "portyu9",
+            "App origin exact repository ID/name/owner response differs")
+    trusted = {key: raw[key] for key in raw if key != "repository"}
+    identity = verified_native_banner_app_identity(**trusted)
     installation = raw["installation"]
     bot = raw["bot_user"]
     observed = {
@@ -81,7 +90,7 @@ def minimize(raw: Any) -> dict[str, Any]:
         "expected_installation_id": raw["expected_installation_id"],
         "expected_repository_id": raw["expected_repository_id"],
     }
-    require(set(observed) == INPUT
+    require(set(observed) == INPUT - {"repository"}
             and verified_native_banner_app_identity(**observed) == identity,
             "minimal native App identity evidence lost reviewed binding")
     no_credentials(observed)
@@ -96,14 +105,19 @@ def minimize(raw: Any) -> dict[str, Any]:
 def self_test() -> None:
     import banner_native_live_admission as admission
 
-    fixture = admission.fixture()["nativeApp"]
+    fixture = copy.deepcopy(admission.fixture()["nativeApp"])
+    fixture["repository"] = {
+        "id": fixture["expected_repository_id"],
+        "full_name": "portyu9/portyu9",
+        "owner": {"login": "portyu9"},
+    }
     good = minimize(fixture)
-    require(set(good) == INPUT
+    require(set(good) == INPUT - {"repository"}
             and good["installation"]["repository_selection"] == "selected"
             and good["bot_user"]["login"].endswith("[bot]"),
             "minimal selected-installation positive evidence rejected")
-    require(minimize(good) == good,
-            "minimal App evidence is not idempotent")
+    require(minimize({**good, "repository": fixture["repository"]}) == good,
+            "minimal App evidence is not stable after re-authentication")
     payload = json.dumps(good, sort_keys=True, separators=(",", ":"))
     require("token" not in payload and "private_key" not in payload,
             "App evidence output unexpectedly contains a credential")
@@ -127,6 +141,12 @@ def self_test() -> None:
          lambda x: x.update(expected_installation_id=98765)),
         ("wrong repository ID",
          lambda x: x.update(expected_repository_id=98765)),
+        ("wrong observed repository ID",
+         lambda x: x["repository"].update(id=98765)),
+        ("wrong repository name",
+         lambda x: x["repository"].update(full_name="attacker/repo")),
+        ("wrong repository owner",
+         lambda x: x["repository"]["owner"].update(login="attacker")),
         ("boolean App ID",
          lambda x: x.update(expected_app_id=True)),
         ("unselected installation",
@@ -143,7 +163,7 @@ def self_test() -> None:
     for label, rewrite in cases:
         rejected(label, rewrite)
     print("banner App identity minimal envelope: selected App, producer bot, "
-          "immutable IDs, secret-free canonical output and 12 negatives PASS; "
+          "immutable IDs, secret-free canonical output and 15 negatives PASS; "
           "zero JWT, network or mutation")
 
 
