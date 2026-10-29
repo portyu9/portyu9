@@ -100,6 +100,21 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "graphql",
+              "graphqlOperation": "query",
+              "method": "POST",
+              "mutating": false,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/branches/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/branches/main",
               "method": "GET",
               "mutating": false,
@@ -115,6 +130,27 @@
             {
               "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/branches/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/branches/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/$STALE_REF",
+              "method": "GET",
+              "mutating": false,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/$STALE_REF",
               "method": "GET",
               "mutating": false,
               "step": "Re-prove plan and create only an immutable README PR"
@@ -128,9 +164,65 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/issues/$STALE_PR/comments",
+              "method": "POST",
+              "mutating": true,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/issues/$STALE_PR/comments?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/pulls",
               "method": "POST",
               "mutating": true,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/$STALE_PR",
+              "method": "GET",
+              "mutating": false,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/$STALE_PR",
+              "method": "GET",
+              "mutating": false,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/$STALE_PR",
+              "method": "PATCH",
+              "mutating": true,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/$STALE_PR/reviews?per_page=100",
+              "method": "GET",
+              "mutating": false,
               "step": "Re-prove plan and create only an immutable README PR"
             },
             {
@@ -194,6 +286,18 @@
               "method": "POST",
               "step": "Re-prove plan and create only an immutable README PR",
               "target": "app/installations/${INSTALLATION_ID}/access_tokens"
+            },
+            {
+              "class": "issue-or-pr-metadata",
+              "method": "POST",
+              "step": "Re-prove plan and create only an immutable README PR",
+              "target": "repos/${GITHUB_REPOSITORY}/issues/$STALE_PR/comments"
+            },
+            {
+              "class": "pull-request",
+              "method": "PATCH",
+              "step": "Re-prove plan and create only an immutable README PR",
+              "target": "repos/${GITHUB_REPOSITORY}/pulls/$STALE_PR"
             },
             {
               "class": "pull-request",
