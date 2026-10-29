@@ -127,6 +127,13 @@
       "rationale": "Authorize frozen #1820 head 9e8b81a89f502bf47a37cbf911e66d3c0353f7b9/tree b5f5855d652023504e8f90081de71704b545f866 measured by closed unmerged #1821: six dark-only derivatives, immutable historical replay, v8 banner selector, README, Spotlight read-only delegate source pin. One trusted-source expansion / zero reductions; semantic workflow BOM unchanged. No triggers, job/action permissions, tokens, OIDC, endpoints, bypass, merge or direct-main authority added."
     },
     {
+      "baseBomSha256": "2cd230ed2e4752cb062da14a60cae211c569150d42f5f793c23d507f0d5cc7d7",
+      "candidateBomSha256": "8be8b84764ae39b738e46f111baf79969b34a9292a72054322e83fdc98495c9c",
+      "expansionSha256": "115c7345ea5c37ee6d2d64dc6e57bfdd77c625d424c1c021c35b35ad5a243fb1",
+      "id": "cap-banner-eight-utc-recovery-windows-v1",
+      "rationale": "Prior-authorize exact frozen #1966 head 70a028f5b1f22b916ca4b8f5297deef9e658599b/tree a127e2c0554a8963ce6bbbe06480c946ab090154, independently measured disposable #1967: one cron trigger expansion, zero reductions and no TCB expansion. Preserve original four UTC slots; add four interleaved recovery windows only. No new App/owner authority, API mutation, permission, artifact, bypass or branch mutation."
+    },
+    {
       "baseBomSha256": "04dc28976ae0f22aabdf8054cebfa599a97099c64c98940469efb31b0d0aa57a",
       "candidateBomSha256": "2cd230ed2e4752cb062da14a60cae211c569150d42f5f793c23d507f0d5cc7d7",
       "expansionSha256": "21a76832b3c1d12405d98f88f1c18032b7fcbd21c6a5bb58e443ca768579141f",
