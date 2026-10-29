@@ -132,6 +132,13 @@ jobs:
       - name: Verify reviewed Python runtime
         run: python3 source/scripts/verify-python-runtime.py
 
+      - name: Download exact same-run owner receipt
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: approved-banner-owner-receipt
+          path: reviewed-owner-artifact
+          digest-mismatch: error
+
       - name: Independently authenticate same-run owner receipt
         env:
           GH_TOKEN: ${{ github.token }}
@@ -155,6 +162,7 @@ jobs:
             --archive "$RUNNER_TEMP/native-owner-receipt.zip" \
             --owner-receipt-out "$RUNNER_TEMP/native-banner-owner.json"
           test -s "$RUNNER_TEMP/native-banner-owner.json"
+          cmp reviewed-owner-artifact/owner-review.json "$RUNNER_TEMP/native-banner-owner.json"
           rm -f "$RUNNER_TEMP/native-owner-selection.json" "$RUNNER_TEMP/native-owner-receipt.zip"
 
       - name: Mint isolated reviewed App lease and merge only exact protected head
