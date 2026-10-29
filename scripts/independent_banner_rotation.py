@@ -141,6 +141,8 @@ def self_test() -> None:
     # from review snapshot processing and retain zero privileged API access.
     import banner_native_live_admission
     banner_native_live_admission.self_test()
+    import banner_native_owner_review_transaction_contract
+    banner_native_owner_review_transaction_contract.self_test()
 
 
 def main() -> int:
