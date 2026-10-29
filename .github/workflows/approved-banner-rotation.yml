@@ -148,10 +148,9 @@ jobs:
           fi
           PR_LIST="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=main&per_page=100")"
           jq -e 'type == "array" and length < 100' <<< "$PR_LIST" > /dev/null
-          if jq -e 'any(.[]; .head.ref | startswith("automation/banner-rotation/"))' <<< "$PR_LIST" > /dev/null; then
-            echo "Prior banner candidate remains open; avoid duplicate lanes."
-            exit 0
-          fi
+          # Read-only App candidate selection and historical salvage occur
+          # after independently minted scoped App identity below. Never skip
+          # all future UTC rotations merely because an old PR remains open.
           BRANCH="automation/banner-rotation/${UTC_DAY}-${SOURCE_SHA:0:12}"
           if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BRANCH}" >/dev/null 2>&1; then
             echo "Banner branch already exists without an open PR; refuse orphan/duplicate."
@@ -216,7 +215,100 @@ jobs:
           PY
           PUBLISH_TOKEN="$(jq -er .token "$APP_TOKEN_FILE")"
           echo "::add-mask::$PUBLISH_TOKEN"
-          rm -f "$APP_INSTALL" "$APP_BOT" "$APP_TOKEN_FILE"
+          rm -f "$APP_TOKEN_FILE"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)" = "$SOURCE_SHA"
+
+          # Fail closed on every incomplete, discussed, forged or updated PR.
+          # This is an authenticated read-only decision using accepted-main
+          # source and immutable native GitHub REST/GraphQL inventories.
+          jq -n --slurpfile install "$APP_INSTALL" --slurpfile bot "$APP_BOT" \
+            --argjson appId "$APP_ID" --argjson installationId "$INSTALLATION_ID" \
+            --argjson repositoryId "$REPOSITORY_ID" \
+            '{installation:$install[0],bot_user:$bot[0],expected_app_id:$appId,
+              expected_installation_id:$installationId,expected_repository_id:$repositoryId}' \
+            > "$RUNNER_TEMP/banner-app-evidence.json"
+          PYTHONPATH=source/scripts python3 source/scripts/banner_native_stale_recovery.py \
+            --app-evidence "$RUNNER_TEMP/banner-app-evidence.json" \
+            --decision-out "$RUNNER_TEMP/banner-stale-decision.json" >/dev/null
+          STALE_STATE="$(jq -er .decision "$RUNNER_TEMP/banner-stale-decision.json")"
+          case "$STALE_STATE" in
+            no-open-banner-candidate)
+              echo "No prior banner candidate; proceed with current UTC proposal." ;;
+            current-banner-candidate-requires-proof)
+              echo "Current-day exact native banner PR already exists; do not duplicate."
+              exit 0 ;;
+            stale-banner-candidate-comment-then-close-only)
+              STALE_PR="$(jq -er .prNumber "$RUNNER_TEMP/banner-stale-decision.json")"
+              STALE_HEAD="$(jq -er .headSha "$RUNNER_TEMP/banner-stale-decision.json")"
+              STALE_REF="$(jq -er .headRef "$RUNNER_TEMP/banner-stale-decision.json")"
+              HISTORICAL_BASE="$(jq -er .historicalBaseSha "$RUNNER_TEMP/banner-stale-decision.json")"
+              [[ "$STALE_PR" =~ ^[1-9][0-9]*$ ]]
+              [[ "$STALE_HEAD" =~ ^[0-9a-f]{40}$ ]]
+              [[ "$HISTORICAL_BASE" =~ ^[0-9a-f]{40}$ ]]
+              [[ "$STALE_REF" =~ ^automation/banner-rotation/[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9a-f]{12}$ ]]
+              test "$(jq -er .mainSha "$RUNNER_TEMP/banner-stale-decision.json")" = "$SOURCE_SHA"
+
+              # Independently repeat the complete read-only salvage proof
+              # just before any App token is used for a PR mutation.
+              PYTHONPATH=source/scripts python3 source/scripts/banner_native_stale_recovery.py \
+                --app-evidence "$RUNNER_TEMP/banner-app-evidence.json" \
+                --decision-out "$RUNNER_TEMP/banner-stale-reproof.json" >/dev/null
+              cmp "$RUNNER_TEMP/banner-stale-decision.json" "$RUNNER_TEMP/banner-stale-reproof.json"
+              test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"
+              test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/$STALE_REF" --jq .object.sha)" = "$STALE_HEAD"
+              test "$(gh api "repos/${GITHUB_REPOSITORY}/pulls/$STALE_PR" --jq .head.sha)" = "$STALE_HEAD"
+
+              STALE_COMMENT="Automatic close-only salvage of stale original approved banner PR #${STALE_PR}. Immutable head ${STALE_HEAD} (parent ${HISTORICAL_BASE}) is an exact one-commit README-only historical UTC candidate, no SVGs or source changes. Read-only full native inventories proved zero reviews, comments and review threads, correct selected-installation App producer and unchanged accepted-main/head refs. Current main ${SOURCE_SHA} moved; the current UTC artwork will be independently re-proposed without forcing the old branch. All original art preserved. This source branch has a PR and is safe for owner deletion; no code or tests to salvage."
+              COMMENT_RESPONSE="$(GH_TOKEN="$PUBLISH_TOKEN" gh api --include --method POST \
+                "repos/${GITHUB_REPOSITORY}/issues/$STALE_PR/comments" -f body="$STALE_COMMENT")"
+              COMMENT_STATUS="$(head -n 1 <<< "$COMMENT_RESPONSE" | tr -d '\r')"
+              [[ "$COMMENT_STATUS" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+                echo "ERROR: banner close-only salvage comment did not return HTTP 201" >&2
+                exit 1
+              }
+              COMMENT_JSON="$(sed '1,/^[[:space:]]*$/d' <<< "$COMMENT_RESPONSE")"
+              COMMENT_ID="$(jq -er --arg body "$STALE_COMMENT" --arg bot "${APP_SLUG}[bot]" \
+                'select(.body == $body and .user.login == $bot) | .id' <<< "$COMMENT_JSON")"
+              [[ "$COMMENT_ID" =~ ^[1-9][0-9]*$ ]]
+
+              # Re-check engagement after the visible comment: a competing
+              # human review, discussion, changed head or main vetoes close.
+              test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"
+              test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/$STALE_REF" --jq .object.sha)" = "$STALE_HEAD"
+              LIVE_PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/$STALE_PR")"
+              jq -e --arg sha "$STALE_HEAD" --arg main "$SOURCE_SHA" \
+                '.state == "open" and .merged == false and .head.sha == $sha and .base.sha == $main' \
+                <<< "$LIVE_PR" > /dev/null
+              LIVE_REVIEWS="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/$STALE_PR/reviews?per_page=100" --jq '.[]' | jq -s '.')"
+              test "$(jq -er 'length' <<< "$LIVE_REVIEWS")" = 0
+              LIVE_COMMENTS="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/$STALE_PR/comments?per_page=100" --jq '.[]' | jq -s '.')"
+              jq -e --argjson id "$COMMENT_ID" \
+                'length == 1 and .[0].id == $id' <<< "$LIVE_COMMENTS" >/dev/null
+              LIVE_THREADS="$(gh api graphql -f owner=portyu9 -f name=portyu9 \
+                -F number="$STALE_PR" \
+                -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){totalCount nodes{id isResolved} pageInfo{hasNextPage}}}}}')"
+              jq -e '.data.repository.pullRequest.reviewThreads |
+                .totalCount == 0 and (.nodes|length == 0) and
+                .pageInfo.hasNextPage == false' <<< "$LIVE_THREADS" >/dev/null
+
+              CLOSE_RESPONSE="$(GH_TOKEN="$PUBLISH_TOKEN" gh api --include --method PATCH \
+                "repos/${GITHUB_REPOSITORY}/pulls/$STALE_PR" -f state=closed)"
+              CLOSE_STATUS="$(head -n 1 <<< "$CLOSE_RESPONSE" | tr -d '\r')"
+              [[ "$CLOSE_STATUS" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {
+                echo "ERROR: banner stale PR close returned non-200" >&2
+                exit 1
+              }
+              jq -e --arg head "$STALE_HEAD" \
+                '.state == "closed" and .merged_at == null and .head.sha == $head' \
+                <<< "$(sed '1,/^[[:space:]]*$/d' <<< "$CLOSE_RESPONSE")" >/dev/null
+              test "$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)" = "$SOURCE_SHA"
+              echo "Verified, commented and closed stale native banner PR #$STALE_PR without merge." ;;
+            *)
+              echo "ERROR: unknown native banner stale recovery decision" >&2
+              exit 1 ;;
+          esac
+          rm -f "$APP_INSTALL" "$APP_BOT" "$RUNNER_TEMP/banner-app-evidence.json" \
+            "$RUNNER_TEMP/banner-stale-decision.json" "$RUNNER_TEMP/banner-stale-reproof.json"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)" = "$SOURCE_SHA"
           AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$PUBLISH_TOKEN" | base64 -w0)"
           created=false
