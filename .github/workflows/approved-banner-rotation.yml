@@ -115,6 +115,7 @@ jobs:
           digest-mismatch: error
 
       - name: Re-prove plan and create only an immutable README PR
+        id: publish
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ needs.plan.outputs.base_sha }}
@@ -303,8 +304,10 @@ jobs:
               echo "ERROR: unknown native banner stale recovery decision" >&2
               exit 1 ;;
           esac
-          rm -f "$APP_INSTALL" "$APP_BOT" "$RUNNER_TEMP/banner-app-evidence.json" \
-            "$RUNNER_TEMP/banner-stale-decision.json" "$RUNNER_TEMP/banner-stale-reproof.json"
+          # Keep the authenticated App metadata only until the native PR and
+          # secret-free publisher provenance packet have been bound. Never
+          # keep the App lease, JWT, or private key in a job artifact.
+          rm -f "$RUNNER_TEMP/banner-stale-decision.json" "$RUNNER_TEMP/banner-stale-reproof.json"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)" = "$SOURCE_SHA"
           # Only now is a no-open-candidate verdict available. Keep the
           # orphan-ref guard, but do not reject an already-open current PR.
@@ -328,4 +331,59 @@ jobs:
           PR_JSON="$(GH_TOKEN="$PUBLISH_TOKEN" gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input - <<< "$PR_REQUEST")"
           jq -e --arg head "$BRANCH" '(type=="object") and (.number|type=="number" and .>0) and (.head.ref==$head) and (.base.ref=="main") and (.draft==false)' <<< "$PR_JSON" > /dev/null
           opened=true
+
+          # Only a genuine first-attempt unattended schedule may emit an
+          # immutable selected-App identity artifact for the separate owner
+          # reviewer. A manual dispatch never grants autonomous review.
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ] && [ "$GITHUB_RUN_ATTEMPT" = "1" ]; then
+            test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"
+            test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$BRANCH" --jq .object.sha)" = "$(jq -er .head.sha <<< "$PR_JSON")"
+            printf %s "$PR_JSON" > "$RUNNER_TEMP/banner-created-pr.json"
+            gh api "repos/$GITHUB_REPOSITORY" > "$RUNNER_TEMP/banner-repository.json"
+            mkdir -- banner-app-origin
+            PYTHONPATH=source/scripts python3 - "$APP_INSTALL" "$APP_BOT" \
+              "$RUNNER_TEMP/banner-repository.json" "$RUNNER_TEMP/banner-created-pr.json" \
+              "$APP_ID" "$INSTALLATION_ID" "$REPOSITORY_ID" \
+              "$SOURCE_SHA" "$GITHUB_RUN_ID" <<'PY'
+          import json, sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+          import banner_native_app_origin_envelope as origin
+          import banner_native_publisher_run_artifact as publisher
+          import banner_native_observer_cli as observer
+
+          def read(filename):
+              with open(filename, encoding="utf-8") as stream:
+                  return json.load(stream)
+
+          app_id, installation_id, repository_id = map(int, sys.argv[5:8])
+          native_app = origin.minimize({
+              "installation": read(sys.argv[1]),
+              "bot_user": read(sys.argv[2]),
+              "repository": read(sys.argv[3]),
+              "expected_app_id": app_id,
+              "expected_installation_id": installation_id,
+              "expected_repository_id": repository_id,
+          })
+          packet = publisher.build(
+              app_evidence=native_app, pr=read(sys.argv[4]),
+              base_sha=sys.argv[8], run_id=int(sys.argv[9]),
+              observed_at=datetime.now(timezone.utc),
+          )
+          observer.write_exclusive(Path("banner-app-origin/app-origin.json"), packet)
+          print("banner publisher App-origin immutable evidence created: data only")
+          PY
+            echo "app_origin_ready=true" >> "$GITHUB_OUTPUT"
+          fi
+          rm -f "$APP_INSTALL" "$APP_BOT" "$RUNNER_TEMP/banner-app-evidence.json" \
+            "$RUNNER_TEMP/banner-repository.json" "$RUNNER_TEMP/banner-created-pr.json"
           unset PUBLISH_TOKEN AUTH_HEADER
+
+      - name: Upload exact scheduled App-origin evidence for isolated reviewer
+        if: steps.publish.outputs.app_origin_ready == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: approved-banner-app-origin
+          path: banner-app-origin/app-origin.json
+          if-no-files-found: error
+          retention-days: 1

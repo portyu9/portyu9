@@ -81,6 +81,13 @@
               "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
               "repository": "actions/download-artifact",
               "step": "Download exact read-only banner plan"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Upload exact scheduled App-origin evidence for isolated reviewer"
             }
           ],
           "apiSurfaces": [
@@ -103,6 +110,27 @@
               "endpoint": "graphql",
               "graphqlOperation": "query",
               "method": "POST",
+              "mutating": false,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/$GITHUB_REPOSITORY",
+              "method": "GET",
+              "mutating": false,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/$GITHUB_REPOSITORY/git/ref/heads/$BRANCH",
+              "method": "GET",
+              "mutating": false,
+              "step": "Re-prove plan and create only an immutable README PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/$GITHUB_REPOSITORY/git/ref/heads/main",
+              "method": "GET",
               "mutating": false,
               "step": "Re-prove plan and create only an immutable README PR"
             },
@@ -267,6 +295,14 @@
               "operation": "download",
               "path": "banner-candidate",
               "step": "Download exact read-only banner plan"
+            },
+            {
+              "if-no-files-found": "error",
+              "name": "approved-banner-app-origin",
+              "operation": "upload",
+              "path": "banner-app-origin/app-origin.json",
+              "retention-days": "1",
+              "step": "Upload exact scheduled App-origin evidence for isolated reviewer"
             }
           ],
           "id": "publish",
