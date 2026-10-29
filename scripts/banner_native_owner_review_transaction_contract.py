@@ -20,7 +20,7 @@ import banner_native_terminal_reproof as terminal
 from automation_governed_bot_review_gate import REVIEW_LOGIN, review_marker
 
 REPOSITORY = "portyu9/portyu9"
-HTTP_200 = re.compile(r"^HTTP/(?:1\\.[01]|2(?:\\.0)?) 200(?: [^\\r\\n]*)?$")
+HTTP_200 = re.compile(r"^HTTP/(?:1\.[01]|2(?:\.0)?) 200(?: [^\r\n]*)?$")
 TTL = timedelta(minutes=10)
 
 
@@ -164,7 +164,7 @@ def self_test() -> None:
         ("unexpected 204 status",
          lambda a, b, c: "HTTP/2.0 204 No Content"),
         ("misleading HTTP header",
-         lambda a, b, c: "HTTP/2.0 200 OK\\nHTTP/2.0 403"),
+         lambda a, b, c: "HTTP/2.0 200 OK\nHTTP/2.0 403"),
         ("wrong review actor",
          lambda a, b, c: c["user"].update(login="attacker")),
         ("wrong exact head",
