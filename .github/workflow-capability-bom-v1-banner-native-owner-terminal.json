@@ -1,0 +1,237 @@
+{
+  "automationPolicyId": "automation-policy-v1",
+  "bomId": "workflow-capability-bom-v1",
+  "repository": "portyu9/portyu9",
+  "schemaVersion": 1,
+  "workflows": [
+    {
+      "id": "banner-native-owner-terminal",
+      "jobs": [
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout immutable trusted main without persistent credential"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+              "repository": "actions/upload-artifact",
+              "step": "Upload exact owner receipt"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact current-day banner as owner"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/$GITHUB_REPOSITORY/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact current-day banner as owner"
+            }
+          ],
+          "artifacts": [
+            {
+              "if-no-files-found": "error",
+              "name": "approved-banner-owner-receipt",
+              "operation": "upload",
+              "path": "banner-owner-receipt/owner-review.json",
+              "retention-days": "1",
+              "step": "Upload exact owner receipt"
+            }
+          ],
+          "id": "owner",
+          "mutations": [],
+          "name": "review-authenticated-banner-owner",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "actions": "read",
+            "checks": "read",
+            "contents": "read",
+            "pull-requests": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [
+              "PORTYU9_BOT_REVIEW_TOKEN"
+            ],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout immutable trusted main without persistent credential"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
+              "repository": "actions/download-artifact",
+              "step": "Download exact same-run owner receipt"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "app/installations/$INSTALLATION_ID",
+              "method": "GET",
+              "mutating": false,
+              "step": "Mint isolated reviewed App lease and merge only exact protected head"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "app/installations/$INSTALLATION_ID/access_tokens",
+              "method": "POST",
+              "mutating": true,
+              "step": "Mint isolated reviewed App lease and merge only exact protected head"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/$GITHUB_REPOSITORY/actions/artifacts/$OWNER_ARTIFACT_ID/zip",
+              "method": "GET",
+              "mutating": false,
+              "step": "Independently authenticate same-run owner receipt"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/$GITHUB_REPOSITORY/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Independently authenticate same-run owner receipt"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/$GITHUB_REPOSITORY/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Mint isolated reviewed App lease and merge only exact protected head"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/$GITHUB_REPOSITORY/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Mint isolated reviewed App lease and merge only exact protected head"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "users/$APP_SLUG%5Bbot%5D",
+              "method": "GET",
+              "mutating": false,
+              "step": "Mint isolated reviewed App lease and merge only exact protected head"
+            }
+          ],
+          "artifacts": [
+            {
+              "digest-mismatch": "error",
+              "name": "approved-banner-owner-receipt",
+              "operation": "download",
+              "path": "reviewed-owner-artifact",
+              "step": "Download exact same-run owner receipt"
+            }
+          ],
+          "id": "terminal",
+          "mutations": [
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Mint isolated reviewed App lease and merge only exact protected head",
+              "target": "app/installations/$INSTALLATION_ID/access_tokens"
+            }
+          ],
+          "name": "merge-authenticated-banner-terminal",
+          "needs": [
+            "owner"
+          ],
+          "oidc": false,
+          "permissions": {
+            "actions": "read",
+            "checks": "read",
+            "contents": "read",
+            "pull-requests": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [
+              "PORTYU9_RULESET_ADMIN_APP_ID",
+              "PORTYU9_RULESET_ADMIN_INSTALLATION_ID",
+              "PORTYU9_RULESET_ADMIN_PRIVATE_KEY"
+            ],
+            "vars": []
+          }
+        }
+      ],
+      "name": "Native banner owner and terminal",
+      "path": ".github/workflows/banner-native-owner-terminal.yml",
+      "references": {
+        "env": [
+          "PYTHON_VERSION"
+        ],
+        "githubToken": [
+          "github.token"
+        ],
+        "secrets": [
+          "PORTYU9_BOT_REVIEW_TOKEN",
+          "PORTYU9_RULESET_ADMIN_APP_ID",
+          "PORTYU9_RULESET_ADMIN_INSTALLATION_ID",
+          "PORTYU9_RULESET_ADMIN_PRIVATE_KEY"
+        ],
+        "vars": []
+      },
+      "triggers": {
+        "workflow_run": {
+          "types": [
+            "completed"
+          ],
+          "workflows": [
+            "Profile quality",
+            "CodeQL"
+          ]
+        }
+      },
+      "workflowPermissions": {
+        "contents": "read"
+      }
+    }
+  ]
+}
