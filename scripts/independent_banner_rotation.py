@@ -155,6 +155,8 @@ def self_test() -> None:
     banner_native_owner_identity_source.self_test()
     import banner_native_owner_review_writer
     banner_native_owner_review_writer.self_test()
+    import banner_native_publisher_run_artifact
+    banner_native_publisher_run_artifact.self_test()
 
 
 def main() -> int:
