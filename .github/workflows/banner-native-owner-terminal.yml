@@ -48,7 +48,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Verify reviewed Python runtime
+      - name: Verify resolved Python runtime
         run: python3 source/scripts/verify-python-runtime.py
 
       - name: Approve exact current-day banner as owner
@@ -129,7 +129,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Verify reviewed Python runtime
+      - name: Verify resolved Python runtime
         run: python3 source/scripts/verify-python-runtime.py
 
       - name: Download exact same-run owner receipt
