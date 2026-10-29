@@ -132,9 +132,13 @@ if __name__ == "__main__":
             test = subprocess.run(
                 ["python3", str(candidate / "scripts/banner_native_observer_cli.py"),
                  "--self-test"],
-                cwd=candidate, check=True, text=True,
+                cwd=candidate, check=False, text=True,
                 capture_output=True, timeout=90,
             )
+            if test.returncode:
+                print("EXACT_1937_FAILURE_STDOUT=" + test.stdout, flush=True)
+                print("EXACT_1937_FAILURE_STDERR=" + test.stderr, flush=True)
+                raise ValueError("immutable wake observer self-test failed")
             require(
                 "banner observer CLI: read-only" in test.stdout,
                 "frozen candidate did not pass native wake observer self-test",
