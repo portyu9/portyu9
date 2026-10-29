@@ -94,4 +94,16 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # TRANSIENT DIAGNOSTIC ONLY: print exact trusted compiler capability
+    # inventory; this tail is removed before accepting the source PR.
+    import json
+    measured = compiler.compile_bom()
+    banner = next(item for item in measured["workflows"]
+                  if item["id"] == "approved-banner-rotation")
+    publish = next(job for job in banner["jobs"] if job["id"] == "publish")
+    print("EXACT_BANNER_PUBLISH_BOM=" +
+          json.dumps({
+              "apiSurfaces": publish["apiSurfaces"],
+              "mutations": publish["mutations"],
+          }, sort_keys=True, separators=(",", ":")), flush=True)
     raise SystemExit(main())
