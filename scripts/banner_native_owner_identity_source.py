@@ -51,7 +51,7 @@ def collect(*, get_owner: Callable[[str], Any],
             "authenticated review token does not belong to exact repository owner")
     require(type(repository.get("id")) is int
             and repository["id"] == expected_repository_id
-            and repository.get("full_name") == REPOSITORY.lstrip("/repos/")
+            and repository.get("full_name") == REPOSITORY.removeprefix("/repos/")
             and repository.get("name") == "portyu9"
             and repository.get("private") is False,
             "native owner credential bound to different repository or state")
