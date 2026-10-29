@@ -174,7 +174,28 @@ def self_test() -> None:
             pass
         else:
             raise AssertionError("stale banner selector admitted tampered PR")
-    print("stale banner recovery classifier: current/stale and adversarial fixtures PASS")
+    # Lock the actual privileged publisher's post-comment transaction to
+    # the same historical-or-current base predicate already authorized by
+    # verified_stale_banner_close_readiness. GitHub can retain the original
+    # base SHA after main advances; requiring only current main would leave
+    # a comment on the old PR and then fail, blocking autonomous recovery.
+    workflow = (Path(__file__).resolve().parents[1] /
+                ".github/workflows/approved-banner-rotation.yml").read_text(
+                    encoding="utf-8")
+    guard = (
+        '.state == "open" and .merged == false and .head.sha == $sha and '
+        '.base.ref == "main" and '
+        '(.base.sha == $historical or .base.sha == $main)'
+    )
+    require(
+        workflow.count(guard) == 1
+        and workflow.count('--arg historical "$HISTORICAL_BASE"') == 1
+        and workflow.index('COMMENT_ID="$(jq') < workflow.index(guard)
+        < workflow.index('CLOSE_RESPONSE='),
+        "actual post-comment stale-close gate lost exact historical/current base",
+    )
+    print("stale banner recovery classifier: current/stale, guarded post-comment "
+          "historical/main, and adversarial fixtures PASS")
 
 
 def main() -> int:
