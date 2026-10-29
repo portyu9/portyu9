@@ -66,8 +66,18 @@ REVIEWED_CROSS_RUN_AUTHORITY_DOWNLOADS: dict[tuple[str, str, str], dict[str, Any
         "repository": "",
     },
 }
+# This one exact future producer is PRE-STAGED AS ABSENT, never a wildcard.
+# It will be inert until a separately authorized protected workflow begins
+# emitting the credential-free App-origin packet. Until a reviewed consumer
+# exists, preservation-only evidence cannot confer review/merge authority.
+STAGED_BANNER_APP_ORIGIN_PRODUCER = (
+    ".github/workflows/approved-banner-rotation.yml",
+    "publish",
+    "Upload exact scheduled App-origin evidence for isolated reviewer",
+)
 REVIEWED_ARTIFACT_RETENTION_CLASSIFICATIONS: dict[tuple[str, str, str], dict[str, str]] = {
     (".github/workflows/approved-banner-rotation.yml", "plan", "Upload one exact banner-only candidate"): {"classification": "authority", "consumerMode": "same-run-proposal-authority"},
+    STAGED_BANNER_APP_ORIGIN_PRODUCER: {"classification": "evidence", "consumerMode": "evidence-preservation-only"},
     (".github/workflows/activity-metrics.yml", "generate", "Upload four independently validated activity subjects"): {"classification": "authority", "consumerMode": "same-run-publication-authority"},
     (".github/workflows/action-provenance-witness.yml", "prepare", "Upload unsigned reviewed witness bundle"): {"classification": "authority", "consumerMode": "cross-run-attested-authority"},
     (".github/workflows/codeql-autofix.yml", "controller", "Upload immutable controller provenance receipt"): {"classification": "authority", "consumerMode": "cross-run-custom-api-authority"},
@@ -899,9 +909,19 @@ def _compile_artifact_retention_policy(
         observed_producers <= reviewed_producers,
         f"unclassified artifact upload producer entered repository: {sorted(observed_producers - reviewed_producers)}",
     )
+    # The only temporary exception to fail-closed stale-producer detection is
+    # the frozen future scheduled-App source. An actual workflow must still
+    # satisfy every classification, retention and full-source capability gate.
+    # Explicit adversarial fixture classifications keep STRICT no-missing
+    # behavior rather than inheriting this production-only exact exception.
+    pending = reviewed_producers - observed_producers
+    stage_only = (
+        {STAGED_BANNER_APP_ORIGIN_PRODUCER}
+        if classifications is None else set()
+    )
     require(
-        reviewed_producers <= observed_producers,
-        f"reviewed artifact upload producer is stale or missing: {sorted(reviewed_producers - observed_producers)}",
+        pending <= stage_only,
+        f"reviewed artifact upload producer is stale or missing: {sorted(pending - stage_only)}",
     )
     observed_downloads = set(download_lookup)
     reviewed_downloads = set(bindings)
