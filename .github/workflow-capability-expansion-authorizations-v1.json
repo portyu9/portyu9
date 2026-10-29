@@ -1405,7 +1405,7 @@
       "candidateBomSha256": "04dc28976ae0f22aabdf8054cebfa599a97099c64c98940469efb31b0d0aa57a",
       "expansionSha256": "3fcc9bfc69176bc2d46a5a99cdf5f342a0f5124fec4e88d84079bf55d8fc772f",
       "id": "cap-independent-banner-app-origin-artifact-1947-v1",
-      "rationale": "Prior-authorize ONLY frozen #1947 selected-App publisher artifact upload source 50cc839144e4d0aab6ebe34af6c0547c0345a9a3 tree f5dba2ac91308c32168e57cdf47b5bfda9c6566f; independent closed #1951 measured five capability expansions, zero reductions, no protected TCB change. Only one credential-free, one-day evidence-preservation-only approved-banner-app-origin upload after authenticated first-attempt schedule and exact new App PR; no owner review, independent App merge, check writer, secret, branch-protection or direct-main authority."
+      "rationale": "Prior-authorize frozen #1947 selected-App publisher artifact upload SHA 50cc839144e4d0aab6ebe34af6c0547c0345a9a3 tree f5dba2ac91308c32168e57cdf47b5bfda9c6566f. Closed independent #1951 measured five capability expansions, zero reductions, no protected TCB. Permit only one secret-free, one-day evidence-preservation-only approved-banner-app-origin upload after an authentic first-attempt UTC schedule and exact native App PR; no owner review, check writer or App terminal merge."
     },
     {
       "baseBomSha256": "c6857da666228646811bce890edbca6a2a24baaefc3d8d18be7e59cc0c3d1bc5",
