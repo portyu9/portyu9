@@ -78,9 +78,11 @@ def select(*, listing: Any, artifacts: dict[int, Any], main_sha: str,
     candidates: list[dict[str, Any]] = []
     for run in runs:
         created = utc(run.get("created_at"))
+        # Every same-day schedule is collected, including earlier retry
+        # attempts with no App-origin artifact. Only the selected publisher
+        # may be subject to the six-hour review freshness bound.
         require(created.date().isoformat() == now_day
                 and created <= observed_at
-                and observed_at - created <= TTL
                 and run.get("name") == producer.WORKFLOW
                 and run.get("path") == producer.WORKFLOW_PATH
                 and run.get("event") == "schedule"
@@ -105,6 +107,10 @@ def select(*, listing: Any, artifacts: dict[int, Any], main_sha: str,
         require(len(matching) <= 1, "duplicated native App-origin artifacts")
         if not matching:
             continue
+        # An old, artifact-less retry is historical evidence, not a
+        # candidate. Never weaken freshness of an actual App-origin source.
+        require(observed_at - created <= TTL,
+                "selected App-origin publisher run is stale")
         item = matching[0]
         changed = utc(run.get("updated_at"))
         made = utc(item.get("created_at"))
@@ -245,6 +251,42 @@ def self_test() -> None:
         "producerRunId": 812, "artifactId": 702,
         "sha256": "b" * 64, "mainSha": main, "utcDay": "2026-10-29",
     }, "native producer discovery lost immutable source binding")
+    # Real four-window UTC schedules retain old same-day retries. A
+    # morning run with no App-origin artifact must not invalidate the unique
+    # current fresh, authenticated publisher discovered later in the day.
+    with_history = copy.deepcopy(good)
+    historical = copy.deepcopy(run)
+    historical.update(
+        id=811, head_sha="f" * 40, conclusion="failure",
+        created_at="2026-10-29T01:01:00Z",
+        updated_at="2026-10-29T01:03:00Z",
+    )
+    with_history["listing"]["workflow_runs"].append(historical)
+    with_history["listing"]["total_count"] = 2
+    with_history["artifacts"][811] = {"total_count": 0, "artifacts": []}
+    require(select(**with_history) == proof,
+            "old artifact-less same-day retry vetoed fresh publisher")
+    # The same old run must still be ineligible if it carries a purported
+    # App-origin artifact: stale source age cannot be laundered by history.
+    with_stale_artifact = copy.deepcopy(with_history)
+    forged = copy.deepcopy(item)
+    forged["id"] = 701
+    forged["created_at"] = "2026-10-29T01:02:00Z"
+    forged["expires_at"] = "2026-10-30T01:02:00Z"
+    forged["archive_download_url"] = (
+        "https://api.github.com/repos/portyu9/portyu9/actions/artifacts/701/zip"
+    )
+    forged["workflow_run"]["id"] = 811
+    forged["workflow_run"]["head_sha"] = historical["head_sha"]
+    with_stale_artifact["artifacts"][811] = {
+        "total_count": 1, "artifacts": [forged],
+    }
+    try:
+        select(**with_stale_artifact)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("stale App-origin source was accepted as history")
     def reject(label: str, mutation: Callable[[dict[str, Any]], None]) -> None:
         bad = copy.deepcopy(good)
         mutation(bad)
