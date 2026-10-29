@@ -47,17 +47,23 @@ def read_bounded_source_zip(path: Path) -> bytes:
     """Read one untrusted archive without symlink traversal or unbounded I/O."""
     require(isinstance(path, Path) and path.is_file() and not path.is_symlink(),
             "scheduled publisher ZIP source is not a regular non-symlink file")
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-    descriptor = os.open(path, flags)
-    try:
-        metadata = os.fstat(descriptor)
+    # Fix the filesystem object identity before and after the fixed-mode
+    # read. A swapped symlink or replaced inode is never trusted.
+    original = path.lstat()
+    require(stat.S_ISREG(original.st_mode)
+            and 0 < original.st_size <= producer_origin.MAX_ARCHIVE,
+            "scheduled publisher source must be one bounded regular inode")
+    with path.open("rb") as stream:
+        metadata = os.fstat(stream.fileno())
         require(stat.S_ISREG(metadata.st_mode)
-                and 0 < metadata.st_size <= producer_origin.MAX_ARCHIVE,
-                "scheduled publisher archive exceeds exact input budget")
-        with os.fdopen(descriptor, "rb", closefd=False) as stream:
-            archive = stream.read(producer_origin.MAX_ARCHIVE + 1)
-    finally:
-        os.close(descriptor)
+                and (metadata.st_dev, metadata.st_ino, metadata.st_size)
+                  == (original.st_dev, original.st_ino, original.st_size),
+                "scheduled publisher ZIP inode changed before read")
+        archive = stream.read(producer_origin.MAX_ARCHIVE + 1)
+    final = path.lstat()
+    require((final.st_dev, final.st_ino, final.st_size)
+            == (original.st_dev, original.st_ino, original.st_size),
+            "scheduled publisher ZIP inode changed during read")
     require(0 < len(archive) <= producer_origin.MAX_ARCHIVE
             and len(archive) == metadata.st_size,
             "scheduled publisher archive changed while being read")
