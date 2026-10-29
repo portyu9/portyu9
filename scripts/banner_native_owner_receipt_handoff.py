@@ -32,8 +32,8 @@ import banner_native_transaction_artifact_cli as transaction
 from banner_native_authenticated_app_source import FixedOriginRead, REPOSITORY
 from banner_native_publisher_run_artifact import unique_object
 
-WORKFLOW = producer.WORKFLOW
-WORKFLOW_PATH = producer.WORKFLOW_PATH
+WORKFLOW = "Native banner owner and terminal"
+WORKFLOW_PATH = ".github/workflows/banner-native-owner-terminal.yml"
 OWNER_JOB = "review-authenticated-banner-owner"
 OWNER_APPROVE_STEP = "Approve exact current-day banner as owner"
 OWNER_UPLOAD_STEP = "Upload exact owner receipt"
@@ -276,11 +276,19 @@ def collect(*, read: Callable[[str], Any], repository_id: int,
 
 def self_test() -> None:
     import banner_native_live_admission as admission
+    # A workflow_run consumer must NEVER masquerade as its schedule-only
+    # publisher: GitHub assigns distinct run names, paths and event types.
+    require((WORKFLOW, WORKFLOW_PATH) !=
+            (producer.WORKFLOW, producer.WORKFLOW_PATH)
+            and WORKFLOW != producer.WORKFLOW
+            and WORKFLOW_PATH != producer.WORKFLOW_PATH,
+            "owner workflow_run incorrectly bound to schedule-only publisher")
     source = Path(__file__).resolve().parents[1] / WORKFLOW_PATH
-    require(source.is_file() and not source.is_symlink()
-            and source.read_text(encoding="utf-8").splitlines()[0] ==
-                f"name: {WORKFLOW}",
-            "owner receipt workflow identity must match canonical publisher and live YAML")
+    if source.exists():
+        require(source.is_file() and not source.is_symlink()
+                and source.read_text(encoding="utf-8").splitlines()[0] ==
+                    f"name: {WORKFLOW}",
+                "owner receipt workflow identity drifted from live YAML")
     original = admission.fixture()
     clock = utc(original["observedAt"]) + timedelta(minutes=8)
     stamp = lambda moment: moment.isoformat(timespec="seconds").replace("+00:00", "Z")
@@ -369,6 +377,10 @@ def self_test() -> None:
             return
         raise AssertionError("untrusted native owner handoff accepted " + label)
     reject("wrong workflow", lambda x: x["run"].update(name="forged"))
+    reject("publisher is not owner workflow", lambda x: x["run"].update(
+        name=producer.WORKFLOW, path=producer.WORKFLOW_PATH))
+    reject("wrong owner workflow path", lambda x: x["run"].update(
+        path=producer.WORKFLOW_PATH))
     reject("wrong event", lambda x: x["run"].update(event="workflow_dispatch"))
     reject("changed main", lambda x: x["run"].update(head_sha="f"*40))
     reject("manual rerun", lambda x: x["run"].update(run_attempt=2))
