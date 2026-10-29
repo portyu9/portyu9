@@ -1701,12 +1701,12 @@ def self_test() -> None:
     )
     require(
         staged_count in {0, 1}
-        and live_retention["uploadProducerCount"] == 22 + staged_count
-        and live_retention["downloadConsumerCount"] == 31
+        and live_retention["uploadProducerCount"] == 23 + staged_count
+        and live_retention["downloadConsumerCount"] == 32
         and sum(
             1 for entry in live_retention["entries"]
             if entry.get("antiReplayMode") in AUTHORITY_ARTIFACT_ANTI_REPLAY_MODES
-        ) == 12,
+        ) == 13,
         "artifact retention/anti-replay live inventory cardinality changed",
     )
 
