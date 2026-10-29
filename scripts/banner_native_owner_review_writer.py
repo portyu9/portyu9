@@ -24,11 +24,13 @@ import os
 from pathlib import Path
 import re
 import ssl
+import stat
 from typing import Any, Callable
 
 import banner_native_live_admission as admission
 import banner_native_observer_cli as observer
 import banner_native_owner_identity_source as owner_source
+import banner_native_publisher_run_artifact as producer_origin
 import banner_native_owner_review_transaction_contract as owner_contract
 import banner_native_transaction_artifact_cli as transaction
 from banner_native_authenticated_app_source import (
@@ -39,6 +41,85 @@ HOST = "api.github.com"
 MAX_RESPONSE_BYTES = 131_072
 OWNER_PATH = re.compile(r"^repos/portyu9/portyu9/pulls/([1-9][0-9]*)/reviews$")
 FRESH_TTL = timedelta(seconds=75)
+
+
+def read_bounded_source_zip(path: Path) -> bytes:
+    """Read one untrusted archive without symlink traversal or unbounded I/O."""
+    require(type(path) is Path and path.is_file() and not path.is_symlink(),
+            "scheduled publisher ZIP source is not a regular non-symlink file")
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    try:
+        metadata = os.fstat(descriptor)
+        require(stat.S_ISREG(metadata.st_mode)
+                and 0 < metadata.st_size <= producer_origin.MAX_ARCHIVE,
+                "scheduled publisher archive exceeds exact input budget")
+        with os.fdopen(descriptor, "rb", closefd=False) as stream:
+            archive = stream.read(producer_origin.MAX_ARCHIVE + 1)
+    finally:
+        os.close(descriptor)
+    require(0 < len(archive) <= producer_origin.MAX_ARCHIVE
+            and len(archive) == metadata.st_size,
+            "scheduled publisher archive changed while being read")
+    return archive
+
+
+def verified_scheduled_review_source(
+    *, documents: Any, wake: Any, source_run: Any,
+    artifact_inventory: Any, archive: bytes, observed_at: datetime,
+    expected_repository_id: int,
+) -> dict[str, str | int]:
+    """Prove exact native CI wake AND independent scheduled App source."""
+    require(type(documents) is dict
+            and set(documents) == {"initial", "appIdentity", "ownerIdentity"}
+            and type(wake) is dict
+            and wake.get("decision") == "exact-native-banner-wake-observed-no-write",
+            "reviewer missing exact independent CI wake or identity inputs")
+    before = documents["initial"]
+    require(type(before) is dict and type(wake.get("prNumber")) is int
+            and type(wake.get("baseSha")) is str
+            and type(wake.get("headSha")) is str
+            and type(wake.get("headRef")) is str,
+            "reviewer wake/subject malformed")
+    evidence = producer_origin.attest(
+        source_run=source_run, artifact_inventory=artifact_inventory,
+        archive=archive, snapshot=before, observed_now=observed_at,
+        expected_repository_id=expected_repository_id,
+    )
+    require(evidence["decision"] ==
+            "authenticated-native-banner-schedule-app-origin-data-only"
+            and evidence["prNumber"] == wake["prNumber"]
+            and evidence["baseSha"] == wake["baseSha"]
+            and evidence["headSha"] == wake["headSha"]
+            and before["pr"]["head"]["ref"] == wake["headRef"]
+            and evidence["repositoryId"] ==
+                documents["appIdentity"]["expected_repository_id"]
+            and evidence["ownerEligibleDay"] == observed_at.date().isoformat(),
+            "selected App publisher source/wake/owner identity changed")
+    require(before["nativeApp"] == documents["appIdentity"],
+            "reviewer identity differs from authenticated publisher artifact")
+    return evidence
+
+
+def complete_provenance_bound_review(
+    *, documents: Any, wake: Any, source_run: Any,
+    artifact_inventory: Any, archive: bytes, observed_at: datetime,
+    expected_repository_id: int,
+    submit: Callable[[dict[str, Any]], tuple[str, dict[str, Any]]],
+    observe_after: Callable[[dict[str, Any]], Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    # Fail closed BEFORE the first owner-token POST. This is a production
+    # prerequisite, not a caller-supplied boolean or an artifact signature.
+    verified_scheduled_review_source(
+        documents=documents, wake=wake, source_run=source_run,
+        artifact_inventory=artifact_inventory, archive=archive,
+        observed_at=observed_at,
+        expected_repository_id=expected_repository_id,
+    )
+    return complete_review(
+        documents=documents, observed_at=observed_at,
+        submit=submit, observe_after=observe_after,
+    )
 
 
 def require(ok: bool, message: str) -> None:
@@ -334,6 +415,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--app-evidence", type=Path)
+    parser.add_argument("--producer-run-id", type=int)
+    parser.add_argument("--app-origin-archive", type=Path)
     parser.add_argument("--wake-event", type=Path)
     parser.add_argument("--repository-id", type=int)
     parser.add_argument("--receipt-out", type=Path)
@@ -341,10 +424,14 @@ def main() -> int:
     if args.self_test:
         require(all(getattr(args, key) is None for key in (
             "app_evidence", "wake_event", "repository_id", "receipt_out",
+            "producer_run_id", "app_origin_archive",
         )), "owner POST self-test cannot use live paths or credentials")
         self_test()
         return 0
     require(args.app_evidence is not None and args.wake_event is not None
+            and type(args.producer_run_id) is int
+            and args.producer_run_id > 0
+            and args.app_origin_archive is not None
             and type(args.repository_id) is int
             and args.repository_id > 0 and args.receipt_out is not None
             and os.environ.get("GITHUB_REPOSITORY") == "portyu9/portyu9"
@@ -365,6 +452,17 @@ def main() -> int:
     )
     require(wake["decision"] == "exact-native-banner-wake-observed-no-write",
             "actual native banner completion did not match accepted candidate")
+    # The run is independently authenticated by a separate read-only GitHub
+    # credential and a closed exact endpoint allowlist. A JSON artifact or
+    # unverified caller-supplied run metadata cannot authorize an owner POST.
+    source_path = f"{REPOSITORY}/actions/runs/{args.producer_run_id}"
+    reader = FixedOriginRead(
+        read_token,
+        frozenset({source_path, source_path + "/artifacts"}),
+    )
+    authenticated_run = reader.get(source_path)
+    authenticated_artifacts = reader.get(source_path + "/artifacts")
+    source_archive = read_bounded_source_zip(args.app_origin_archive)
     own = owner_source.collect(
         get_owner=FixedOriginRead(owner_token, frozenset({"/user"})).get,
         get_repository=FixedOriginRead(read_token, frozenset({REPOSITORY})).get,
@@ -385,8 +483,13 @@ def main() -> int:
                 "actual owner review did not survive full native re-observation")
         return after
 
-    artifacts, receipt = complete_review(
+    artifacts, receipt = complete_provenance_bound_review(
         documents=documents,
+        wake=wake,
+        source_run=authenticated_run,
+        artifact_inventory=authenticated_artifacts,
+        archive=source_archive,
+        expected_repository_id=args.repository_id,
         observed_at=datetime.now(timezone.utc).replace(microsecond=0),
         submit=ExactOwnerReviewPost(owner_token).submit,
         observe_after=observe_after,
