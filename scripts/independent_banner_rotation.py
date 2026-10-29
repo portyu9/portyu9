@@ -159,6 +159,8 @@ def self_test() -> None:
     banner_native_app_terminal_merge_writer.self_test()
     import banner_native_publisher_run_artifact
     banner_native_publisher_run_artifact.self_test()
+    import banner_native_publisher_discovery
+    banner_native_publisher_discovery.self_test()
 
 
 def main() -> int:
