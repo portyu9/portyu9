@@ -45,7 +45,7 @@ def unique_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def read_bounded(path: Path) -> Any:
-    require(type(path) is Path, "banner observer input needs a concrete file path")
+    require(type(path) is type(Path()), "banner observer input needs a concrete file path")
     flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
     descriptor = os.open(path, flags)
     try:
