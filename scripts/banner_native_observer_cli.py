@@ -204,8 +204,10 @@ def self_test() -> None:
             "observer failed to bind one newly approved owner review")
 
     for label, mutate in (
-        ("replayed clock", lambda x: x.update(
-            observedAt=initial_fixture["observedAt"],
+        ("reversed clock", lambda x: x.update(
+            observedAt=(initial_time - timedelta(seconds=1)).isoformat(
+                timespec="seconds",
+            ).replace("+00:00", "Z"),
         )),
         ("different App", lambda x: x["nativeApp"].update(
             expected_app_id=987,
