@@ -22,6 +22,7 @@ import banner_native_live_admission as admission
 import banner_native_rest_transport as rest
 import banner_native_snapshot_collector as collector
 import banner_native_terminal_reproof as terminal
+import independent_banner_candidate_contract as contract
 
 MAX_FILE_BYTES = 1_048_576
 APP_KEYS = frozenset({
@@ -44,7 +45,7 @@ def unique_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def read_bounded(path: Path) -> Any:
-    require(type(path) is Path, "banner observer input needs a concrete file path")
+    require(type(path) is type(Path()), "banner observer input needs a concrete file path")
     flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
     descriptor = os.open(path, flags)
     try:
@@ -122,6 +123,41 @@ def observe(
     terminal_result = terminal.evaluate(initial, snapshot)
     return snapshot, terminal_result
 
+def observe_native_wake(
+    *, app_evidence: Any, token: str, event: Any,
+    observed_now: datetime, client: Any | None = None,
+    threads_reader: Callable[[str, int], dict[str, Any]] | None = None,
+) -> tuple[dict[str, Any], dict[str, str | int]]:
+    """Bind a native completed workflow wake to an independently observed PR.
+
+    This is read-only evidence; neither a webhook nor its result grants a
+    privileged approval, check publication, App token or protected merge.
+    """
+    snapshot, decision = observe(
+        app_evidence=app_evidence, token=token,
+        observed_now=observed_now, client=client,
+        threads_reader=threads_reader,
+    )
+    require(
+        decision.get("decision")
+        == "exact-native-banner-owner-review-ready-read-only",
+        "native banner event has no fully validated unreviewed candidate",
+    )
+    admitted = contract.verified_native_banner_review_wake(
+        event=event, pr=snapshot["pr"], native_app=app_evidence,
+        expected_main_sha=snapshot["mainSha"],
+        observed_now=observed_now,
+    )
+    require(
+        admitted["prNumber"] == decision["prNumber"]
+        and admitted["baseSha"] == decision["baseSha"]
+        and admitted["headSha"] == decision["headSha"]
+        and admitted["headRef"] == snapshot["pr"]["head"]["ref"],
+        "native wake and independently verified banner subject diverged",
+    )
+    return snapshot, {**admitted,
+                      "decision": "exact-native-banner-wake-observed-no-write"}
+
 
 def self_test() -> None:
     import copy
@@ -168,8 +204,10 @@ def self_test() -> None:
             "observer failed to bind one newly approved owner review")
 
     for label, mutate in (
-        ("replayed clock", lambda x: x.update(
-            observedAt=initial_fixture["observedAt"],
+        ("reversed clock", lambda x: x.update(
+            observedAt=(initial_time - timedelta(seconds=1)).isoformat(
+                timespec="seconds",
+            ).replace("+00:00", "Z"),
         )),
         ("different App", lambda x: x["nativeApp"].update(
             expected_app_id=987,
@@ -237,6 +275,92 @@ def self_test() -> None:
         else:
             raise AssertionError("banner observer accepted oversized evidence")
 
+
+    # An actual workflow completion is a wake only, never approval authority.
+    pr = initial["pr"]
+    native = {
+        "action": "completed", "repository": {"full_name": contract.REPOSITORY},
+        "sender": {"login": "github-actions[bot]"},
+        "workflow_run": {
+            "id": 4821, "name": "Profile quality",
+            "path": contract.EXPECTED_PROTECTED_WORKFLOWS["Profile quality"][0],
+            "event": "pull_request", "status": "completed",
+            "conclusion": "success", "head_sha": pr["head"]["sha"],
+            "head_branch": pr["head"]["ref"],
+            "repository": {"full_name": contract.REPOSITORY},
+            "head_repository": {"full_name": contract.REPOSITORY},
+            "run_attempt": 1, "check_suite_id": 4822,
+            "created_at": (initial_time - timedelta(minutes=1)).isoformat(
+                timespec="seconds",
+            ).replace("+00:00", "Z"),
+            "pull_requests": [{
+                "number": pr["number"], "head": {"sha": pr["head"]["sha"]},
+                "base": {"ref": "main"},
+            }],
+        },
+    }
+    def wake(event: Any, *, sample: Any = initial_fixture,
+             clock: datetime = initial_time) -> tuple[Any, Any]:
+        return observe_native_wake(
+            **kwargs, event=event, observed_now=clock,
+            client=collector._FixtureClient(sample),
+            threads_reader=lambda _repo, _pr: copy.deepcopy(
+                sample["reviewThreads"],
+            ),
+        )
+    found, proof = wake(native)
+    require(found == initial
+            and proof["decision"] == "exact-native-banner-wake-observed-no-write"
+            and proof["sourceRunId"] == 4821
+            and proof["headSha"] == pr["head"]["sha"],
+            "native banner wake failed its exact read-only binding")
+    for label, mutate in (
+        ("wrong head", lambda x: x["workflow_run"].update(head_sha="f" * 40)),
+        ("wrong path", lambda x: x["workflow_run"].update(
+            path=".github/workflows/unreviewed.yml")),
+        ("replayed job", lambda x: x["workflow_run"].update(run_attempt=2)),
+        ("failed job", lambda x: x["workflow_run"].update(
+            conclusion="failure")),
+        ("unrelated PR", lambda x: x["workflow_run"].update(
+            pull_requests=[])),
+        ("different repository", lambda x: x["repository"].update(
+            full_name="outsider/fork")),
+        ("wrong event", lambda x: x.update(action="requested")),
+    ):
+        bad = copy.deepcopy(native)
+        mutate(bad)
+        try:
+            wake(bad)
+        except (ValueError, TypeError, KeyError):
+            pass
+        else:
+            raise AssertionError(f"unsafe native banner wake accepted: {label}")
+    for label, sample, clock in (
+        ("owner review already exists", after_fixture,
+         initial_time + timedelta(minutes=3)),
+        ("expired webhook", initial_fixture,
+         initial_time + timedelta(hours=3)),
+    ):
+        try:
+            wake(native, sample=sample, clock=clock)
+        except (ValueError, TypeError, KeyError):
+            pass
+        else:
+            raise AssertionError(f"unsafe banner wake state accepted: {label}")
+    with tempfile.TemporaryDirectory(prefix="banner-native-wake-") as tmp:
+        event_path = Path(tmp) / "event.json"
+        write_exclusive(event_path, native)
+        require(read_bounded(event_path) == native,
+                "native event lost exact JSON when persisted")
+        event_path.unlink()
+        event_path.write_text('{"action":"completed","action":"requested"}')
+        try:
+            read_bounded(event_path)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("duplicate native webhook key was accepted")
+
     require(after["mainSha"] == initial["mainSha"],
             "observer positive fixture did not preserve original main lease")
     print(
@@ -251,16 +375,20 @@ def main() -> int:
     parser.add_argument("--app-evidence", type=Path)
     parser.add_argument("--snapshot-out", type=Path)
     parser.add_argument("--initial-snapshot", type=Path)
+    parser.add_argument("--wake-event", type=Path)
     args = parser.parse_args()
 
     if args.self_test:
         require(args.app_evidence is None and args.snapshot_out is None
-                and args.initial_snapshot is None,
+                and args.initial_snapshot is None
+                and args.wake_event is None,
                 "observer self-test must not consume external evidence")
         self_test()
         return 0
     require(args.app_evidence is not None and args.snapshot_out is not None,
             "observer requires one authenticated-App evidence file and a new snapshot path")
+    require(args.initial_snapshot is None or args.wake_event is None,
+            "native wake cannot be combined with a post-review snapshot")
     token = os.environ.get("GH_TOKEN")
     require(token is not None, "observer GH_TOKEN is missing")
     app = read_bounded(args.app_evidence)
@@ -269,9 +397,15 @@ def main() -> int:
         else read_bounded(args.initial_snapshot)
     )
     now = datetime.now(timezone.utc).replace(microsecond=0)
-    snapshot, result = observe(
-        app_evidence=app, token=token, observed_now=now, initial=initial,
-    )
+    if args.wake_event is not None:
+        snapshot, result = observe_native_wake(
+            app_evidence=app, token=token, observed_now=now,
+            event=read_bounded(args.wake_event),
+        )
+    else:
+        snapshot, result = observe(
+            app_evidence=app, token=token, observed_now=now, initial=initial,
+        )
     write_exclusive(args.snapshot_out, snapshot)
     # Never print bearer token, raw App input, or unvalidated snapshot.
     print(json.dumps(result, sort_keys=True, separators=(",", ":")))
