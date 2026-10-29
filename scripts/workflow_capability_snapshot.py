@@ -19,6 +19,7 @@ BASE_SNAPSHOT = ROOT / ".github/workflow-capability-bom-v1.json"
 ACTION_PROVENANCE_WITNESS_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-action-provenance-witness.json"
 ACTIVITY_METRICS_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-activity-metrics.json"
 APPROVED_BANNER_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-approved-banner-rotation.json"
+BANNER_NATIVE_OWNER_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-banner-native-owner-terminal.json"
 ADMISSION_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-capability-admission.json"
 AUTOFIX_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-codeql-autofix.json"
 DEPENDABOT_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-dependabot-controller.json"
@@ -72,6 +73,7 @@ def load_combined() -> dict[str, Any]:
     action_provenance_witness_extension = load_part(ACTION_PROVENANCE_WITNESS_EXTENSION, "Action provenance witness BOM extension")
     activity_metrics_extension = load_part(ACTIVITY_METRICS_EXTENSION, "Independent activity metrics BOM extension")
     approved_banner_extension = load_part(APPROVED_BANNER_EXTENSION, "Independent approved banner BOM extension")
+    banner_native_owner_extension = load_part(BANNER_NATIVE_OWNER_EXTENSION, "Independent native banner owner/App BOM extension")
     admission_extension = load_part(ADMISSION_EXTENSION, "Capability admission BOM extension")
     autofix_extension = load_part(AUTOFIX_EXTENSION, "CodeQL Autofix BOM extension")
     dependabot_extension = load_part(DEPENDABOT_EXTENSION, "Dependabot controller BOM extension")
@@ -98,6 +100,12 @@ def load_combined() -> dict[str, Any]:
         identity="approved-banner-rotation",
         path=".github/workflows/approved-banner-rotation.yml",
         label="Independent approved banner BOM extension",
+    )
+    one_workflow(
+        banner_native_owner_extension,
+        identity="banner-native-owner-terminal",
+        path=".github/workflows/banner-native-owner-terminal.yml",
+        label="Native banner owner/App BOM extension",
     )
     one_workflow(
         admission_extension,
@@ -149,6 +157,7 @@ def load_combined() -> dict[str, Any]:
         + list(action_provenance_witness_extension["workflows"])
         + list(activity_metrics_extension["workflows"])
         + list(approved_banner_extension["workflows"])
+        + list(banner_native_owner_extension["workflows"])
         + list(admission_extension["workflows"])
         + list(autofix_extension["workflows"])
         + list(dependabot_extension["workflows"])
@@ -386,12 +395,13 @@ def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
 def self_test() -> None:
     combined = load_combined()
     validate_ruleset_reconciler_safety(combined)
-    require(len(combined["workflows"]) == 15, "composite Workflow Capability BOM must contain fifteen workflows")
+    require(len(combined["workflows"]) == 16, "composite Workflow Capability BOM must contain sixteen workflows")
     require(
         [workflow["path"] for workflow in combined["workflows"]] == [
             ".github/workflows/action-provenance-witness.yml",
             ".github/workflows/activity-metrics.yml",
             ".github/workflows/approved-banner-rotation.yml",
+            ".github/workflows/banner-native-owner-terminal.yml",
             ".github/workflows/bot-pr-user-approval.yml",
             ".github/workflows/capability-admission.yml",
             ".github/workflows/codeql-autofix.yml",
@@ -415,6 +425,8 @@ def self_test() -> None:
             "composite Workflow Capability BOM lost Dependabot controller workflow")
     require(any(workflow["id"] == "profile-generator-compatibility-witness" for workflow in combined["workflows"]),
             "composite Workflow Capability BOM lost profile generator compatibility witness workflow")
+    require(any(workflow["id"] == "banner-native-owner-terminal" for workflow in combined["workflows"]),
+            "composite Workflow Capability BOM lost native banner owner/App terminal")
     require(any(workflow["id"] == "bot-pr-user-approval" for workflow in combined["workflows"]),
             "composite Workflow Capability BOM lost bot PR user approval workflow")
     require(any(workflow["id"] == "ruleset-drift-sentinel" for workflow in combined["workflows"]),

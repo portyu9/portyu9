@@ -16,6 +16,7 @@ EXPECTED_VERSION_INFO = tuple(int(part) for part in EXPECTED_VERSION.split("."))
 EXPECTED_WORKFLOW_VERSIONS = {
     "activity-metrics.yml": EXPECTED_VERSION,
     "approved-banner-rotation.yml": EXPECTED_VERSION,
+    "banner-native-owner-terminal.yml": EXPECTED_VERSION,
     "action-provenance-witness.yml": EXPECTED_VERSION,
     "capability-admission.yml": EXPECTED_VERSION,
     "codeql-autofix.yml": EXPECTED_VERSION,
@@ -29,6 +30,7 @@ EXPECTED_WORKFLOWS = set(EXPECTED_WORKFLOW_VERSIONS)
 VERIFY_COMMANDS = {
     "activity-metrics.yml": "python3 source/scripts/verify-python-runtime.py",
     "approved-banner-rotation.yml": "python3 source/scripts/verify-python-runtime.py",
+    "banner-native-owner-terminal.yml": "python3 source/scripts/verify-python-runtime.py",
     "action-provenance-witness.yml": "python3 scripts/verify-python-runtime.py",
     "capability-admission.yml": "python3 scripts/verify-python-runtime.py",
     "codeql-autofix.yml": "python3 scripts/verify-python-runtime.py",

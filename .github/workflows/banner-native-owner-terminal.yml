@@ -1,0 +1,252 @@
+name: Native banner owner and terminal
+
+on:
+  workflow_run:
+    workflows:
+      - Profile quality
+      - CodeQL
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-banner-owner-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.13.18"
+
+jobs:
+  owner:
+    name: review-authenticated-banner-owner
+    if: >-
+      ${{ github.ref == 'refs/heads/main' &&
+          github.event.workflow_run.name == 'Profile quality' &&
+          github.event.workflow_run.event == 'pull_request' &&
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_repository.full_name == github.repository &&
+          startsWith(github.event.workflow_run.head_branch, 'automation/banner-rotation/') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    environment: portyu9-review-identity
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout immutable trusted main without persistent credential
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 source/scripts/verify-python-runtime.py
+
+      - name: Approve exact current-day banner as owner
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BANNER_OWNER_TOKEN: ${{ secrets.PORTYU9_BOT_REVIEW_TOKEN }}
+        run: |
+          set -euo pipefail
+          set +x
+          umask 077
+          test "$GITHUB_REPOSITORY" = "portyu9/portyu9"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_EVENT_NAME" = "workflow_run"
+          test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
+          test -n "$BANNER_OWNER_TOKEN"
+          test "$GH_TOKEN" != "$BANNER_OWNER_TOKEN"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$GITHUB_SHA"
+          mkdir -p banner-owner-receipt
+          PYTHONPATH=source/scripts python3 source/scripts/banner_native_publisher_discovery.py \
+            --repository-id "$GITHUB_REPOSITORY_ID" \
+            --selection-out "$RUNNER_TEMP/native-banner-source.json"
+          RUN_ID="$(jq -er .producerRunId "$RUNNER_TEMP/native-banner-source.json")"
+          ARTIFACT_ID="$(jq -er .artifactId "$RUNNER_TEMP/native-banner-source.json")"
+          [[ "$RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" \
+            > "$RUNNER_TEMP/native-banner-publisher.zip"
+          PYTHONPATH=source/scripts python3 source/scripts/banner_native_publisher_discovery.py \
+            --selection "$RUNNER_TEMP/native-banner-source.json" \
+            --archive "$RUNNER_TEMP/native-banner-publisher.zip" \
+            --app-evidence-out "$RUNNER_TEMP/native-banner-app.json"
+          PYTHONPATH=source/scripts python3 source/scripts/banner_native_owner_review_writer.py \
+            --app-evidence "$RUNNER_TEMP/native-banner-app.json" \
+            --producer-run-id "$RUN_ID" \
+            --app-origin-archive "$RUNNER_TEMP/native-banner-publisher.zip" \
+            --wake-event "$GITHUB_EVENT_PATH" \
+            --repository-id "$GITHUB_REPOSITORY_ID" \
+            --receipt-out banner-owner-receipt/owner-review.json \
+            > "$RUNNER_TEMP/native-banner-owner-result.json"
+          test -s banner-owner-receipt/owner-review.json
+          test "$(jq -er .decision "$RUNNER_TEMP/native-banner-owner-result.json")" = \
+            "dual-source-banner-owner-review-receipt-no-merge"
+          rm -f "$RUNNER_TEMP/native-banner-source.json" \
+            "$RUNNER_TEMP/native-banner-publisher.zip" \
+            "$RUNNER_TEMP/native-banner-app.json" \
+            "$RUNNER_TEMP/native-banner-owner-result.json"
+
+      - name: Upload exact owner receipt
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: approved-banner-owner-receipt
+          path: banner-owner-receipt/owner-review.json
+          if-no-files-found: error
+          retention-days: 1
+
+  terminal:
+    name: merge-authenticated-banner-terminal
+    needs: owner
+    if: needs.owner.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    environment: ruleset-admin-identity
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout immutable trusted main without persistent credential
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 source/scripts/verify-python-runtime.py
+
+      - name: Download exact same-run owner receipt
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: approved-banner-owner-receipt
+          path: reviewed-owner-artifact
+          digest-mismatch: error
+
+      - name: Independently authenticate same-run owner receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$GITHUB_REPOSITORY" = "portyu9/portyu9"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_EVENT_NAME" = "workflow_run"
+          test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$GITHUB_SHA"
+          PYTHONPATH=source/scripts python3 source/scripts/banner_native_owner_receipt_handoff.py \
+            --repository-id "$GITHUB_REPOSITORY_ID" \
+            --selection-out "$RUNNER_TEMP/native-owner-selection.json"
+          OWNER_ARTIFACT_ID="$(jq -er .artifactId "$RUNNER_TEMP/native-owner-selection.json")"
+          [[ "$OWNER_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$OWNER_ARTIFACT_ID/zip" \
+            > "$RUNNER_TEMP/native-owner-receipt.zip"
+          PYTHONPATH=source/scripts python3 source/scripts/banner_native_owner_receipt_handoff.py \
+            --repository-id "$GITHUB_REPOSITORY_ID" \
+            --archive "$RUNNER_TEMP/native-owner-receipt.zip" \
+            --owner-receipt-out "$RUNNER_TEMP/native-banner-owner.json"
+          test -s "$RUNNER_TEMP/native-banner-owner.json"
+          cmp reviewed-owner-artifact/owner-review.json "$RUNNER_TEMP/native-banner-owner.json"
+          rm -f "$RUNNER_TEMP/native-owner-selection.json" "$RUNNER_TEMP/native-owner-receipt.zip"
+
+      - name: Mint isolated reviewed App lease and merge only exact protected head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APP_ID: ${{ secrets.PORTYU9_RULESET_ADMIN_APP_ID }}
+          INSTALLATION_ID: ${{ secrets.PORTYU9_RULESET_ADMIN_INSTALLATION_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.PORTYU9_RULESET_ADMIN_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          set +x
+          umask 077
+          test "$GITHUB_REPOSITORY" = "portyu9/portyu9"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_EVENT_NAME" = "workflow_run"
+          test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
+          [[ "$APP_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$INSTALLATION_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_REPOSITORY_ID" =~ ^[1-9][0-9]*$ ]]
+          test -n "$APP_PRIVATE_KEY"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$GITHUB_SHA"
+          APP_KEY="$RUNNER_TEMP/native-banner-terminal-key.pem"
+          APP_INSTALL="$RUNNER_TEMP/native-banner-terminal-install.json"
+          APP_BOT="$RUNNER_TEMP/native-banner-terminal-bot.json"
+          APP_TOKEN_FILE="$RUNNER_TEMP/native-banner-terminal-token.json"
+          trap 'rm -f "$RUNNER_TEMP/native-banner-terminal-key.pem" "$RUNNER_TEMP/native-banner-terminal-install.json" "$RUNNER_TEMP/native-banner-terminal-bot.json" "$RUNNER_TEMP/native-banner-terminal-token.json" "$RUNNER_TEMP/native-banner-owner.json"' EXIT
+          printf %s "$APP_PRIVATE_KEY" > "$APP_KEY"
+          openssl pkey -in "$APP_KEY" -noout > /dev/null
+          ISSUED="$(date -u +%s)"
+          HEADER="$(printf %s '{"alg":"RS256","typ":"JWT"}' | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+          PAYLOAD="$(jq -cn --arg iss "$APP_ID" --argjson iat "$((ISSUED - 60))" --argjson exp "$((ISSUED + 540))" '{iss:$iss,iat:$iat,exp:$exp}' | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+          SIGNATURE="$(printf %s "$HEADER.$PAYLOAD" | openssl dgst -binary -sha256 -sign "$APP_KEY" | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+          APP_JWT="$HEADER.$PAYLOAD.$SIGNATURE"
+          rm -f "$APP_KEY"
+          unset APP_PRIVATE_KEY HEADER PAYLOAD SIGNATURE
+          GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer $APP_JWT" \
+            "app/installations/$INSTALLATION_ID" > "$APP_INSTALL"
+          APP_SLUG="$(jq -er .app_slug "$APP_INSTALL")"
+          [[ "$APP_SLUG" =~ ^[a-z0-9][a-z0-9-]{2,100}$ ]]
+          gh api "users/$APP_SLUG%5Bbot%5D" > "$APP_BOT"
+          GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer $APP_JWT" \
+            --method POST "app/installations/$INSTALLATION_ID/access_tokens" \
+            -f "repositories[]=portyu9" \
+            -f "permissions[contents]=write" \
+            -f "permissions[pull_requests]=write" > "$APP_TOKEN_FILE"
+          unset APP_JWT
+          PYTHONPATH=source/scripts python3 - \
+            "$APP_INSTALL" "$APP_BOT" "$APP_TOKEN_FILE" "$RUNNER_TEMP/native-banner-owner.json" \
+            "$APP_ID" "$INSTALLATION_ID" "$GITHUB_REPOSITORY_ID" <<'PY'
+          import json
+          import sys
+          from datetime import datetime, timezone
+          from independent_banner_candidate_contract import (
+              verified_native_banner_app_identity,
+              verified_scoped_banner_app,
+          )
+          def read(p):
+              with open(p, encoding="utf-8") as stream:
+                  return json.load(stream)
+          install, bot, token, owner = map(read, sys.argv[1:5])
+          app_id, install_id, repo_id = map(int, sys.argv[5:8])
+          expected = owner["appIdentity"]
+          verified = verified_scoped_banner_app(
+              installation=install, bot_user=bot, token_response=token,
+              expected_app_id=app_id,
+              expected_installation_id=install_id,
+              expected_repository_id=repo_id,
+              observed_at=datetime.now(timezone.utc),
+          )
+          source = verified_native_banner_app_identity(**expected)
+          if verified != source:
+              raise ValueError("selected App lease differs from authenticated owner source")
+          PY
+          SCOPED_TOKEN="$(jq -er .token "$APP_TOKEN_FILE")"
+          echo "::add-mask::$SCOPED_TOKEN"
+          rm -f "$APP_TOKEN_FILE"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$GITHUB_SHA"
+          GH_TOKEN="$GH_TOKEN" BANNER_SCOPED_APP_TOKEN="$SCOPED_TOKEN" \
+            PYTHONPATH=source/scripts python3 source/scripts/banner_native_app_terminal_merge_writer.py \
+            --owner-receipt "$RUNNER_TEMP/native-banner-owner.json" \
+            --repository-id "$GITHUB_REPOSITORY_ID" \
+            --merge-out "$RUNNER_TEMP/native-banner-terminal-evidence.json" \
+            > "$RUNNER_TEMP/native-banner-terminal-result.json"
+          test "$(jq -er .decision "$RUNNER_TEMP/native-banner-terminal-result.json")" = \
+            "native-banner-protected-merge-observed-no-write"
+          unset SCOPED_TOKEN
