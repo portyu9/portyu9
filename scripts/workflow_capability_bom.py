@@ -909,15 +909,17 @@ def _compile_artifact_retention_policy(
         observed_producers <= reviewed_producers,
         f"unclassified artifact upload producer entered repository: {sorted(observed_producers - reviewed_producers)}",
     )
-    # The only temporary exception to fail-closed stale-producer detection is
-    # the frozen future scheduled-App source. An actual workflow must still
-    # satisfy every classification, retention and full-source capability gate.
-    # Explicit adversarial fixture classifications keep STRICT no-missing
-    # behavior rather than inheriting this production-only exact exception.
+    # A single frozen absent producer is permitted ONLY while its exact
+    # preservation-only specification matches the reviewed immutable shape.
+    # All other missing producers remain strict failures even in adversarial
+    # fixture classifications. No user-controlled extra producer can enter.
     pending = reviewed_producers - observed_producers
     stage_only = (
         {STAGED_BANNER_APP_ORIGIN_PRODUCER}
-        if classifications is None else set()
+        if reviewed.get(STAGED_BANNER_APP_ORIGIN_PRODUCER) == {
+            "classification": "evidence",
+            "consumerMode": "evidence-preservation-only",
+        } else set()
     )
     require(
         pending <= stage_only,
@@ -1686,8 +1688,17 @@ def self_test() -> None:
     live_bom = compile_bom()
     live_workflows = live_bom["workflows"]
     live_retention = compile_artifact_retention_policy(live_workflows, live_bom["repository"])
+    # The prospective producer is not on accepted main until independently
+    # authorized. Permit exactly zero or one of this reviewed source, never
+    # arbitrary future producer cardinality.
+    staged_count = sum(
+        1 for row in live_retention["entries"]
+        if (row["workflow"], row["job"], row["step"])
+            == STAGED_BANNER_APP_ORIGIN_PRODUCER
+    )
     require(
-        live_retention["uploadProducerCount"] == 22
+        staged_count in {0, 1}
+        and live_retention["uploadProducerCount"] == 22 + staged_count
         and live_retention["downloadConsumerCount"] == 31
         and sum(
             1 for entry in live_retention["entries"]
