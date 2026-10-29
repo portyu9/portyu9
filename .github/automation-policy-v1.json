@@ -11,6 +11,39 @@
   "rulesetContract": ".github/rulesets/repository-rulesets-v1.json",
   "decisionReceiptContract": ".github/automation-decision-receipts-v1.json",
   "workflows": {
+    "banner-native-owner-terminal": {
+      "path": ".github/workflows/banner-native-owner-terminal.yml",
+      "triggers": [
+        "workflow_run"
+      ],
+      "permissions": {
+        "contents": "read"
+      },
+      "jobs": {
+        "owner": {
+          "name": "review-authenticated-banner-owner",
+          "needs": [],
+          "permissions": {
+            "actions": "read",
+            "checks": "read",
+            "contents": "read",
+            "pull-requests": "read"
+          }
+        },
+        "terminal": {
+          "name": "merge-authenticated-banner-terminal",
+          "needs": [
+            "owner"
+          ],
+          "permissions": {
+            "actions": "read",
+            "checks": "read",
+            "contents": "read",
+            "pull-requests": "read"
+          }
+        }
+      }
+    },
     "action-provenance-witness": {
       "path": ".github/workflows/action-provenance-witness.yml",
       "triggers": [
