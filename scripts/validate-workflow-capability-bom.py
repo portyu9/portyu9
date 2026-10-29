@@ -94,4 +94,46 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # DISPOSABLE READ-ONLY MEASUREMENT. NEVER MERGE.
+    # Independently measure exact #1925 frozen candidate; no privilege mutation.
+    code = main()
+    if code == 0:
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+
+        frozen_sha = "437a9297721e070307cceee297e49e9dde21fce9"
+        frozen_tree = "19623b4150fd26ae2d4e60c570dbb4734d7f7a3a"
+        with tempfile.TemporaryDirectory(prefix="measure-1925-") as temporary:
+            candidate = Path(temporary) / "candidate"
+            candidate.mkdir()
+            subprocess.run(["git", "init", "-q", str(candidate)], check=True)
+            subprocess.run(
+                ["git", "-C", str(candidate), "fetch", "-q", "--depth=1",
+                 "https://github.com/portyu9/portyu9.git", frozen_sha],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(candidate), "checkout", "-q", "--detach", "FETCH_HEAD"],
+                check=True,
+            )
+            actual_sha = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD"], text=True,
+            ).strip()
+            actual_tree = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD^{tree}"], text=True,
+            ).strip()
+            require(
+                actual_sha == frozen_sha and actual_tree == frozen_tree,
+                "exact #1925 candidate commit/tree changed",
+            )
+            measured = workflow_capability_admission.measure(
+                candidate, candidate_tree_sha=frozen_tree,
+            )
+            result = workflow_capability_admission.public_measurement(
+                measured, candidate_tree_sha=frozen_tree,
+            )
+            print("EXACT_1925_MEASUREMENT=" +
+                  json.dumps(result, sort_keys=True, separators=(",", ":")), flush=True)
+    raise SystemExit(code)
