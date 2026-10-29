@@ -23,6 +23,7 @@ jobs:
     name: review-authenticated-banner-owner
     if: >-
       ${{ github.ref == 'refs/heads/main' &&
+          github.event.workflow_run.name == 'Profile quality' &&
           github.event.workflow_run.event == 'pull_request' &&
           github.event.workflow_run.conclusion == 'success' &&
           github.event.workflow_run.head_repository.full_name == github.repository &&
