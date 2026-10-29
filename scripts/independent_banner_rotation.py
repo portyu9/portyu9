@@ -149,6 +149,8 @@ def self_test() -> None:
     banner_native_transaction_artifact_cli.self_test()
     import banner_native_app_origin_envelope
     banner_native_app_origin_envelope.self_test()
+    import banner_native_authenticated_app_source
+    banner_native_authenticated_app_source.self_test()
 
 
 def main() -> int:
