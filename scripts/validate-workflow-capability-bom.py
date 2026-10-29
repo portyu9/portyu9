@@ -46,12 +46,6 @@ def first_difference(expected: Any, observed: Any, path: str = "$") -> str | Non
 
 
 def validate_snapshot() -> tuple[int, int]:
-    # TEMPORARY CANDIDATE-ONLY DIAGNOSTIC. REMOVE BEFORE ANY AUTHORIZATION.
-    import json
-    candidate = compiler.compile_bom()
-    selected = [w for w in candidate["workflows"] if w["id"] == "banner-native-owner-terminal"]
-    require(len(selected) == 1, "candidate native banner workflow did not compile")
-    print("TEMP_BANNER_OWNER_WORKFLOW_EXTENSION=" + json.dumps(selected[0], sort_keys=True, separators=(",", ":")), flush=True)
     snapshot = workflow_capability_snapshot.load_combined()
 
     compiler.self_test()
@@ -80,7 +74,7 @@ def validate_snapshot() -> tuple[int, int]:
 
     workflows = compiled["workflows"]
     jobs = sum(len(workflow["jobs"]) for workflow in workflows)
-    require(len(workflows) == 15, f"Workflow Capability BOM workflow count changed: {len(workflows)}")
+    require(len(workflows) == 16, f"Workflow Capability BOM workflow count changed: {len(workflows)}")
     require(jobs > 0, "Workflow Capability BOM contains no jobs")
     return len(workflows), jobs
 
