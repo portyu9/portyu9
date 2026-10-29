@@ -1408,6 +1408,13 @@
       "rationale": "Authorize frozen native banner App PR publisher #1854 tree f4313e8e70517d672913542b6de21ef324b896ff, measured in #1855: 10 expansions/2 reductions and no TCB source change. Environment-gated App may mint only one-repository contents:write plus pull_requests:write short-lived token to open one README-only native CI-eligible PR; GITHUB_TOKEN becomes read-only. No ruleset mutation, direct main write, reviewer/merge authority, CI bypass, unapproved art or generated branch mutation."
     },
     {
+      "baseBomSha256": "ac067cd4aacce6599dd3ba5cedb9381854372d2d5a210dc978700160cdaf0db6",
+      "candidateBomSha256": "c6857da666228646811bce890edbca6a2a24baaefc3d8d18be7e59cc0c3d1bc5",
+      "expansionSha256": "523dc7b521e360e509c266c7c9e3623434a507923736b658ac1c570f31f63cce",
+      "id": "cap-independent-banner-stale-close-1931-v1",
+      "rationale": "Prior-authorize frozen #1931 source 033a805004ea129eed51c0ee259f5ce5991260f5 tree 15b8b19114a70903f15fba580508fb3946c773bc; independent closed #1932 measured 10 expansions, 0 reductions, no new protected TCB source. Only complete exact historical App-banner PR salvage, one HTTP-201 comment then HTTP-200 close, extra read-only native inventories in existing scoped publisher. No review/merge, new token, permission, rule bypass, check or direct-main write."
+    },
+    {
       "baseBomSha256": "7f91352fc1f77fbb890b058b86e71592ff85012777b149fecff0deb378fd37c3",
       "candidateBomSha256": "d1c6dc9d071c5876eeee3b6ad1cd6b42f0f7d5682115b1afe1644b24ca571020",
       "expansionSha256": "76db7100bd3c51f0880a62cab3add50fc86e75bdb15660850492fa4fbf901517",
