@@ -16,11 +16,10 @@ authorization before deployment.
 from __future__ import annotations
 
 import copy
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta
 import hashlib
 import io
 import json
-from pathlib import Path
 import re
 import stat
 from typing import Any
@@ -85,7 +84,8 @@ def build(*, app_evidence: Any, pr: Any, base_sha: str, run_id: int,
             and pr.get("draft") is False
             and pr["base"].get("ref") == "main"
             and pr["base"].get("sha") == base_sha
-            and pr["head"].get("repo", {}).get("full_name") == REPOSITORY,
+            and type(pr["head"].get("repo")) is dict
+            and pr["head"]["repo"].get("full_name") == REPOSITORY,
             "native App publisher source PR is absent or not exact")
     head = pr["head"].get("sha")
     ref = pr["head"].get("ref")
