@@ -94,4 +94,38 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # DISPOSABLE READ-ONLY FROZEN IMPLEMENTATION MEASUREMENT. NEVER MERGE.
+    code = main()
+    if code == 0:
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        frozen_sha = "033a805004ea129eed51c0ee259f5ce5991260f5"
+        frozen_tree = "15b8b19114a70903f15fba580508fb3946c773bc"
+        with tempfile.TemporaryDirectory(prefix="measure-banner-1931-") as temporary:
+            source = Path(temporary) / "candidate"
+            source.mkdir()
+            subprocess.run(["git", "init", "-q", str(source)], check=True)
+            subprocess.run(["git", "-C", str(source), "fetch", "-q", "--depth=1",
+                            "https://github.com/portyu9/portyu9.git", frozen_sha],
+                           check=True)
+            subprocess.run(["git", "-C", str(source), "checkout", "-q",
+                            "--detach", "FETCH_HEAD"], check=True)
+            actual_sha = subprocess.check_output(
+                ["git", "-C", str(source), "rev-parse", "HEAD"], text=True,
+            ).strip()
+            actual_tree = subprocess.check_output(
+                ["git", "-C", str(source), "rev-parse", "HEAD^{tree}"], text=True,
+            ).strip()
+            require(actual_sha == frozen_sha and actual_tree == frozen_tree,
+                    "frozen banner implementation SHA/tree drift")
+            measured = workflow_capability_admission.measure(
+                source, candidate_tree_sha=frozen_tree,
+            )
+            result = workflow_capability_admission.public_measurement(
+                measured, candidate_tree_sha=frozen_tree,
+            )
+            print("EXACT_BANNER_1931_MEASUREMENT=" +
+                  json.dumps(result, sort_keys=True, separators=(",", ":")), flush=True)
+    raise SystemExit(code)
