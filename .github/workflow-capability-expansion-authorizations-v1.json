@@ -127,6 +127,13 @@
       "rationale": "Authorize frozen #1820 head 9e8b81a89f502bf47a37cbf911e66d3c0353f7b9/tree b5f5855d652023504e8f90081de71704b545f866 measured by closed unmerged #1821: six dark-only derivatives, immutable historical replay, v8 banner selector, README, Spotlight read-only delegate source pin. One trusted-source expansion / zero reductions; semantic workflow BOM unchanged. No triggers, job/action permissions, tokens, OIDC, endpoints, bypass, merge or direct-main authority added."
     },
     {
+      "baseBomSha256": "04dc28976ae0f22aabdf8054cebfa599a97099c64c98940469efb31b0d0aa57a",
+      "candidateBomSha256": "2cd230ed2e4752cb062da14a60cae211c569150d42f5f793c23d507f0d5cc7d7",
+      "expansionSha256": "21a76832b3c1d12405d98f88f1c18032b7fcbd21c6a5bb58e443ca768579141f",
+      "id": "cap-banner-native-owner-app-terminal-v1",
+      "rationale": "Prior-authorize frozen #1959 head 52b4800dd928a94df52b96d53d1bab222d32292f tree f8e6f59455ba59567bc62a318dedd326615653f4, independently measured closed #1960: exactly 4 capability/TCB expansions, 0 reductions; protected source TCB SHA256 8014136e7751507510a4ac6d98b5d409ee502345b7e3bb482ec76e1526c83b1a. Isolate native owner approval and selected-App exact-head terminal merge with same-run receipt anti-replay; no bypass, synthetic checks, direct-main write or broadened repository target."
+    },
+    {
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "expansionSha256": "1c44d1abf42c3bb918db41beeb57cb27a005c7c09d2cad61c6713376d3fa8a0e",
