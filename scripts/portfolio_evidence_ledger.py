@@ -23,6 +23,15 @@ EVIDENCE_SEMANTICS = "execution-result-subject-binding-freshness-v1"
 SHA40_ZERO = "0" * 40
 API_ORIGIN = "https://api.github.com"
 TRUSTED_WORKFLOW_EVENTS = frozenset({"push", "workflow_dispatch"})
+AI_QA_RECOVERY_WORKFLOW = "current-main-ci-wake.yml"
+AI_QA_RECOVERY_EVENTS = frozenset({"schedule", "workflow_run", "workflow_dispatch"})
+AI_QA_RECOVERY_GATES = frozenset({
+    "Validate exact accepted-main CI / Required PR Gate",
+    "Validate exact accepted-main CI / Security Gates",
+    "Validate exact accepted-main CodeQL / Exact-Subject CodeQL Analysis",
+    "Exact Current-Main Recovery Gate",
+})
+
 SCHEDULED_NATIVE_AI_QA = frozenset({
     ("ai-qa-automation", "ci.yml"),
     ("ai-qa-automation", "security.yml"),
@@ -31,6 +40,8 @@ SCHEDULED_NATIVE_AI_QA = frozenset({
 
 def trusted_workflow_events(repo: str | None, workflow: str | None) -> frozenset[str]:
     """Only AI QA native current-main CI and Security may use scheduled evidence."""
+    if repo == "ai-qa-automation" and workflow == AI_QA_RECOVERY_WORKFLOW:
+        return AI_QA_RECOVERY_EVENTS
     if (repo, workflow) in SCHEDULED_NATIVE_AI_QA:
         return TRUSTED_WORKFLOW_EVENTS | frozenset({"schedule"})
     return TRUSTED_WORKFLOW_EVENTS
@@ -863,6 +874,144 @@ def workflow_jobs_self_test() -> None:
             raise ValueError(f"workflow jobs pagination self-test accepted malformed pagination: {expected}")
 
 
+
+def verified_ai_qa_recovery(
+    run: dict[str, Any], jobs: list[dict[str, Any]], subject: str
+) -> bool:
+    """Qualify actual native GitHub Actions job results, never a wake or dispatch acknowledgment."""
+    if not (
+        isinstance(subject, str) and len(subject) == 40
+        and all(ch in "0123456789abcdef" for ch in subject)
+        and isinstance(run, dict)
+        and run.get("name") == "Trusted current-main CI wake"
+        and run.get("path") == f".github/workflows/{AI_QA_RECOVERY_WORKFLOW}"
+        and run.get("event") in AI_QA_RECOVERY_EVENTS
+        and run.get("head_sha") == subject
+        and run.get("head_branch") == "main"
+        and run.get("status") == "completed"
+        and run.get("conclusion") == "success"
+        and type(run.get("run_attempt")) is int and run["run_attempt"] == 1
+        and isinstance(run.get("repository"), dict)
+        and run["repository"].get("full_name") == f"{OWNER}/ai-qa-automation"
+        and isinstance(run.get("head_repository"), dict)
+        and run["head_repository"].get("full_name") == f"{OWNER}/ai-qa-automation"
+        and type(run.get("id")) is int and run["id"] > 0
+    ):
+        return False
+    if not isinstance(jobs, list) or len(jobs) < len(AI_QA_RECOVERY_GATES):
+        return False
+    found: set[str] = set()
+    seen_ids: set[int] = set()
+    for job in jobs:
+        if not isinstance(job, dict):
+            return False
+        job_id = job.get("id")
+        if type(job_id) is not int or job_id <= 0 or job_id in seen_ids:
+            return False
+        seen_ids.add(job_id)
+        name = job.get("name")
+        if name not in AI_QA_RECOVERY_GATES:
+            continue
+        if (
+            name in found
+            or job.get("run_id") != run["id"]
+            or job.get("head_sha") != subject
+            or job.get("status") != "completed"
+            or job.get("conclusion") != "success"
+        ):
+            return False
+        found.add(name)
+    return found == AI_QA_RECOVERY_GATES
+
+
+def latest_ai_qa_recovery(
+    subject: str, token: str | None
+) -> dict[str, Any]:
+    """Find a complete, exact-main CI+Security+CodeQL recovery within bounded native API evidence."""
+    if subject == SHA40_ZERO:
+        return {}
+    base = f"https://api.github.com/repos/{OWNER}/ai-qa-automation"
+    payload = fetch_json(
+        f"{base}/actions/workflows/{AI_QA_RECOVERY_WORKFLOW}/runs"
+        f"?head_sha={subject}&per_page=100", token,
+    )
+    runs = payload.get("workflow_runs")
+    total = payload.get("total_count")
+    require(
+        type(total) is int and total >= 0
+        and isinstance(runs, list) and len(runs) <= 100 and total >= len(runs),
+        "AI QA trusted recovery run inventory is malformed",
+    )
+    # A cancelled/skipped controller has no release authority. No run or job
+    # is ever reclassified as a different workflow or given a synthetic check.
+    for run in sorted(
+        runs, key=lambda item: item.get("created_at", "") if isinstance(item, dict) else "",
+        reverse=True,
+    ):
+        if not isinstance(run, dict) or run.get("status") != "completed":
+            continue
+        if run.get("conclusion") != "success" or run.get("head_sha") != subject:
+            continue
+        run_id = run.get("id")
+        if type(run_id) is not int or run_id <= 0:
+            continue
+        if verified_ai_qa_recovery(run, workflow_jobs("ai-qa-automation", run_id, token), subject):
+            return run
+    return {}
+
+
+def ai_qa_recovery_self_test() -> None:
+    """Adversarial identity and terminal-job fixtures for current-main recovery admission."""
+    subject = "1" * 40
+    run = {
+        "id": 123, "name": "Trusted current-main CI wake",
+        "path": f".github/workflows/{AI_QA_RECOVERY_WORKFLOW}",
+        "event": "workflow_run", "head_sha": subject, "head_branch": "main",
+        "status": "completed", "conclusion": "success", "run_attempt": 1,
+        "repository": {"full_name": f"{OWNER}/ai-qa-automation"},
+        "head_repository": {"full_name": f"{OWNER}/ai-qa-automation"},
+    }
+    jobs = [
+        {
+            "id": index, "run_id": 123, "head_sha": subject, "name": name,
+            "status": "completed", "conclusion": "success",
+        }
+        for index, name in enumerate(sorted(AI_QA_RECOVERY_GATES), 1)
+    ]
+    require(verified_ai_qa_recovery(run, jobs, subject), "exact native recovery fixture rejected")
+    wrong_runs = (
+        {**run, "head_sha": "2" * 40},
+        {**run, "path": ".github/workflows/ci.yml"},
+        {**run, "event": "pull_request"},
+        {**run, "status": "in_progress", "conclusion": None},
+        {**run, "run_attempt": 2},
+        {**run, "repository": {"full_name": "other/repository"}},
+        {**run, "head_branch": "untrusted"},
+    )
+    for candidate in wrong_runs:
+        require(not verified_ai_qa_recovery(candidate, jobs, subject),
+                "untrusted recovery source passed native admission")
+    wrong_jobs = (
+        jobs[:-1],
+        [*jobs, jobs[0]],
+        [{**jobs[0], "conclusion": "failure"}, *jobs[1:]],
+        [{**jobs[0], "run_id": 124}, *jobs[1:]],
+        [{**jobs[0], "head_sha": "2" * 40}, *jobs[1:]],
+    )
+    for candidate in wrong_jobs:
+        require(not verified_ai_qa_recovery(run, candidate, subject),
+                "incomplete or foreign recovery job passed native admission")
+    require(
+        trusted_workflow_events("ai-qa-automation", AI_QA_RECOVERY_WORKFLOW)
+        == AI_QA_RECOVERY_EVENTS,
+        "AI QA recovery gained unreviewed event authority",
+    )
+    require(
+        "workflow_run" not in trusted_workflow_events("other-repo", AI_QA_RECOVERY_WORKFLOW),
+        "AI QA recovery trust scope leaked across repositories",
+    )
+
+
 def scheduled_native_main_ci_self_test() -> None:
     """Scheduled recovery is limited to exact AI QA CI/Security; reject others."""
     subject = "1" * 40
@@ -1039,6 +1188,15 @@ def collect_evidence_dimensions(
 
     run_cache: dict[str, dict[str, Any]] = {}
     jobs_cache: dict[int, list[dict[str, Any]]] = {}
+    # The AI QA trusted recovery invokes the full exact-main reusable CI,
+    # Security and CodeQL, but GitHub assigns it the controller workflow path.
+    # Admit that real run only after independently verifying its native jobs.
+    recovery_run: dict[str, Any] = {}
+    if repo == "ai-qa-automation":
+        try:
+            recovery_run = latest_ai_qa_recovery(subject, token)
+        except (urllib.error.URLError, TimeoutError, ConnectionResetError, json.JSONDecodeError, ValueError):
+            pass
     records: list[dict[str, Any]] = []
     for index, spec in enumerate(specs, 1):
         workflow = str(spec["workflow"])
@@ -1046,6 +1204,15 @@ def collect_evidence_dimensions(
             if workflow not in run_cache:
                 run_cache[workflow] = latest_workflow_run(repo, workflow, subject, token)
             run = run_cache[workflow]
+            if recovery_run and workflow in {"ci.yml", "security.yml"}:
+                # Never mask a real failing native check on this exact main.
+                native_current_failure = (
+                    run.get("head_sha") == subject
+                    and run.get("status") == "completed"
+                    and run.get("conclusion") not in ("success", "startup_failure")
+                )
+                if not native_current_failure:
+                    run = recovery_run
         except (urllib.error.URLError, TimeoutError, ConnectionResetError, json.JSONDecodeError, ValueError):
             run = {}
 
@@ -1114,6 +1281,7 @@ def build_ledger(day: dt.date, token: str | None, offline: bool) -> dict[str, An
     workflow_run_primitive_self_test()
     workflow_runs_for_subject_self_test()
     scheduled_native_main_ci_self_test()
+    ai_qa_recovery_self_test()
     workflow_jobs_self_test()
     evidence.self_test()
     reviewed = registry.systems()
