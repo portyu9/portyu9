@@ -173,6 +173,30 @@ def authenticated_owner_source(*, run: Any, jobs: Any,
     }
 
 
+def read_owner_zip(path: Path) -> bytes:
+    """Bounded immutable non-symlink inode for the owner receipt archive."""
+    require(type(path) is type(Path()) and path.is_file()
+            and not path.is_symlink(),
+            "owner receipt ZIP path is not one regular non-symlink file")
+    original = path.lstat()
+    require(stat.S_ISREG(original.st_mode)
+            and 0 < original.st_size <= MAX_ARCHIVE,
+            "owner receipt ZIP source is not bounded")
+    with path.open("rb") as stream:
+        opened = os.fstat(stream.fileno())
+        require(stat.S_ISREG(opened.st_mode)
+                and (opened.st_dev, opened.st_ino, opened.st_size) ==
+                    (original.st_dev, original.st_ino, original.st_size),
+                "owner ZIP inode changed before the read")
+        data = stream.read(MAX_ARCHIVE + 1)
+    final = path.lstat()
+    require((final.st_dev, final.st_ino, final.st_size) ==
+            (original.st_dev, original.st_ino, original.st_size)
+            and len(data) == opened.st_size,
+            "owner receipt ZIP changed during read")
+    return data
+
+
 def unpack_receipt(archive: bytes) -> dict[str, Any]:
     """Never extract ZIP paths to the filesystem or admit extra members."""
     require(type(archive) is bytes and 0 < len(archive) <= MAX_ARCHIVE,
@@ -427,8 +451,7 @@ def main() -> int:
     require(args.owner_receipt_out is not None and args.archive is not None
             and args.selection_out is None,
             "owner receipt import requires only exact downloaded ZIP")
-    from banner_native_owner_review_writer import read_bounded_source_zip
-    archive = read_bounded_source_zip(args.archive)
+    archive = read_owner_zip(args.archive)
     documents = attest(proof=proof, archive=archive, observed_at=now)
     observer.write_exclusive(args.owner_receipt_out, documents)
     return 0
