@@ -239,5 +239,5 @@ jobs:
             --merge-out "$RUNNER_TEMP/native-banner-terminal-evidence.json" \
             > "$RUNNER_TEMP/native-banner-terminal-result.json"
           test "$(jq -er .decision "$RUNNER_TEMP/native-banner-terminal-result.json")" = \
-            "exact-native-banner-protected-merge-observed"
+            "native-banner-protected-merge-observed-no-write"
           unset SCOPED_TOKEN
