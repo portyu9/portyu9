@@ -94,4 +94,42 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # Independent disposable candidate measurement. NEVER merge this source.
+    code = main()
+    if code == 0:
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        frozen_sha = "50cc839144e4d0aab6ebe34af6c0547c0345a9a3"
+        frozen_tree = "f5dba2ac91308c32168e57cdf47b5bfda9c6566f"
+        with tempfile.TemporaryDirectory(prefix="measure-banner-1947-") as temporary:
+            candidate = Path(temporary) / "candidate"
+            candidate.mkdir()
+            subprocess.run(["git", "init", "-q", str(candidate)], check=True)
+            subprocess.run([
+                "git", "-C", str(candidate), "fetch", "-q", "--depth=1",
+                "https://github.com/portyu9/portyu9.git", frozen_sha,
+            ], check=True)
+            subprocess.run([
+                "git", "-C", str(candidate), "checkout", "-q",
+                "--detach", "FETCH_HEAD",
+            ], check=True)
+            actual_sha = subprocess.check_output([
+                "git", "-C", str(candidate), "rev-parse", "HEAD",
+            ], text=True).strip()
+            actual_tree = subprocess.check_output([
+                "git", "-C", str(candidate), "rev-parse", "HEAD^{tree}",
+            ], text=True).strip()
+            require(actual_sha == frozen_sha and actual_tree == frozen_tree,
+                    "frozen banner publisher source commit/tree drifted")
+            measured = workflow_capability_admission.measure(
+                candidate, candidate_tree_sha=frozen_tree,
+            )
+            result = workflow_capability_admission.public_measurement(
+                measured, candidate_tree_sha=frozen_tree,
+            )
+            print("EXACT_BANNER_1947_PUBLISHER_MEASUREMENT="
+                  + json.dumps(result, sort_keys=True, separators=(",", ":")),
+                  flush=True)
+    raise SystemExit(code)
