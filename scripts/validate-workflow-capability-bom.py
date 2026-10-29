@@ -103,8 +103,8 @@ if __name__ == "__main__":
         import tempfile
         from pathlib import Path
 
-        frozen_sha = "3d6c6e2a35a3443a198336e9488ce8938f71f799"
-        frozen_tree = "7ecffbb92f20c04806cd7da8fee76d82fc386fba"
+        frozen_sha = "cc4afa6c6c2bca51f1c82e70f4f80da51561d028"
+        frozen_tree = "9ac228253701c0c577fe60b0a7dbf4ec88b2a86c"
         with tempfile.TemporaryDirectory(prefix="measure-banner-artifact-tcb-") as temporary:
             candidate = Path(temporary) / "candidate"
             candidate.mkdir()
