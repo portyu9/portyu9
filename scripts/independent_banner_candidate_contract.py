@@ -827,10 +827,45 @@ def verified_stale_banner_close_readiness(
     )
     verified_review_thread_connection(review_threads)
     require(review_threads["totalCount"] == 0
-            and type(reviews) is list and len(reviews) == 0
+            and type(reviews) is list and len(reviews) <= 1
             and type(issue_comments) is list and len(issue_comments) == 0,
-            "reviewed, commented or discussed banner PR cannot auto-close")
+            "discussed or multiply reviewed banner PR cannot auto-close")
+    # One unattended native owner approval is evidence to PRESERVE and visibly
+    # salvage, not reason to drop a genuine completed terminal failure forever.
+    # Never admit a generic human review: it must be the exact governed
+    # owner marker, head, actor, UTC day and unrevoked APPROVED state.
+    owner_review_id = 0
+    owner_review_at = ""
+    if reviews:
+        from automation_governed_bot_review_gate import (
+            REVIEW_LOGIN, review_marker, review_decision,
+            validate_review_entries,
+        )
+        prior = validate_review_entries(reviews)[0]
+        stamp = prior.get("submitted_at")
+        require(type(stamp) is str and stamp.endswith("Z"),
+                "stale owner approval is missing native UTC submission")
+        try:
+            approved_at = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("stale owner approval timestamp is malformed") from exc
+        require(approved_at.tzinfo is not None
+                and approved_at.utcoffset() == timezone.utc.utcoffset(approved_at)
+                and approved_at.date() == original_day
+                and approved_at <= observed_now
+                and review_decision(reviews, historical_base_sha,
+                                    proved["headSha"]) == "approved"
+                and prior["user"].get("login") == REVIEW_LOGIN
+                and prior.get("state") == "APPROVED"
+                and prior.get("commit_id") == proved["headSha"]
+                and prior.get("body") == review_marker(
+                    historical_base_sha, proved["headSha"]),
+                "stale owner approval was manual, vetoed, altered or out of day")
+        owner_review_id = prior["id"]
+        owner_review_at = stamp
     return {
+        "ownerReviewId": owner_review_id,
+        "ownerReviewSubmittedAt": owner_review_at,
         "decision": "stale-banner-candidate-comment-then-close-only",
         "prNumber": proved["prNumber"],
         "headRef": chosen["headRef"],
@@ -1467,6 +1502,60 @@ def self_test() -> None:
             and safe_stale["historicalBaseSha"] == base
             and safe_stale["currentMainSha"] == live_sha,
             "exact historical and current stale proof did not qualify")
+    # Preserve one exact prior native owner APPROVED review after an
+    # unrelated trusted main advance. This is the real production shape
+    # from #1969, and the comment-before-close operation must retain proof.
+    reviewed_stale = copy.deepcopy(owner_review)
+    reviewed_stale["submitted_at"] = (
+        stale_now - timedelta(days=1, minutes=20)
+    ).isoformat(timespec="seconds").replace("+00:00", "Z")
+    reviewed_result = verified_stale_banner_close_readiness(
+        **{**stale_fixture, "reviews": [reviewed_stale]})
+    require(reviewed_result["ownerReviewId"] == owner_review["id"]
+            and reviewed_result["ownerReviewSubmittedAt"]
+            == reviewed_stale["submitted_at"],
+            "exact historical approved owner review cannot be safely salvaged")
+
+    for label, mutation in (
+        ("manual owner approval", lambda row: row.update(body="Approved")),
+        ("owner veto", lambda row: row.update(state="CHANGES_REQUESTED")),
+        ("foreign review actor", lambda row: row["user"].update(login="outsider")),
+        ("foreign reviewed commit", lambda row: row.update(commit_id="f" * 40)),
+        ("incorrect reviewed marker", lambda row: row.update(body=review_marker(
+            "f" * 40, head))),
+        ("submitted outside source UTC day", lambda row: row.update(
+            submitted_at=stale_now.isoformat(timespec="seconds").replace(
+                "+00:00", "Z"))),
+        ("future owner timestamp", lambda row: row.update(
+            submitted_at=(stale_now + timedelta(days=1)).isoformat(
+                timespec="seconds").replace("+00:00", "Z"))),
+    ):
+        poisoned = copy.deepcopy(reviewed_stale)
+        mutation(poisoned)
+        try:
+            verified_stale_banner_close_readiness(
+                **{**stale_fixture, "reviews": [poisoned]})
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("reviewed stale salvage admitted " + label)
+    for label, rows in (
+        ("second owner review", [reviewed_stale, {
+            **reviewed_stale, "id": reviewed_stale["id"] + 1,
+        }]),
+        ("historical manual review", [reviewed_stale, {
+            **reviewed_stale, "id": reviewed_stale["id"] + 1,
+            "body": "manual owner comment", "state": "COMMENTED",
+        }]),
+    ):
+        try:
+            verified_stale_banner_close_readiness(
+                **{**stale_fixture, "reviews": rows})
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("reviewed stale salvage admitted " + label)
+
     for label, overrides in [
         ("not stale", {
             "live_main_sha": base,
