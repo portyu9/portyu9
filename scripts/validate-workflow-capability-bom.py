@@ -94,4 +94,46 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # DISPOSABLE read-only independently frozen TCB measurement.
+    # NEVER MERGE. Fetches candidate Git data only, NEVER runs candidate code.
+    code = main()
+    if code == 0:
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+
+        frozen_sha = "3d6c6e2a35a3443a198336e9488ce8938f71f799"
+        frozen_tree = "7ecffbb92f20c04806cd7da8fee76d82fc386fba"
+        with tempfile.TemporaryDirectory(prefix="measure-banner-artifact-tcb-") as temporary:
+            candidate = Path(temporary) / "candidate"
+            candidate.mkdir()
+            subprocess.run(["git", "init", "-q", str(candidate)], check=True)
+            subprocess.run([
+                "git", "-C", str(candidate), "fetch", "-q", "--depth=1",
+                "https://github.com/portyu9/portyu9.git", frozen_sha,
+            ], check=True)
+            subprocess.run([
+                "git", "-C", str(candidate), "checkout", "-q",
+                "--detach", "FETCH_HEAD",
+            ], check=True)
+            sha = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD"],
+                text=True,
+            ).strip()
+            tree = subprocess.check_output(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD^{tree}"],
+                text=True,
+            ).strip()
+            require(sha == frozen_sha and tree == frozen_tree,
+                    "immutable staged banner TCB SHA/tree changed")
+            measurement = workflow_capability_admission.measure(
+                candidate, candidate_tree_sha=frozen_tree,
+            )
+            result = workflow_capability_admission.public_measurement(
+                measurement, candidate_tree_sha=frozen_tree,
+            )
+            print("EXACT_BANNER_ARTIFACT_TCB_1948_MEASUREMENT="
+                  + json.dumps(result, sort_keys=True, separators=(",", ":")),
+                  flush=True)
+    raise SystemExit(code)
