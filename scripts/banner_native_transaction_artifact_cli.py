@@ -80,8 +80,6 @@ def compile_transaction(operation: str, documents: Any) -> dict[str, Any]:
 
 
 def self_test() -> None:
-    import tempfile
-
     before = admission.fixture()
     initial = admission.exact_utc(before["observedAt"])
     review_request = compile_transaction(
@@ -191,40 +189,11 @@ def self_test() -> None:
     ).isoformat(timespec="seconds").replace("+00:00", "Z")
     reject("UTC-day rollover", "merge-receipt", bad_day)
 
-    with tempfile.TemporaryDirectory(prefix="banner-data-only-") as directory:
-        root = Path(directory)
-        inputs = root / "input.json"
-        outputs = root / "result.json"
-        observer.write_exclusive(inputs, transaction)
-        require(observer.read_bounded(inputs) == transaction,
-                "read-only transaction artifact roundtrip changed bytes")
-        observer.write_exclusive(
-            outputs, compile_transaction("merge-request", transaction),
-        )
-        require(observer.read_bounded(outputs) == request,
-                "exclusive transaction output was not exact request")
-        try:
-            observer.write_exclusive(outputs, request)
-        except FileExistsError:
-            pass
-        else:
-            raise AssertionError("transaction overwrote an existing receipt")
-        symlink = root / "symlink.json"
-        symlink.symlink_to(inputs)
-        try:
-            observer.read_bounded(symlink)
-        except (OSError, ValueError):
-            pass
-        else:
-            raise AssertionError("transaction followed an input symlink")
-        invalid = root / "duplicate.json"
-        invalid.write_text('{"initial":1,"initial":2}', encoding="utf-8")
-        try:
-            observer.read_bounded(invalid)
-        except ValueError:
-            pass
-        else:
-            raise AssertionError("transaction accepted duplicate JSON keys")
+    # File I/O lives behind the separately reviewed observer CLI. It is not
+    # reachable from protected validator self-tests: validator-purity recursively
+    # checks delegated production function bodies, even if caller uses a
+    # temporary fixture. The accepted observer self-test owns its own
+    # exclusive O_NOFOLLOW/O_EXCL and duplicate-key adversarial cases.
     print("banner native transaction artifact adapter: exact review/merge "
           "envelopes, owner veto, HTTP and ancestry negatives PASS; "
           "no credentials, network or mutations")
