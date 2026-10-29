@@ -131,7 +131,7 @@
       "candidateBomSha256": "2cd230ed2e4752cb062da14a60cae211c569150d42f5f793c23d507f0d5cc7d7",
       "expansionSha256": "21a76832b3c1d12405d98f88f1c18032b7fcbd21c6a5bb58e443ca768579141f",
       "id": "cap-banner-native-owner-app-terminal-v1",
-      "rationale": "Prior-authorize frozen #1959 head 52b4800dd928a94df52b96d53d1bab222d32292f tree f8e6f59455ba59567bc62a318dedd326615653f4, independently measured closed #1960: exactly 4 capability/TCB expansions, 0 reductions; protected source TCB SHA256 8014136e7751507510a4ac6d98b5d409ee502345b7e3bb482ec76e1526c83b1a. Isolate native owner approval and selected-App exact-head terminal merge with same-run receipt anti-replay; no bypass, synthetic checks, direct-main write or broadened repository target."
+      "rationale": "Prior-authorize frozen #1959 head 8420dc7f242acd4f8d94d5a9a3892bdc05d00d89 tree f7c0f32e8a37ada64d744eea13fc448e7171f997, independently measured closed #1960: exactly 4 capability/TCB expansions, 0 reductions; protected source TCB SHA256 8014136e7751507510a4ac6d98b5d409ee502345b7e3bb482ec76e1526c83b1a. Isolate native owner approval and selected-App exact-head terminal merge with same-run receipt anti-replay; no bypass, synthetic checks, direct-main write or broadened repository target."
     },
     {
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
