@@ -83,8 +83,6 @@ def observe(*, native_app: dict[str, Any], token: str,
             and contract.HEX40.fullmatch(parents[0]["sha"]) is not None,
             "historical banner candidate requires one authenticated parent")
     original_base = parents[0]["sha"]
-    require(original_base != main_sha,
-            "stale candidate original base must differ from accepted main")
 
     original_readme = collector.read_readme(api, original_base)
     proposed_readme = collector.read_readme(api, head_sha)
