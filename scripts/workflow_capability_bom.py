@@ -39,6 +39,7 @@ AUTHORITY_ARTIFACT_ANTI_REPLAY_MODES = frozenset({
     "cross-run-current-main-expiry",
 })
 REVIEWED_AUTHORITY_ARTIFACT_ANTI_REPLAY: dict[tuple[str, str, str], str] = {
+    (".github/workflows/banner-native-owner-terminal.yml", "owner", "Upload exact owner receipt"): "same-run-container-bound",
     (".github/workflows/approved-banner-rotation.yml", "plan", "Upload one exact banner-only candidate"): "same-run-container-bound",
     (".github/workflows/activity-metrics.yml", "generate", "Upload four independently validated activity subjects"): "same-run-container-bound",
     (".github/workflows/action-provenance-witness.yml", "prepare", "Upload unsigned reviewed witness bundle"): "cross-run-attested-explicit-ttl",
@@ -76,6 +77,7 @@ STAGED_BANNER_APP_ORIGIN_PRODUCER = (
     "Upload exact scheduled App-origin evidence for isolated reviewer",
 )
 REVIEWED_ARTIFACT_RETENTION_CLASSIFICATIONS: dict[tuple[str, str, str], dict[str, str]] = {
+    (".github/workflows/banner-native-owner-terminal.yml", "owner", "Upload exact owner receipt"): {"classification": "authority", "consumerMode": "same-run-terminal-merge-authority"},
     (".github/workflows/approved-banner-rotation.yml", "plan", "Upload one exact banner-only candidate"): {"classification": "authority", "consumerMode": "same-run-proposal-authority"},
     STAGED_BANNER_APP_ORIGIN_PRODUCER: {"classification": "evidence", "consumerMode": "evidence-preservation-only"},
     (".github/workflows/activity-metrics.yml", "generate", "Upload four independently validated activity subjects"): {"classification": "authority", "consumerMode": "same-run-publication-authority"},
@@ -104,6 +106,7 @@ REVIEWED_LONG_LIVED_AUTHORITY_RETENTION_DAYS: dict[tuple[str, str, str], int] = 
     (".github/workflows/codeql-autofix.yml", "controller", "Upload immutable controller provenance receipt"): 7,
 }
 REVIEWED_ARTIFACT_DOWNLOAD_BINDINGS: dict[tuple[str, str, str], dict[str, Any]] = {
+    (".github/workflows/banner-native-owner-terminal.yml", "terminal", "Download exact same-run owner receipt"): {"producer": (".github/workflows/banner-native-owner-terminal.yml", "owner", "Upload exact owner receipt"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "approved-banner-owner-receipt"},
     (".github/workflows/approved-banner-rotation.yml", "publish", "Download exact read-only banner plan"): {"producer": (".github/workflows/approved-banner-rotation.yml", "plan", "Upload one exact banner-only candidate"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "reviewed-banner-readme"},
     (".github/workflows/activity-metrics.yml", "publish", "Download signed immutable activity candidates"): {"producer": (".github/workflows/activity-metrics.yml", "generate", "Upload four independently validated activity subjects"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "independent-activity-subjects"},
     (".github/workflows/activity-metrics.yml", "attest", "Download immutable activity subjects for signing"): {"producer": (".github/workflows/activity-metrics.yml", "generate", "Upload four independently validated activity subjects"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "independent-activity-subjects"},
