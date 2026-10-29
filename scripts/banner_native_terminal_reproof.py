@@ -20,13 +20,46 @@ from automation_governed_bot_review_gate import (
 )
 
 DATA_FIELDS = frozenset(admission.BASIC | admission.CURRENT)
-STABLE_FIELDS = DATA_FIELDS - frozenset({"observedAt", "reviews", "completeness"})
+STABLE_FIELDS = DATA_FIELDS - frozenset({"observedAt", "reviews", "completeness", "pr", "openPrs"})
 REVIEW_TTL = timedelta(minutes=10)
 
 
 def require(condition: bool, reason: str) -> None:
     if not condition:
         raise ValueError(reason)
+
+
+def same_except_owner_review_clock(before: Any, after: Any, approval: Any,
+                                   start: datetime, end: datetime) -> bool:
+    """Admit only GitHub's owner-APPROVED updated_at side effect, never PR edits.
+
+    GitHub updates both REST /pulls and the open-PR list's updated_at when a
+    review lands. An immediately read owner receipt may still see the previous
+    timestamp; the later isolated App job can see the submitted review time.
+    The exact authenticated new review supplies that single allowed timestamp.
+    """
+    if type(before) is not dict or type(after) is not dict:
+        return False
+    if (set(before) != set(after)
+            or any(before[key] != after[key]
+                   for key in before if key != "updated_at")):
+        return False
+    previous = before.get("updated_at")
+    current = after.get("updated_at")
+    if previous == current:
+        return True
+    if type(previous) is not str or type(current) is not str:
+        return False
+    submitted = approval.get("submitted_at") if type(approval) is dict else None
+    if type(submitted) is not str:
+        return False
+    try:
+        old = admission.exact_utc(previous)
+        new = admission.exact_utc(current)
+        approved = admission.exact_utc(submitted)
+    except ValueError:
+        return False
+    return old <= start <= approved <= end and new == approved
 
 
 def evaluated(snapshot: Any) -> dict[str, str | int]:
@@ -53,7 +86,7 @@ def evaluate(initial: Any, after_review: Any) -> dict[str, str | int]:
             and start.date() == end.date(),
             "banner owner-review observation is replayed, stale or crossed UTC day")
     require(all(initial[key] == after_review[key] for key in STABLE_FIELDS),
-            "banner base/head/PR/artwork/App/CI/refs/threads changed around owner review")
+            "banner base/head/artwork/App/CI/refs/threads changed around owner review")
     for name in admission.INVENTORIES:
         if name == "reviews":
             continue
@@ -95,6 +128,23 @@ def evaluate(initial: Any, after_review: Any) -> dict[str, str | int]:
             and new.get("body") == review_marker(base, head)
             and type(new.get("id")) is int and new["id"] > 0,
             "banner new owner approval lacks exact actor/head/marker binding")
+    # Authenticate the exactly one new owner review before accepting its
+    # GitHub-managed updated_at side effect. All other native PR fields remain
+    # byte-for-byte stable, including base/head, body, metadata and branch.
+    require(same_except_owner_review_clock(
+                initial["pr"], after_review["pr"], new, start, end),
+            "banner detailed PR changed beyond the exact owner-review clock")
+    require(type(initial["openPrs"]) is list
+            and type(after_review["openPrs"]) is list
+            and len(initial["openPrs"]) == len(after_review["openPrs"])
+            and all(same_except_owner_review_clock(
+                previous, current, new, start, end)
+                if (type(previous) is dict and
+                    previous.get("number") == first["prNumber"])
+                else previous == current
+                for previous, current in zip(
+                    initial["openPrs"], after_review["openPrs"], strict=True)),
+            "banner open PR inventory changed beyond the exact owner-review clock")
     require(review_decision(fresh, base, head) == "approved",
             "banner terminal review was subsequently vetoed/revoked")
     require(after_review["pr"]["head"]["ref"] ==
@@ -136,6 +186,56 @@ def self_test() -> None:
         "utcDay": admission.exact_utc(before["observedAt"]).date().isoformat(),
         "ownerReviewId": 517,
     }, "approved two-phase reviewer proof returned ambiguous subject")
+
+    # Production failure 40972395420: native owner APPROVED succeeded, but
+    # GitHub advanced PR updated_at from original creation time to the exact
+    # native review submitted_at only after the owner's receipt was captured.
+    # This is not a PR file/body/ref mutation; every other field stays pinned.
+    clock_reviewed = copy.deepcopy(after)
+    start = admission.exact_utc(before["observedAt"])
+    creation_clock = start - timedelta(minutes=3)
+    origin = creation_clock.isoformat(timespec="seconds").replace("+00:00", "Z")
+    approval_clock = (start + timedelta(minutes=2)).isoformat(
+        timespec="seconds").replace("+00:00", "Z")
+    before_clock = copy.deepcopy(before)
+    for snapshot in (before_clock, clock_reviewed):
+        snapshot["pr"]["updated_at"] = origin
+        for row in snapshot["openPrs"]:
+            row["updated_at"] = origin
+    clock_reviewed["reviews"][0]["submitted_at"] = approval_clock
+    clock_reviewed["pr"]["updated_at"] = approval_clock
+    clock_reviewed["openPrs"][0]["updated_at"] = approval_clock
+    require(evaluate(before_clock, clock_reviewed)["ownerReviewId"] == 517,
+            "legitimate delayed native owner-review timestamp blocked exact merge")
+    stale_clock = copy.deepcopy(clock_reviewed)
+    stale_clock["pr"]["updated_at"] = origin
+    stale_clock["openPrs"][0]["updated_at"] = origin
+    require(evaluate(before_clock, stale_clock)["ownerReviewId"] == 517,
+            "immediate native review observation cannot retain prior PR clock")
+    for label, change in (
+        ("unrelated PR metadata timestamp", lambda x:
+         x["pr"].update(updated_at=(start + timedelta(seconds=1))
+                        .isoformat(timespec="seconds").replace("+00:00", "Z"))),
+        ("unrelated open PR metadata timestamp", lambda x:
+         x["openPrs"][0].update(updated_at=(start + timedelta(seconds=1))
+                               .isoformat(timespec="seconds").replace("+00:00", "Z"))),
+        ("changed PR body at review", lambda x:
+         x["pr"].update(body="forged after approval")),
+        ("changed PR source title", lambda x:
+         x["openPrs"][0].update(title="forged")),
+        ("approval submitted time missing", lambda x:
+         x["reviews"][0].pop("submitted_at")),
+        ("approval submitted time forged", lambda x:
+         x["reviews"][0].update(submitted_at=origin)),
+    ):
+        bad = copy.deepcopy(clock_reviewed)
+        change(bad)
+        try:
+            evaluate(before_clock, bad)
+        except (ValueError, KeyError, TypeError):
+            pass
+        else:
+            raise AssertionError("owner PR clock exception admitted " + label)
 
     # Build independent mutated observations so even a nested data mutation
     # cannot contaminate the positive evidence.
