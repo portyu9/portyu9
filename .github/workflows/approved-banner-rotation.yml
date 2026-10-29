@@ -273,8 +273,13 @@ jobs:
               test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"
               test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/$STALE_REF" --jq .object.sha)" = "$STALE_HEAD"
               LIVE_PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/$STALE_PR")"
+              # Native open PR base.sha may stay at its verified historical
+              # parent even after main advances. Bound the ONLY two allowed
+              # base identities to the independently salvaged ancestor and
+              # the exact current main, never to a third or arbitrary base.
               jq -e --arg sha "$STALE_HEAD" --arg main "$SOURCE_SHA" \
-                '.state == "open" and .merged == false and .head.sha == $sha and .base.sha == $main' \
+                --arg historical "$HISTORICAL_BASE" \
+                '.state == "open" and .merged == false and .head.sha == $sha and .base.ref == "main" and (.base.sha == $historical or .base.sha == $main)' \
                 <<< "$LIVE_PR" > /dev/null
               LIVE_REVIEWS="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/$STALE_PR/reviews?per_page=100" --jq '.[]' | jq -s '.')"
               test "$(jq -er 'length' <<< "$LIVE_REVIEWS")" = 0
