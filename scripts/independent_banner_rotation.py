@@ -145,6 +145,8 @@ def self_test() -> None:
     banner_native_owner_review_transaction_contract.self_test()
     import banner_native_protected_merge_response_contract
     banner_native_protected_merge_response_contract.self_test()
+    import banner_native_transaction_artifact_cli
+    banner_native_transaction_artifact_cli.self_test()
 
 
 def main() -> int:
