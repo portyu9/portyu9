@@ -24,11 +24,13 @@ import os
 from pathlib import Path
 import re
 import ssl
+import stat
 from typing import Any, Callable
 
 import banner_native_live_admission as admission
 import banner_native_observer_cli as observer
 import banner_native_owner_identity_source as owner_source
+import banner_native_publisher_run_artifact as producer_origin
 import banner_native_owner_review_transaction_contract as owner_contract
 import banner_native_transaction_artifact_cli as transaction
 from banner_native_authenticated_app_source import (
@@ -39,6 +41,91 @@ HOST = "api.github.com"
 MAX_RESPONSE_BYTES = 131_072
 OWNER_PATH = re.compile(r"^repos/portyu9/portyu9/pulls/([1-9][0-9]*)/reviews$")
 FRESH_TTL = timedelta(seconds=75)
+
+
+def read_bounded_source_zip(path: Path) -> bytes:
+    """Read one untrusted archive without symlink traversal or unbounded I/O."""
+    require(isinstance(path, Path) and path.is_file() and not path.is_symlink(),
+            "scheduled publisher ZIP source is not a regular non-symlink file")
+    # Fix the filesystem object identity before and after the fixed-mode
+    # read. A swapped symlink or replaced inode is never trusted.
+    original = path.lstat()
+    require(stat.S_ISREG(original.st_mode)
+            and 0 < original.st_size <= producer_origin.MAX_ARCHIVE,
+            "scheduled publisher source must be one bounded regular inode")
+    with path.open("rb") as stream:
+        metadata = os.fstat(stream.fileno())
+        require(stat.S_ISREG(metadata.st_mode)
+                and (metadata.st_dev, metadata.st_ino, metadata.st_size)
+                  == (original.st_dev, original.st_ino, original.st_size),
+                "scheduled publisher ZIP inode changed before read")
+        archive = stream.read(producer_origin.MAX_ARCHIVE + 1)
+    final = path.lstat()
+    require((final.st_dev, final.st_ino, final.st_size)
+            == (original.st_dev, original.st_ino, original.st_size),
+            "scheduled publisher ZIP inode changed during read")
+    require(0 < len(archive) <= producer_origin.MAX_ARCHIVE
+            and len(archive) == metadata.st_size,
+            "scheduled publisher archive changed while being read")
+    return archive
+
+
+def verified_scheduled_review_source(
+    *, documents: Any, wake: Any, source_run: Any,
+    artifact_inventory: Any, archive: bytes, observed_at: datetime,
+    expected_repository_id: int,
+) -> dict[str, str | int]:
+    """Prove exact native CI wake AND independent scheduled App source."""
+    require(type(documents) is dict
+            and set(documents) == {"initial", "appIdentity", "ownerIdentity"}
+            and type(wake) is dict
+            and wake.get("decision") == "exact-native-banner-wake-observed-no-write",
+            "reviewer missing exact independent CI wake or identity inputs")
+    before = documents["initial"]
+    require(type(before) is dict and type(wake.get("prNumber")) is int
+            and type(wake.get("baseSha")) is str
+            and type(wake.get("headSha")) is str
+            and type(wake.get("headRef")) is str,
+            "reviewer wake/subject malformed")
+    evidence = producer_origin.attest(
+        source_run=source_run, artifact_inventory=artifact_inventory,
+        archive=archive, snapshot=before, observed_now=observed_at,
+        expected_repository_id=expected_repository_id,
+    )
+    require(evidence["decision"] ==
+            "authenticated-native-banner-schedule-app-origin-data-only"
+            and evidence["prNumber"] == wake["prNumber"]
+            and evidence["baseSha"] == wake["baseSha"]
+            and evidence["headSha"] == wake["headSha"]
+            and before["pr"]["head"]["ref"] == wake["headRef"]
+            and evidence["repositoryId"] ==
+                documents["appIdentity"]["expected_repository_id"]
+            and evidence["ownerEligibleDay"] == observed_at.date().isoformat(),
+            "selected App publisher source/wake/owner identity changed")
+    require(before["nativeApp"] == documents["appIdentity"],
+            "reviewer identity differs from authenticated publisher artifact")
+    return evidence
+
+
+def complete_provenance_bound_review(
+    *, documents: Any, wake: Any, source_run: Any,
+    artifact_inventory: Any, archive: bytes, observed_at: datetime,
+    expected_repository_id: int,
+    submit: Callable[[dict[str, Any]], tuple[str, dict[str, Any]]],
+    observe_after: Callable[[dict[str, Any]], Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    # Fail closed BEFORE the first owner-token POST. This is a production
+    # prerequisite, not a caller-supplied boolean or an artifact signature.
+    verified_scheduled_review_source(
+        documents=documents, wake=wake, source_run=source_run,
+        artifact_inventory=artifact_inventory, archive=archive,
+        observed_at=observed_at,
+        expected_repository_id=expected_repository_id,
+    )
+    return complete_review(
+        documents=documents, observed_at=observed_at,
+        submit=submit, observe_after=observe_after,
+    )
 
 
 def require(ok: bool, message: str) -> None:
@@ -229,6 +316,146 @@ def self_test() -> None:
                 "dual-source-banner-owner-review-receipt-no-merge",
             "positive owner write did not re-prove exact HTTP/native approval")
 
+    # Exercise the actual ZIP/run/App/CI pre-write binding, not merely the
+    # request transport. Every forged origin is rejected before submit.
+    import hashlib
+    import io
+    import zipfile
+    import tempfile
+
+    produced_at = start - timedelta(minutes=2)
+    origin_packet = producer_origin.build(
+        app_evidence=app, pr=before["pr"], base_sha=before["mainSha"],
+        run_id=77, observed_at=produced_at,
+    )
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as zipout:
+        zipout.writestr(
+            producer_origin.ARTIFACT_FILE,
+            json.dumps(origin_packet, sort_keys=True, separators=(",", ":")),
+        )
+    zip_data = stream.getvalue()
+    def iso(moment: datetime) -> str:
+        return moment.isoformat(timespec="seconds").replace("+00:00", "Z")
+
+    source_run = {
+        "id": 77, "name": producer_origin.WORKFLOW,
+        "path": producer_origin.WORKFLOW_PATH,
+        "event": "schedule", "status": "completed",
+        "conclusion": "success", "run_attempt": 1,
+        "head_branch": "main", "head_sha": before["mainSha"],
+        "repository": {"full_name": "portyu9/portyu9"},
+        "head_repository": {"full_name": "portyu9/portyu9"},
+        "actor": {"login": "portyu9"},
+        "triggering_actor": {"login": "portyu9"},
+        "created_at": iso(start - timedelta(minutes=4)),
+        "updated_at": iso(start - timedelta(minutes=1)),
+    }
+    native_artifacts = {
+        "total_count": 1,
+        "artifacts": [{
+            "id": 88, "name": producer_origin.ARTIFACT_NAME,
+            "size_in_bytes": len(zip_data),
+            "expired": False,
+            "digest": "sha256:" + hashlib.sha256(zip_data).hexdigest(),
+            "archive_download_url":
+                "https://api.github.com/repos/portyu9/portyu9/actions/artifacts/88/zip",
+            "created_at": iso(produced_at),
+            "expires_at": iso(start + timedelta(days=1)),
+            "workflow_run": {
+                "id": 77, "repository_id": 14, "head_repository_id": 14,
+                "head_branch": "main", "head_sha": before["mainSha"],
+            },
+        }],
+    }
+    exact_wake = {
+        "decision": "exact-native-banner-wake-observed-no-write",
+        "prNumber": before["pr"]["number"],
+        "baseSha": before["mainSha"],
+        "headSha": before["pr"]["head"]["sha"],
+        "headRef": before["pr"]["head"]["ref"],
+    }
+    source_inputs = {
+        "documents": documents, "wake": exact_wake,
+        "source_run": source_run,
+        "artifact_inventory": native_artifacts, "archive": zip_data,
+        "observed_at": start + timedelta(seconds=10),
+        "expected_repository_id": 14,
+    }
+    production_proof = verified_scheduled_review_source(**source_inputs)
+    require(production_proof["producerRunId"] == 77
+            and production_proof["prNumber"] == before["pr"]["number"],
+            "independent scheduled App provenance did not bind")
+    submitted: list[dict[str, Any]] = []
+    artifacts2, receipt2 = complete_provenance_bound_review(
+        **source_inputs,
+        submit=lambda req: (submitted.append(req),
+                            ("HTTP/1.1 200 OK", copy.deepcopy(review)))[1],
+        observe_after=lambda old: copy.deepcopy(after),
+    )
+    require(len(submitted) == 1 and submitted[0] == prepared
+            and artifacts2["ownerResponse"]["id"] == review["id"]
+            and receipt2["ownerUserId"] == 9922,
+            "authentic scheduled publisher did not preserve owner receipt")
+
+    def reject_source(label: str, mutate: Callable[[dict[str, Any]], None]) -> None:
+        case = copy.deepcopy(source_inputs)
+        mutate(case)
+        attempted: list[Any] = []
+        try:
+            complete_provenance_bound_review(
+                **case,
+                submit=lambda req: (attempted.append(req),
+                                    ("HTTP/1.1 200 OK", review))[1],
+                observe_after=lambda old: copy.deepcopy(after),
+            )
+        except (KeyError, TypeError, ValueError):
+            require(not attempted, "owner POST before source veto: " + label)
+            return
+        raise AssertionError("untrusted publisher reached owner token: " + label)
+
+    reject_source("manual publisher trigger",
+                  lambda c: c["source_run"].update(event="workflow_dispatch"))
+    reject_source("replayed publisher attempt",
+                  lambda c: c["source_run"].update(run_attempt=2))
+    reject_source("different producer main",
+                  lambda c: c["source_run"].update(head_sha="f" * 40))
+    reject_source("wrong producer actor",
+                  lambda c: c["source_run"]["actor"].update(login="attacker"))
+    reject_source("tampered publisher ZIP",
+                  lambda c: c.update(archive=b"untrusted"))
+    reject_source("wrong repo-bound artifact ID",
+                  lambda c: c["artifact_inventory"]["artifacts"][0]
+                      ["workflow_run"].update(repository_id=99))
+    reject_source("wrong native workflow wake head",
+                  lambda c: c["wake"].update(headSha="f" * 40))
+    reject_source("wrong owner source repository",
+                  lambda c: c["documents"]["ownerIdentity"].update(
+                      repositoryId=99))
+    reject_source("missing source artifact",
+                  lambda c: c["artifact_inventory"].update(artifacts=[]))
+
+    with tempfile.TemporaryDirectory(prefix="banner-owner-zip-") as location:
+        path = Path(location) / "native.zip"
+        path.write_bytes(zip_data)
+        require(read_bounded_source_zip(path) == zip_data,
+                "bounded real ZIP file read did not preserve exact bytes")
+        link = Path(location) / "link.zip"
+        link.symlink_to(path)
+        try:
+            read_bounded_source_zip(link)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("symlink source ZIP crossed owner boundary")
+        path.write_bytes(b"x" * (producer_origin.MAX_ARCHIVE + 1))
+        try:
+            read_bounded_source_zip(path)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("oversized source ZIP crossed owner boundary")
+
     def no_post(label: str, data: Any, when: datetime) -> None:
         counter: list[Any] = []
         try:
@@ -334,6 +561,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--app-evidence", type=Path)
+    parser.add_argument("--producer-run-id", type=int)
+    parser.add_argument("--app-origin-archive", type=Path)
     parser.add_argument("--wake-event", type=Path)
     parser.add_argument("--repository-id", type=int)
     parser.add_argument("--receipt-out", type=Path)
@@ -341,10 +570,14 @@ def main() -> int:
     if args.self_test:
         require(all(getattr(args, key) is None for key in (
             "app_evidence", "wake_event", "repository_id", "receipt_out",
+            "producer_run_id", "app_origin_archive",
         )), "owner POST self-test cannot use live paths or credentials")
         self_test()
         return 0
     require(args.app_evidence is not None and args.wake_event is not None
+            and type(args.producer_run_id) is int
+            and args.producer_run_id > 0
+            and args.app_origin_archive is not None
             and type(args.repository_id) is int
             and args.repository_id > 0 and args.receipt_out is not None
             and os.environ.get("GITHUB_REPOSITORY") == "portyu9/portyu9"
@@ -365,6 +598,17 @@ def main() -> int:
     )
     require(wake["decision"] == "exact-native-banner-wake-observed-no-write",
             "actual native banner completion did not match accepted candidate")
+    # The run is independently authenticated by a separate read-only GitHub
+    # credential and a closed exact endpoint allowlist. A JSON artifact or
+    # unverified caller-supplied run metadata cannot authorize an owner POST.
+    source_path = f"{REPOSITORY}/actions/runs/{args.producer_run_id}"
+    reader = FixedOriginRead(
+        read_token,
+        frozenset({source_path, source_path + "/artifacts"}),
+    )
+    authenticated_run = reader.get(source_path)
+    authenticated_artifacts = reader.get(source_path + "/artifacts")
+    source_archive = read_bounded_source_zip(args.app_origin_archive)
     own = owner_source.collect(
         get_owner=FixedOriginRead(owner_token, frozenset({"/user"})).get,
         get_repository=FixedOriginRead(read_token, frozenset({REPOSITORY})).get,
@@ -385,8 +629,13 @@ def main() -> int:
                 "actual owner review did not survive full native re-observation")
         return after
 
-    artifacts, receipt = complete_review(
+    artifacts, receipt = complete_provenance_bound_review(
         documents=documents,
+        wake=wake,
+        source_run=authenticated_run,
+        artifact_inventory=authenticated_artifacts,
+        archive=source_archive,
+        expected_repository_id=args.repository_id,
         observed_at=datetime.now(timezone.utc).replace(microsecond=0),
         submit=ExactOwnerReviewPost(owner_token).submit,
         observe_after=observe_after,
