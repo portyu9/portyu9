@@ -2047,7 +2047,7 @@ def self_test_dispatch_codeql_static_checkout_contract(text: str) -> None:
 
 def validate_controller_workflow_dispatch_status(text: str) -> None:
     require(
-        text.count('repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches') == 2,
+        text.count('repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches') == 3,
         "Dependabot validation workflow-dispatch endpoint inventory changed",
     )
     require(
@@ -2075,6 +2075,13 @@ def validate_controller_workflow_dispatch_status(text: str) -> None:
             '[[ "$CODEQL_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
             "Dependabot exact-head CodeQL workflow dispatch returned unexpected status:",
             'echo "Dispatched CodeQL only after exact read-only Dependabot validation succeeded."',
+        ),
+        (
+            '\n          MAIN_RECOVERY_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref=main)"',
+            '\n          MAIN_RECOVERY_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$MAIN_RECOVERY_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
+            '[[ "$MAIN_RECOVERY_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
+            "Dependabot exact-head post-CodeQL trusted-main recovery dispatch returned unexpected status:",
+            'echo "Queued trusted-main exact-head convergence; no check, review or merge result was synthesized."',
         ),
     )
     for response, status, guard, error, downstream in specs:
@@ -2145,6 +2152,23 @@ def self_test_controller_workflow_dispatch_status(text: str) -> None:
         )
     else:
         fail("Dependabot workflow-dispatch self-test accepted non-204 success class")
+
+    # The reentry must never acknowledge a blind or non-204 main dispatch.
+    # CodeQL success itself remains gated by the independent native checks.
+    unverified_main = text.replace(
+        '[[ "$MAIN_RECOVERY_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
+        '[[ "$MAIN_RECOVERY_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+202([[:space:]]|$) ]] || {',
+        1,
+    )
+    try:
+        validate_controller_workflow_dispatch_status(unverified_main)
+    except ValueError as exc:
+        require(
+            "HTTP 204 guard changed" in str(exc),
+            f"Dependabot trusted-main wake negative fixture failed at wrong guard: {exc}",
+        )
+    else:
+        fail("Dependabot main wake self-test accepted a non-204 response")
 
 
 def validate_controller_merge_success_response_contract(text: str) -> None:

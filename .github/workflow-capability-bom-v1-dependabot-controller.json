@@ -309,6 +309,13 @@
               "method": "POST",
               "mutating": true,
               "step": "Dispatch CodeQL after exact read-only validation"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Dispatch CodeQL after exact read-only validation"
             }
           ],
           "artifacts": [],
@@ -319,6 +326,12 @@
               "method": "POST",
               "step": "Dispatch CodeQL after exact read-only validation",
               "target": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches"
+            },
+            {
+              "class": "workflow-dispatch",
+              "method": "POST",
+              "step": "Dispatch CodeQL after exact read-only validation",
+              "target": "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches"
             }
           ],
           "name": "dependabot-dispatch-codeql",
