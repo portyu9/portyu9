@@ -3,10 +3,13 @@ name: Rotate approved profile banners independently
 on:
   workflow_dispatch:
   schedule:
-    # Four bounded daily UTC retries recover from accepted-main races and
-    # delayed scheduler delivery; the approved UTC-day selector is idempotent.
-    # A successful rotation does not publish again on the same UTC day.
+    # Eight bounded independent UTC opportunities reduce the effect of
+    # dropped/delayed GitHub schedule events and accepted-main races.
+    # Keep the four historically authorized windows unchanged; the second
+    # interleaved cron adds four recovery opportunities. The daily README
+    # selection, exact PR source, and App terminal remain idempotent.
     - cron: "11 1,7,13,19 * * *"
+    - cron: "11 4,10,16,22 * * *"
 
 permissions:
   contents: read
