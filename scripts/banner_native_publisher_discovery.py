@@ -348,6 +348,32 @@ def self_test() -> None:
     )
     require(select(**recent_old) == proof,
             "recent historical App-origin artifact vetoed exact new main")
+    # Four bounded daily schedules may leave *multiple* independently
+    # authenticated older-main App artifacts. Neither may veto the sole
+    # current-main source after unrelated protected merges.
+    many_history = copy.deepcopy(recent_old)
+    extra_run = copy.deepcopy(old_run)
+    extra_run.update(
+        id=809, head_sha="e" * 40,
+        created_at="2026-10-29T10:01:00Z",
+        updated_at="2026-10-29T10:03:00Z",
+    )
+    extra_item = copy.deepcopy(old_item)
+    extra_item.update(
+        id=699, created_at="2026-10-29T10:02:00Z",
+        expires_at="2026-10-30T10:02:00Z",
+        archive_download_url=(
+            "https://api.github.com/repos/portyu9/portyu9/actions/artifacts/699/zip"
+        ),
+    )
+    extra_item["workflow_run"].update(id=809, head_sha="e" * 40)
+    many_history["listing"]["workflow_runs"].append(extra_run)
+    many_history["listing"]["total_count"] = 3
+    many_history["artifacts"][809] = {
+        "total_count": 1, "artifacts": [extra_item],
+    }
+    require(select(**many_history) == proof,
+            "multiple authenticated historical artifacts hid fresh publisher")
     # The historical exemption must not permit forged App artifacts,
     # failed/replayed publisher runs or an incorrect source association.
     for label, mutate in (
