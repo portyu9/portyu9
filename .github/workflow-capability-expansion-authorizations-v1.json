@@ -981,6 +981,13 @@
       "rationale": "Authorize frozen #1336 measured by closed #1337: route the existing Dependabot open-main-PR discovery pagination through the accepted bounded governed paginator while preserving the exact query, pages evidence, typed collection validation, and candidate selection. Changed-file pagination, singleton reads, and all mutations remain unchanged and single-shot. Adds no permission, trigger, endpoint, mutation, secret/OIDC, check reduction, direct-main/ruleset/merge authority, replay, or bypass."
     },
     {
+      "baseBomSha256": "ad751c67ad1f1e651bfe47f23f8b5dfcac285b197870d30cf0341423b8b94df3",
+      "candidateBomSha256": "ac067cd4aacce6599dd3ba5cedb9381854372d2d5a210dc978700160cdaf0db6",
+      "expansionSha256": "064289ce76ca39937abd956bc750b1fee39019c2f21274527771326fef5ae19a",
+      "id": "cap-dependabot-post-codeql-main-wake-1925-v1",
+      "rationale": "Prior-authorize exact immutable #1925 head 437a9297721e070307cceee297e49e9dde21fce9 tree 19623b4150fd26ae2d4e60c570dbb4734d7f7a3a; independent read-only #1926 measured 4 expansions, 0 reductions, TCB SHA256 ce4eb79b3e4da9ad11b9508f75a164602f83169f5a837ecd9cddcfcd181dff40. One new 204-verified same-repo trusted-main controller wake after CodeQL dispatch using existing actions-write; no new token, check, review, merge, secret, direct-main or bypass authority."
+    },
+    {
       "baseBomSha256": "f0b10c97ee15f2b7d36fd99b94bdaec666a686a27208cce94627c7d7108f754d",
       "candidateBomSha256": "f0b10c97ee15f2b7d36fd99b94bdaec666a686a27208cce94627c7d7108f754d",
       "expansionSha256": "9558ce47eaa297b49ea59ed7b5f5b135c76e61dceb8fa524fba6d09a03632828",
