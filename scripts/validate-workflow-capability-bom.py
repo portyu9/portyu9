@@ -101,8 +101,8 @@ if __name__ == "__main__":
         import subprocess
         import tempfile
         from pathlib import Path
-        frozen_sha = "9c4ebfacadd0a95f507ca23f6645541cd3587095"
-        frozen_tree = "0f63a1cdb6c9fd89e3af96e9c4c3e5e99ae38626"
+        frozen_sha = "67ab0f3fd4e1e708ffe3e908fe4b35e084542677"
+        frozen_tree = "59a101811af719f70f27a9695848451a3d618a97"
         with tempfile.TemporaryDirectory(prefix="measure-banner-owner-app-") as temporary:
             candidate = Path(temporary) / "candidate"
             candidate.mkdir()
