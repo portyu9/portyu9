@@ -130,7 +130,7 @@ def validate_budget_artifact_history_schema(sync: str) -> None:
             "Spotlight mutation-budget must retain exact governed read authority")
     require(
         budget.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 1
-        and budget.count("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97") == 1,
+        and budget.count("actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0") == 1,
         "Spotlight mutation-budget governed runtime surface changed",
     )
     require("ref: main" in budget and "ref: ${{ github.sha }}" not in budget,
