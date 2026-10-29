@@ -26,13 +26,14 @@ import zipfile
 
 import banner_native_app_origin_envelope as envelope
 import banner_native_observer_cli as observer
+import banner_native_publisher_run_artifact as producer
 import banner_native_owner_review_transaction_contract as owner_contract
 import banner_native_transaction_artifact_cli as transaction
 from banner_native_authenticated_app_source import FixedOriginRead, REPOSITORY
 from banner_native_publisher_run_artifact import unique_object
 
-WORKFLOW = "Approved banner rotation"
-WORKFLOW_PATH = ".github/workflows/approved-banner-rotation.yml"
+WORKFLOW = producer.WORKFLOW
+WORKFLOW_PATH = producer.WORKFLOW_PATH
 OWNER_JOB = "review-authenticated-banner-owner"
 OWNER_APPROVE_STEP = "Approve exact current-day banner as owner"
 OWNER_UPLOAD_STEP = "Upload exact owner receipt"
@@ -275,6 +276,11 @@ def collect(*, read: Callable[[str], Any], repository_id: int,
 
 def self_test() -> None:
     import banner_native_live_admission as admission
+    source = Path(__file__).resolve().parents[1] / WORKFLOW_PATH
+    require(source.is_file() and not source.is_symlink()
+            and source.read_text(encoding="utf-8").splitlines()[0] ==
+                f"name: {WORKFLOW}",
+            "owner receipt workflow identity must match canonical publisher and live YAML")
     original = admission.fixture()
     clock = utc(original["observedAt"]) + timedelta(minutes=8)
     stamp = lambda moment: moment.isoformat(timespec="seconds").replace("+00:00", "Z")
