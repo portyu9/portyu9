@@ -242,6 +242,14 @@ jobs:
               STALE_HEAD="$(jq -er .headSha "$RUNNER_TEMP/banner-stale-decision.json")"
               STALE_REF="$(jq -er .headRef "$RUNNER_TEMP/banner-stale-decision.json")"
               HISTORICAL_BASE="$(jq -er .historicalBaseSha "$RUNNER_TEMP/banner-stale-decision.json")"
+              STALE_OWNER_REVIEW_ID="$(jq -er .ownerReviewId "$RUNNER_TEMP/banner-stale-decision.json")"
+              STALE_OWNER_REVIEW_AT="$(jq -r .ownerReviewSubmittedAt "$RUNNER_TEMP/banner-stale-decision.json")"
+              [[ "$STALE_OWNER_REVIEW_ID" =~ ^(0|[1-9][0-9]*)$ ]]
+              if [ "$STALE_OWNER_REVIEW_ID" != 0 ]; then
+                [[ "$STALE_OWNER_REVIEW_AT" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]
+              else
+                test -z "$STALE_OWNER_REVIEW_AT"
+              fi
               [[ "$STALE_PR" =~ ^[1-9][0-9]*$ ]]
               [[ "$STALE_HEAD" =~ ^[0-9a-f]{40}$ ]]
               [[ "$HISTORICAL_BASE" =~ ^[0-9a-f]{40}$ ]]
@@ -258,7 +266,7 @@ jobs:
               test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/$STALE_REF" --jq .object.sha)" = "$STALE_HEAD"
               test "$(gh api "repos/${GITHUB_REPOSITORY}/pulls/$STALE_PR" --jq .head.sha)" = "$STALE_HEAD"
 
-              STALE_COMMENT="Automatic close-only salvage of stale original approved banner PR #${STALE_PR}. Immutable head ${STALE_HEAD} (parent ${HISTORICAL_BASE}) is an exact one-commit README-only historical UTC candidate, no SVGs or source changes. Read-only full native inventories proved zero reviews, comments and review threads, correct selected-installation App producer and unchanged accepted-main/head refs. Current main ${SOURCE_SHA} moved; the current UTC artwork will be independently re-proposed without forcing the old branch. All original art preserved. This source branch has a PR and is safe for owner deletion; no code or tests to salvage."
+              STALE_COMMENT="Automatic close-only salvage of stale original approved banner PR #${STALE_PR}. Immutable head ${STALE_HEAD} (parent ${HISTORICAL_BASE}) is an exact one-commit README-only historical UTC candidate, no SVGs or source changes. Read-only complete native inventories proved either zero reviews or exactly one previously completed marker-bound native owner APPROVED review (id ${STALE_OWNER_REVIEW_ID}, UTC ${STALE_OWNER_REVIEW_AT}); zero discussion and review threads, correct selected-installation App producer and unchanged accepted-main/head refs. This comment preserves the original owner approval as explicit historical evidence; it is never transferred to the replacement PR. Current main ${SOURCE_SHA} moved; current UTC artwork will be independently re-proposed and must obtain fresh checks and an independent owner approval without forcing the old branch. All original art preserved. This source branch has a PR and is safe for owner deletion; no unique code or tests to salvage."
               COMMENT_RESPONSE="$(GH_TOKEN="$PUBLISH_TOKEN" gh api --include --method POST \
                 "repos/${GITHUB_REPOSITORY}/issues/$STALE_PR/comments" -f body="$STALE_COMMENT")"
               COMMENT_STATUS="$(head -n 1 <<< "$COMMENT_RESPONSE" | tr -d '\r')"
@@ -285,7 +293,20 @@ jobs:
                 '.state == "open" and .merged == false and .head.sha == $sha and .base.ref == "main" and (.base.sha == $historical or .base.sha == $main)' \
                 <<< "$LIVE_PR" > /dev/null
               LIVE_REVIEWS="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/$STALE_PR/reviews?per_page=100" --jq '.[]' | jq -s '.')"
-              test "$(jq -er 'length' <<< "$LIVE_REVIEWS")" = 0
+              if [ "$STALE_OWNER_REVIEW_ID" = 0 ]; then
+                test "$(jq -er 'length' <<< "$LIVE_REVIEWS")" = 0
+              else
+                EXPECTED_REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${HISTORICAL_BASE} head=${STALE_HEAD} -->"
+                jq -e --argjson id "$STALE_OWNER_REVIEW_ID" \
+                  --arg head "$STALE_HEAD" --arg marker "$EXPECTED_REVIEW_MARKER" \
+                  --arg submitted "$STALE_OWNER_REVIEW_AT" \
+                  'length == 1 and .[0].id == $id and
+                   .[0].user.login == "portyu9" and
+                   .[0].state == "APPROVED" and
+                   .[0].commit_id == $head and
+                   .[0].body == $marker and
+                   .[0].submitted_at == $submitted' <<< "$LIVE_REVIEWS" > /dev/null
+              fi
               LIVE_COMMENTS="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/$STALE_PR/comments?per_page=100" --jq '.[]' | jq -s '.')"
               jq -e --argjson id "$COMMENT_ID" \
                 'length == 1 and .[0].id == $id' <<< "$LIVE_COMMENTS" >/dev/null
