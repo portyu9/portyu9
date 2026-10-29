@@ -22,9 +22,13 @@ import banner_native_live_admission as admission
 import banner_native_owner_review_transaction_contract as owner
 import banner_native_protected_merge_response_contract as merge
 import banner_native_observer_cli as observer
+from independent_banner_candidate_contract import verified_native_banner_app_identity
 
 SCHEMAS = {
     "review-request": frozenset({"initial"}),
+    "authenticated-review-request": frozenset({
+        "initial", "appIdentity", "ownerIdentity",
+    }),
     "review-receipt": frozenset({
         "initial", "reviewed", "ownerStatus", "ownerResponse",
     }),
@@ -54,6 +58,45 @@ def compile_transaction(operation: str, documents: Any) -> dict[str, Any]:
     before = documents["initial"]
     if operation == "review-request":
         return owner.exact_request(before)
+    if operation == "authenticated-review-request":
+        # The native observer and each independently credentialed source
+        # MUST be fetched by the trusted caller over verified HTTPS in its
+        # isolated environment. This pure check cannot authenticate a JSON
+        # artifact or issue a review on its own.
+        app_identity = documents["appIdentity"]
+        reviewer_identity = documents["ownerIdentity"]
+        require(type(app_identity) is dict and
+                set(app_identity) == {
+                    "installation", "bot_user", "expected_app_id",
+                    "expected_installation_id", "expected_repository_id",
+                } and app_identity == before.get("nativeApp"),
+                "selected App origin does not match fresh reviewed candidate")
+        selected = verified_native_banner_app_identity(**app_identity)
+        require(type(reviewer_identity) is dict
+                and set(reviewer_identity) == {
+                    "login", "userId", "repositoryId", "repository",
+                    "defaultBranch",
+                } and reviewer_identity["login"] == owner.REVIEW_LOGIN
+                and type(reviewer_identity["userId"]) is int
+                and reviewer_identity["userId"] > 0
+                and type(reviewer_identity["repositoryId"]) is int
+                and reviewer_identity["repositoryId"] == selected["repositoryId"]
+                and reviewer_identity["repository"] == "portyu9/portyu9"
+                and reviewer_identity["defaultBranch"] == "main",
+                "independent owner identity is not bound to selected App repository")
+        # Exact owner subject is ready only when native status, check,
+        # inventory, UTC artwork and veto predicates independently pass.
+        return {
+            "intent": owner.exact_request(before),
+            "identityBinding": {
+                "ownerLogin": reviewer_identity["login"],
+                "ownerUserId": reviewer_identity["userId"],
+                "appId": selected["appId"],
+                "installationId": selected["installationId"],
+                "repositoryId": selected["repositoryId"],
+            },
+            "decision": "dual-source-banner-owner-review-intent-no-write",
+        }
     reviewed = documents["reviewed"]
     status = documents["ownerStatus"]
     response = documents["ownerResponse"]
@@ -90,6 +133,25 @@ def self_test() -> None:
             and review_request["endpoint"].endswith(
                 f"/pulls/{review_request['prNumber']}/reviews"
             ), "review request must bind exact native candidate")
+    # Two distinct exact HTTPS-origin identities are required for the
+    # future privileged owner writer; neither source is a bearer credential.
+    app_identity = copy.deepcopy(before["nativeApp"])
+    reviewer_identity = {
+        "login": "portyu9", "userId": 35150859,
+        "repositoryId": app_identity["expected_repository_id"],
+        "repository": "portyu9/portyu9", "defaultBranch": "main",
+    }
+    dual = {
+        "initial": before, "appIdentity": app_identity,
+        "ownerIdentity": reviewer_identity,
+    }
+    authenticated = compile_transaction("authenticated-review-request", dual)
+    require(authenticated["intent"] == review_request
+            and authenticated["identityBinding"]["repositoryId"]
+                == app_identity["expected_repository_id"]
+            and authenticated["decision"]
+                == "dual-source-banner-owner-review-intent-no-write",
+            "independent App/owner identity binding did not preserve native request")
     after = copy.deepcopy(before)
     after["observedAt"] = (initial + timedelta(minutes=3)).isoformat(
         timespec="seconds",
@@ -157,6 +219,32 @@ def self_test() -> None:
         except (KeyError, TypeError, ValueError):
             return
         raise AssertionError("unsafe transaction envelope admitted: " + label)
+
+    # Fail closed before any future owner HTTP writer can be invoked.
+    bad_binding = copy.deepcopy(dual)
+    bad_binding["ownerIdentity"]["userId"] = True
+    reject("boolean owner user ID", "authenticated-review-request", bad_binding)
+    bad_binding = copy.deepcopy(dual)
+    bad_binding["ownerIdentity"]["repositoryId"] += 1
+    reject("cross-repo reviewer identity", "authenticated-review-request", bad_binding)
+    bad_binding = copy.deepcopy(dual)
+    bad_binding["ownerIdentity"]["login"] = "attacker"
+    reject("wrong owner login", "authenticated-review-request", bad_binding)
+    bad_binding = copy.deepcopy(dual)
+    bad_binding["ownerIdentity"]["defaultBranch"] = "generated"
+    reject("non-main reviewer intent", "authenticated-review-request", bad_binding)
+    bad_binding = copy.deepcopy(dual)
+    bad_binding["ownerIdentity"]["token"] = "must-never-cross"
+    reject("owner secret injected", "authenticated-review-request", bad_binding)
+    bad_binding = copy.deepcopy(dual)
+    bad_binding["appIdentity"]["installation"]["id"] += 1
+    reject("forged App installation", "authenticated-review-request", bad_binding)
+    bad_binding = copy.deepcopy(dual)
+    bad_binding["appIdentity"]["expected_repository_id"] = True
+    reject("boolean App repo ID", "authenticated-review-request", bad_binding)
+    bad_binding = copy.deepcopy(dual)
+    bad_binding["initial"]["mainRef"]["object"]["sha"] = "f" * 40
+    reject("moved protected main", "authenticated-review-request", bad_binding)
 
     with_added_field = copy.deepcopy(complete)
     with_added_field["token"] = "cannot-be-carried"
