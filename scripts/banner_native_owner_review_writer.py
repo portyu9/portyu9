@@ -310,6 +310,146 @@ def self_test() -> None:
                 "dual-source-banner-owner-review-receipt-no-merge",
             "positive owner write did not re-prove exact HTTP/native approval")
 
+    # Exercise the actual ZIP/run/App/CI pre-write binding, not merely the
+    # request transport. Every forged origin is rejected before submit.
+    import hashlib
+    import io
+    import zipfile
+    import tempfile
+
+    produced_at = start - timedelta(minutes=2)
+    origin_packet = producer_origin.build(
+        app_evidence=app, pr=before["pr"], base_sha=before["mainSha"],
+        run_id=77, observed_at=produced_at,
+    )
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as zipout:
+        zipout.writestr(
+            producer_origin.ARTIFACT_FILE,
+            json.dumps(origin_packet, sort_keys=True, separators=(",", ":")),
+        )
+    zip_data = stream.getvalue()
+    def iso(moment: datetime) -> str:
+        return moment.isoformat(timespec="seconds").replace("+00:00", "Z")
+
+    source_run = {
+        "id": 77, "name": producer_origin.WORKFLOW,
+        "path": producer_origin.WORKFLOW_PATH,
+        "event": "schedule", "status": "completed",
+        "conclusion": "success", "run_attempt": 1,
+        "head_branch": "main", "head_sha": before["mainSha"],
+        "repository": {"full_name": "portyu9/portyu9"},
+        "head_repository": {"full_name": "portyu9/portyu9"},
+        "actor": {"login": "portyu9"},
+        "triggering_actor": {"login": "portyu9"},
+        "created_at": iso(start - timedelta(minutes=4)),
+        "updated_at": iso(start - timedelta(minutes=1)),
+    }
+    native_artifacts = {
+        "total_count": 1,
+        "artifacts": [{
+            "id": 88, "name": producer_origin.ARTIFACT_NAME,
+            "size_in_bytes": len(zip_data),
+            "expired": False,
+            "digest": "sha256:" + hashlib.sha256(zip_data).hexdigest(),
+            "archive_download_url":
+                "https://api.github.com/repos/portyu9/portyu9/actions/artifacts/88/zip",
+            "created_at": iso(produced_at),
+            "expires_at": iso(start + timedelta(days=1)),
+            "workflow_run": {
+                "id": 77, "repository_id": 14, "head_repository_id": 14,
+                "head_branch": "main", "head_sha": before["mainSha"],
+            },
+        }],
+    }
+    exact_wake = {
+        "decision": "exact-native-banner-wake-observed-no-write",
+        "prNumber": before["pr"]["number"],
+        "baseSha": before["mainSha"],
+        "headSha": before["pr"]["head"]["sha"],
+        "headRef": before["pr"]["head"]["ref"],
+    }
+    source_inputs = {
+        "documents": documents, "wake": exact_wake,
+        "source_run": source_run,
+        "artifact_inventory": native_artifacts, "archive": zip_data,
+        "observed_at": start + timedelta(seconds=10),
+        "expected_repository_id": 14,
+    }
+    production_proof = verified_scheduled_review_source(**source_inputs)
+    require(production_proof["producerRunId"] == 77
+            and production_proof["prNumber"] == before["pr"]["number"],
+            "independent scheduled App provenance did not bind")
+    submitted: list[dict[str, Any]] = []
+    artifacts2, receipt2 = complete_provenance_bound_review(
+        **source_inputs,
+        submit=lambda req: (submitted.append(req),
+                            ("HTTP/1.1 200 OK", copy.deepcopy(review)))[1],
+        observe_after=lambda old: copy.deepcopy(after),
+    )
+    require(len(submitted) == 1 and submitted[0] == prepared
+            and artifacts2["ownerResponse"]["id"] == review["id"]
+            and receipt2["ownerUserId"] == 9922,
+            "authentic scheduled publisher did not preserve owner receipt")
+
+    def reject_source(label: str, mutate: Callable[[dict[str, Any]], None]) -> None:
+        case = copy.deepcopy(source_inputs)
+        mutate(case)
+        attempted: list[Any] = []
+        try:
+            complete_provenance_bound_review(
+                **case,
+                submit=lambda req: (attempted.append(req),
+                                    ("HTTP/1.1 200 OK", review))[1],
+                observe_after=lambda old: copy.deepcopy(after),
+            )
+        except (KeyError, TypeError, ValueError):
+            require(not attempted, "owner POST before source veto: " + label)
+            return
+        raise AssertionError("untrusted publisher reached owner token: " + label)
+
+    reject_source("manual publisher trigger",
+                  lambda c: c["source_run"].update(event="workflow_dispatch"))
+    reject_source("replayed publisher attempt",
+                  lambda c: c["source_run"].update(run_attempt=2))
+    reject_source("different producer main",
+                  lambda c: c["source_run"].update(head_sha="f" * 40))
+    reject_source("wrong producer actor",
+                  lambda c: c["source_run"]["actor"].update(login="attacker"))
+    reject_source("tampered publisher ZIP",
+                  lambda c: c.update(archive=b"untrusted"))
+    reject_source("wrong repo-bound artifact ID",
+                  lambda c: c["artifact_inventory"]["artifacts"][0]
+                      ["workflow_run"].update(repository_id=99))
+    reject_source("wrong native workflow wake head",
+                  lambda c: c["wake"].update(headSha="f" * 40))
+    reject_source("wrong owner source repository",
+                  lambda c: c["documents"]["ownerIdentity"].update(
+                      repositoryId=99))
+    reject_source("missing source artifact",
+                  lambda c: c["artifact_inventory"].update(artifacts=[]))
+
+    with tempfile.TemporaryDirectory(prefix="banner-owner-zip-") as location:
+        path = Path(location) / "native.zip"
+        path.write_bytes(zip_data)
+        require(read_bounded_source_zip(path) == zip_data,
+                "bounded real ZIP file read did not preserve exact bytes")
+        link = Path(location) / "link.zip"
+        link.symlink_to(path)
+        try:
+            read_bounded_source_zip(link)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("symlink source ZIP crossed owner boundary")
+        path.write_bytes(b"x" * (producer_origin.MAX_ARCHIVE + 1))
+        try:
+            read_bounded_source_zip(path)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("oversized source ZIP crossed owner boundary")
+
     def no_post(label: str, data: Any, when: datetime) -> None:
         counter: list[Any] = []
         try:
