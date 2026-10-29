@@ -345,34 +345,34 @@ jobs:
               "$RUNNER_TEMP/banner-repository.json" "$RUNNER_TEMP/banner-created-pr.json" \
               "$APP_ID" "$INSTALLATION_ID" "$REPOSITORY_ID" \
               "$SOURCE_SHA" "$GITHUB_RUN_ID" <<'PY'
-            import json, sys
-            from datetime import datetime, timezone
-            from pathlib import Path
-            import banner_native_app_origin_envelope as origin
-            import banner_native_publisher_run_artifact as publisher
-            import banner_native_observer_cli as observer
+          import json, sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+          import banner_native_app_origin_envelope as origin
+          import banner_native_publisher_run_artifact as publisher
+          import banner_native_observer_cli as observer
 
-            def read(filename):
-                with open(filename, encoding="utf-8") as stream:
-                    return json.load(stream)
+          def read(filename):
+              with open(filename, encoding="utf-8") as stream:
+                  return json.load(stream)
 
-            app_id, installation_id, repository_id = map(int, sys.argv[5:8])
-            native_app = origin.minimize({
-                "installation": read(sys.argv[1]),
-                "bot_user": read(sys.argv[2]),
-                "repository": read(sys.argv[3]),
-                "expected_app_id": app_id,
-                "expected_installation_id": installation_id,
-                "expected_repository_id": repository_id,
-            })
-            packet = publisher.build(
-                app_evidence=native_app, pr=read(sys.argv[4]),
-                base_sha=sys.argv[8], run_id=int(sys.argv[9]),
-                observed_at=datetime.now(timezone.utc),
-            )
-            observer.write_exclusive(Path("banner-app-origin/app-origin.json"), packet)
-            print("banner publisher App-origin immutable evidence created: data only")
-            PY
+          app_id, installation_id, repository_id = map(int, sys.argv[5:8])
+          native_app = origin.minimize({
+              "installation": read(sys.argv[1]),
+              "bot_user": read(sys.argv[2]),
+              "repository": read(sys.argv[3]),
+              "expected_app_id": app_id,
+              "expected_installation_id": installation_id,
+              "expected_repository_id": repository_id,
+          })
+          packet = publisher.build(
+              app_evidence=native_app, pr=read(sys.argv[4]),
+              base_sha=sys.argv[8], run_id=int(sys.argv[9]),
+              observed_at=datetime.now(timezone.utc),
+          )
+          observer.write_exclusive(Path("banner-app-origin/app-origin.json"), packet)
+          print("banner publisher App-origin immutable evidence created: data only")
+          PY
             echo "app_origin_ready=true" >> "$GITHUB_OUTPUT"
           fi
           rm -f "$APP_INSTALL" "$APP_BOT" "$RUNNER_TEMP/banner-app-evidence.json" \
