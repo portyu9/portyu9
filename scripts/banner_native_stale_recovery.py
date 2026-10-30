@@ -298,6 +298,9 @@ def self_test() -> None:
     # This test never instantiates a GitHub client or makes network requests.
     sample = admission.fixture()
     historical = copy.deepcopy(sample["pr"])
+    # REST collection rows have a globally assigned native id separate
+    # from the PR number; the fixture's normalized admission PR does not.
+    historical["id"] = 1701
     before = sample["acceptedReadme"]
     historical_readme = sample["proposedReadme"]
     source_day = admission.exact_utc(sample["observedAt"]).date()
