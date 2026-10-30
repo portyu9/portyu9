@@ -8,6 +8,7 @@ separate current-main/head/engagement lease and authenticated App identity.
 from __future__ import annotations
 
 import argparse
+import base64
 import copy
 from datetime import datetime, timedelta, timezone
 import os
@@ -30,6 +31,7 @@ def require(ok: bool, message: str) -> None:
 def pack_stale_decision(
     proof: dict[str, Any], *, number: int, main_sha: str,
     head_sha: str, head_ref: str, historical_base: str, utc_day: str,
+    observed_now: datetime,
 ) -> dict[str, str | int]:
     """Preserve original authenticated owner review in the publisher packet.
 
@@ -48,7 +50,7 @@ def pack_stale_decision(
         and reviewed_at[10] == "T" and reviewed_at[13] == ":"
         and reviewed_at[16] == ":" and reviewed_at.endswith("Z")
         and datetime.fromisoformat(reviewed_at.replace("Z", "+00:00"))
-        <= datetime.now(timezone.utc)),
+        <= observed_now),
         "native stale decision owner review ID/timestamp inconsistent")
     return {
         "decision": "stale-banner-candidate-comment-then-close-only",
@@ -167,7 +169,7 @@ def observe(*, native_app: dict[str, Any], token: str,
     return pack_stale_decision(
         result, number=number, main_sha=main_sha, head_sha=head_sha,
         head_ref=head_ref, historical_base=original_base,
-        utc_day=observed_now.date().isoformat(),
+        utc_day=observed_now.date().isoformat(), observed_now=observed_now,
     )
 
 
@@ -211,7 +213,8 @@ def self_test() -> None:
     prior = (datetime.now(timezone.utc) - timedelta(days=1)).replace(
         microsecond=0)
     stamp = prior.isoformat(timespec="seconds").replace("+00:00", "Z")
-    params = dict(number=19, main_sha="a" * 40,
+    params = dict(observed_now=datetime.now(timezone.utc),
+                  number=19, main_sha="a" * 40,
                   head_sha="b" * 40,
                   head_ref=("automation/banner-rotation/" +
                             prior.date().isoformat() + "-" + "c" * 12),
@@ -249,6 +252,142 @@ def self_test() -> None:
             pass
         else:
             raise AssertionError("stale owner review handoff accepted " + label)
+
+    # Cross the complete native REST/GraphQL observation boundary with
+    # synthetic, source-generated GitHub evidence. This catches schema-loss
+    # regressions *between* verified eligibility and the published JSON packet,
+    # which isolated self-tests failed to detect in the October incident.
+    sample = admission.fixture()
+    old_pr = copy.deepcopy(sample["pr"])
+    old_commit = copy.deepcopy(sample["commit"])
+    old_files = copy.deepcopy(sample["files"])
+    original_day = admission.exact_utc(sample["observedAt"]).date()
+    current_day = original_day + timedelta(days=1)
+    replay_now = datetime.combine(
+        current_day, datetime.min.time(), tzinfo=timezone.utc).replace(hour=12)
+    current_main = "d" * 40
+    old_head = old_pr["head"]["sha"]
+    old_base = old_pr["base"]["sha"]
+    original_readme = sample["acceptedReadme"]
+    old_candidate_readme = sample["proposedReadme"]
+    catalog = contract.approved.load_catalog()
+    current_readme = contract.approved.propose(
+        original_readme, contract.approved.chosen(current_day, catalog), catalog)
+    require(current_readme != original_readme,
+            "cross-boundary native fixture did not advance accepted artwork")
+    from automation_governed_bot_review_gate import review_marker
+    owner_review = {
+        "id": 517, "state": "APPROVED", "user": {"login": "portyu9"},
+        "commit_id": old_head, "body": review_marker(old_base, old_head),
+        "submitted_at": (
+            replay_now - timedelta(days=1, minutes=10)
+        ).isoformat(timespec="seconds").replace("+00:00", "Z"),
+    }
+    prefix = collector.PREFIX
+    def content_document(source: str) -> dict[str, Any]:
+        encoded = source.encode("utf-8")
+        return {
+            "name": "README.md", "path": "README.md", "type": "file",
+            "encoding": "base64", "size": len(encoded),
+            "sha": contract.blob_sha(source),
+            "content": base64.b64encode(encoded).decode("ascii"),
+        }
+
+    refs = {
+        prefix + "git/ref/heads/main": {
+            "ref": "refs/heads/main",
+            "object": {"type": "commit", "sha": current_main},
+        },
+        prefix + "git/ref/heads/" + old_pr["head"]["ref"]: {
+            "ref": "refs/heads/" + old_pr["head"]["ref"],
+            "object": {"type": "commit", "sha": old_head},
+        },
+    }
+    values = {
+        **refs,
+        prefix + "pulls?state=open&base=main&per_page=100&page=1": [old_pr],
+        prefix + f"pulls/{old_pr['number']}": old_pr,
+        prefix + f"commits/{old_head}": old_commit,
+        prefix + f"contents/README.md?ref={old_base}":
+            content_document(original_readme),
+        prefix + f"contents/README.md?ref={old_head}":
+            content_document(old_candidate_readme),
+        prefix + f"contents/README.md?ref={current_main}":
+            content_document(current_readme),
+        prefix + f"pulls/{old_pr['number']}/files?per_page=100&page=1":
+            old_files,
+        prefix + f"pulls/{old_pr['number']}/reviews?per_page=100&page=1":
+            [owner_review],
+        prefix + f"issues/{old_pr['number']}/comments?per_page=100&page=1": [],
+    }
+    class NativeReplay:
+        def __init__(self, responses: dict[str, Any]):
+            self.responses = responses
+            self.requests: list[str] = []
+        def get(self, endpoint: str) -> tuple[Any, None]:
+            self.requests.append(endpoint)
+            require(endpoint in self.responses,
+                    "native replay unexpectedly accessed an unreviewed endpoint")
+            return copy.deepcopy(self.responses[endpoint]), None
+
+    def read_threads(repository: str, number: int) -> dict[str, Any]:
+        require(repository == contract.REPOSITORY
+                and number == old_pr["number"],
+                "native GraphQL replay changed repository or PR identity")
+        return copy.deepcopy(sample["reviewThreads"])
+
+    replay = NativeReplay(values)
+    observed = observe(
+        native_app=sample["nativeApp"], token="synthetic-read-only",
+        observed_now=replay_now, client=replay, threads_reader=read_threads)
+    require(observed["decision"] == "stale-banner-candidate-comment-then-close-only"
+            and observed["prNumber"] == old_pr["number"]
+            and observed["mainSha"] == current_main
+            and observed["headSha"] == old_head
+            and observed["ownerReviewId"] == owner_review["id"]
+            and observed["ownerReviewSubmittedAt"] == owner_review["submitted_at"],
+            "complete synthetic native replay lost publisher owner approval")
+    require(replay.requests.count(prefix + "git/ref/heads/main") == 2
+            and replay.requests.count(
+                prefix + "git/ref/heads/" + old_pr["head"]["ref"]) == 2
+            and replay.requests.count(
+                prefix + "pulls?state=open&base=main&per_page=100&page=1") == 2,
+            "native replay did not repeat immutable main/head/PR inventory")
+    zero = copy.deepcopy(values)
+    zero[prefix + f"pulls/{old_pr['number']}/reviews?per_page=100&page=1"] = []
+    zero_packet = observe(
+        native_app=sample["nativeApp"], token="synthetic-read-only",
+        observed_now=replay_now, client=NativeReplay(zero),
+        threads_reader=read_threads)
+    require(zero_packet["ownerReviewId"] == 0
+            and zero_packet["ownerReviewSubmittedAt"] == "",
+            "complete zero-review historical candidate failed to transmit")
+
+    for label, mutated in (
+        ("competing user comment", lambda obj: obj[
+            prefix + f"issues/{old_pr['number']}/comments?per_page=100&page=1"
+        ].append({"id": 99})),
+        ("changed owner approval", lambda obj: obj[
+            prefix + f"pulls/{old_pr['number']}/reviews?per_page=100&page=1"
+        ][0].update(body="Unbound owner review")),
+        ("new main ref", lambda obj: obj[prefix + "git/ref/heads/main"][
+            "object"].update(sha="e" * 40)),
+        ("unrecognized head", lambda obj: obj[
+            prefix + f"pulls/{old_pr['number']}"
+        ]["head"].update(sha="e" * 40)),
+    ):
+        bad = copy.deepcopy(values)
+        mutated(bad)
+        try:
+            observe(native_app=sample["nativeApp"],
+                    token="synthetic-read-only",
+                    observed_now=replay_now, client=NativeReplay(bad),
+                    threads_reader=read_threads)
+        except (ValueError, KeyError, TypeError):
+            pass
+        else:
+            raise AssertionError(
+                "cross-boundary native observation admitted " + label)
 
     # Lock the actual privileged publisher's post-comment transaction to
     # the same historical-or-current base predicate already authorized by
