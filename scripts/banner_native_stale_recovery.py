@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 import copy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 from typing import Any
@@ -25,6 +25,40 @@ import independent_banner_candidate_contract as contract
 def require(ok: bool, message: str) -> None:
     if not ok:
         raise ValueError(message)
+
+
+def pack_stale_decision(
+    proof: dict[str, Any], *, number: int, main_sha: str,
+    head_sha: str, head_ref: str, historical_base: str, utc_day: str,
+) -> dict[str, str | int]:
+    """Preserve original authenticated owner review in the publisher packet.
+
+    The privileged YAML consumes BOTH fields. Previously observe() silently
+    dropped them even though the native close-eligibility contract proved them.
+    """
+    review_id = proof.get("ownerReviewId")
+    reviewed_at = proof.get("ownerReviewSubmittedAt")
+    require(type(review_id) is int and review_id >= 0
+            and type(reviewed_at) is str,
+            "native stale decision lost immutable owner review provenance")
+    require((review_id == 0 and reviewed_at == "") or (
+        review_id > 0
+        and len(reviewed_at) == 20
+        and reviewed_at[4] == "-" and reviewed_at[7] == "-"
+        and reviewed_at[10] == "T" and reviewed_at[13] == ":"
+        and reviewed_at[16] == ":" and reviewed_at.endswith("Z")
+        and datetime.fromisoformat(reviewed_at.replace("Z", "+00:00"))
+        <= datetime.now(timezone.utc)),
+        "native stale decision owner review ID/timestamp inconsistent")
+    return {
+        "decision": "stale-banner-candidate-comment-then-close-only",
+        "prNumber": number, "mainSha": main_sha,
+        "headSha": head_sha, "headRef": head_ref,
+        "historicalBaseSha": historical_base,
+        "utcDay": utc_day,
+        "ownerReviewId": review_id,
+        "ownerReviewSubmittedAt": reviewed_at,
+    }
 
 
 def observe(*, native_app: dict[str, Any], token: str,
@@ -130,13 +164,11 @@ def observe(*, native_app: dict[str, Any], token: str,
     require(second_witness == witness
             and second_open == open_prs,
             "open PR inventory changed before stale cleanup authorization")
-    return {
-        "decision": "stale-banner-candidate-comment-then-close-only",
-        "prNumber": number, "mainSha": main_sha,
-        "headSha": head_sha, "headRef": head_ref,
-        "historicalBaseSha": original_base,
-        "utcDay": observed_now.date().isoformat(),
-    }
+    return pack_stale_decision(
+        result, number=number, main_sha=main_sha, head_sha=head_sha,
+        head_ref=head_ref, historical_base=original_base,
+        utc_day=observed_now.date().isoformat(),
+    )
 
 
 def self_test() -> None:
@@ -174,6 +206,50 @@ def self_test() -> None:
             pass
         else:
             raise AssertionError("stale banner selector admitted tampered PR")
+    # Actual native handoff, not an independently reconstructed schema:
+    # a single genuine prior-day owner approval must reach BOTH jq consumers.
+    prior = (datetime.now(timezone.utc) - timedelta(days=1)).replace(
+        microsecond=0)
+    stamp = prior.isoformat(timespec="seconds").replace("+00:00", "Z")
+    params = dict(number=19, main_sha="a" * 40,
+                  head_sha="b" * 40,
+                  head_ref=("automation/banner-rotation/" +
+                            prior.date().isoformat() + "-" + "c" * 12),
+                  historical_base="c" * 40,
+                  utc_day=datetime.now(timezone.utc).date().isoformat())
+    reviewed = {"ownerReviewId": 517, "ownerReviewSubmittedAt": stamp}
+    packet = pack_stale_decision(reviewed, **params)
+    require(set(packet) == {
+                "decision", "prNumber", "mainSha", "headSha",
+                "headRef", "historicalBaseSha", "utcDay",
+                "ownerReviewId", "ownerReviewSubmittedAt"}
+            and packet["ownerReviewId"] == reviewed["ownerReviewId"]
+            and packet["ownerReviewSubmittedAt"] == reviewed["ownerReviewSubmittedAt"],
+            "exact native approved owner evidence dropped by output packet")
+    unreviewed = pack_stale_decision(
+        {"ownerReviewId": 0, "ownerReviewSubmittedAt": ""}, **params)
+    require(unreviewed["ownerReviewId"] == 0
+            and unreviewed["ownerReviewSubmittedAt"] == "",
+            "explicit zero-review recovery changed")
+    for label, bad in (
+        ("missing owner ID", {"ownerReviewSubmittedAt": reviewed["ownerReviewSubmittedAt"]}),
+        ("missing owner date", {"ownerReviewId": reviewed["ownerReviewId"]}),
+        ("boolean ID", {"ownerReviewId": True,
+                        "ownerReviewSubmittedAt": reviewed["ownerReviewSubmittedAt"]}),
+        ("downgraded approval", {"ownerReviewId": reviewed["ownerReviewId"],
+                                 "ownerReviewSubmittedAt": ""}),
+        ("spurious review", {"ownerReviewId": 0,
+                             "ownerReviewSubmittedAt": reviewed["ownerReviewSubmittedAt"]}),
+        ("malformed UTC", {"ownerReviewId": reviewed["ownerReviewId"],
+                           "ownerReviewSubmittedAt": "not-utc"}),
+    ):
+        try:
+            pack_stale_decision(bad, **params)
+        except (ValueError, TypeError):
+            pass
+        else:
+            raise AssertionError("stale owner review handoff accepted " + label)
+
     # Lock the actual privileged publisher's post-comment transaction to
     # the same historical-or-current base predicate already authorized by
     # verified_stale_banner_close_readiness. GitHub can retain the original
@@ -182,6 +258,9 @@ def self_test() -> None:
     workflow = (Path(__file__).resolve().parents[1] /
                 ".github/workflows/approved-banner-rotation.yml").read_text(
                     encoding="utf-8")
+    require(workflow.count('jq -er .ownerReviewId') == 1
+            and workflow.count('jq -r .ownerReviewSubmittedAt') == 1,
+            "privileged publisher owner-review handoff schema drifted")
     guard = (
         '.state == "open" and .merged == false and .head.sha == $sha and '
         '.base.ref == "main" and '
