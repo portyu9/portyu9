@@ -75,6 +75,23 @@ def self_test() -> None:
             simulated_pr["head"]["ref"] = (
                 f"dependabot/github_actions/{action_repository}-{fresh_tag}"
             )
+            # A native PR claiming a different immutable commit can never
+            # enter the simulated protected reconciliation, even if its title
+            # or branch resembles the accepted native Dependabot namespace.
+            mismatched = {
+                **simulated_pr, "head": {
+                    **simulated_pr["head"], "sha": "e" * 40,
+                },
+            }
+            try:
+                controller.probe(
+                    pr=mismatched, expected_head_sha="d" * 40,
+                    base_root=base, candidate_root=fake_candidate)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError(
+                    "synthetic Dependabot PR spoofed an immutable head")
             proposal = controller.probe(
                 pr=simulated_pr, expected_head_sha="d" * 40,
                 base_root=base, candidate_root=fake_candidate)
