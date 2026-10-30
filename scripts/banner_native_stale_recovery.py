@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 import copy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 from typing import Any
@@ -206,15 +206,18 @@ def self_test() -> None:
             pass
         else:
             raise AssertionError("stale banner selector admitted tampered PR")
-    # The actual native handoff, not an independently reconstructed schema:
-    # #1969's authentic single-owner APPROVED must reach BOTH jq consumers.
-    params = dict(number=1969, main_sha="a" * 40,
-                  head_sha="630a65054fba8e548a5438fee1aeef9c83c0fe80",
-                  head_ref="automation/banner-rotation/2026-10-29-308dfe7457f7",
-                  historical_base="308dfe7457f7142f7405e2dddd9e8d7f731458c3",
-                  utc_day="2026-10-30")
-    reviewed = {"ownerReviewId": 5706213533,
-                "ownerReviewSubmittedAt": "2026-10-29T23:20:14Z"}
+    # Actual native handoff, not an independently reconstructed schema:
+    # a single genuine prior-day owner approval must reach BOTH jq consumers.
+    prior = (datetime.now(timezone.utc) - timedelta(days=1)).replace(
+        microsecond=0)
+    stamp = prior.isoformat(timespec="seconds").replace("+00:00", "Z")
+    params = dict(number=19, main_sha="a" * 40,
+                  head_sha="b" * 40,
+                  head_ref=("automation/banner-rotation/" +
+                            prior.date().isoformat() + "-" + "c" * 12),
+                  historical_base="c" * 40,
+                  utc_day=datetime.now(timezone.utc).date().isoformat())
+    reviewed = {"ownerReviewId": 517, "ownerReviewSubmittedAt": stamp}
     packet = pack_stale_decision(reviewed, **params)
     require(set(packet) == {
                 "decision", "prNumber", "mainSha", "headSha",
