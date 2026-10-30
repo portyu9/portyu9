@@ -83,6 +83,21 @@ def observe(*, native_app: dict[str, Any], token: str,
         (lambda repo, number: threads.fetch_connection(repo, number, token=token))
         if threads_reader is None else threads_reader
     )
+    return observe_with_readers(
+        native_app=native_app, observed_now=observed_now,
+        api=api, native_threads=native_threads,
+    )
+
+
+def observe_with_readers(*, native_app: dict[str, Any],
+                         observed_now: datetime, api: Any,
+                         native_threads: Any) -> dict[str, str | int]:
+    """Read-only production evidence evaluation; dependencies are explicit.
+
+    The isolated adversarial simulator injects read-only native snapshots here.
+    Live observe() independently authenticates the scoped App and constructs
+    the approved transport; both share this exact decision/serialization path.
+    """
     first_main = collector.read_ref(api, "main")
     main_sha = first_main["object"]["sha"]
     open_prs, witness = rest.inventory(
@@ -275,6 +290,138 @@ def self_test() -> None:
         pass
     else:
         raise AssertionError("native owner review admitted a future submission")
+
+    # Complete production-path dry-run: a fixture-sourced reviewed one-commit
+    # candidate is now stale on tomorrow's accepted main. Only the read-only
+    # REST/GraphQL readers are substituted: selection, live evidence checks,
+    # unique parent/artwork, double-ref leases and final packet are REAL code.
+    # This test never instantiates a GitHub client or makes network requests.
+    sample = admission.fixture()
+    historical = copy.deepcopy(sample["pr"])
+    before = sample["acceptedReadme"]
+    historical_readme = sample["proposedReadme"]
+    source_day = admission.exact_utc(sample["observedAt"]).date()
+    tomorrow = source_day + timedelta(days=1)
+    audit_time = datetime.combine(
+        tomorrow, datetime.min.time(), tzinfo=timezone.utc
+    ).replace(hour=12)
+    new_main = "d" * 40
+    old_head = historical["head"]["sha"]
+    old_base = historical["base"]["sha"]
+    art = contract.approved.load_catalog()
+    accepted_today = contract.approved.propose(
+        before, contract.approved.chosen(tomorrow, art), art)
+    require(accepted_today != before,
+            "native offline publisher test failed to advance artwork date")
+    from automation_governed_bot_review_gate import review_marker
+    native_review = {
+        "id": 517, "user": {"login": "portyu9"},
+        "commit_id": old_head, "state": "APPROVED",
+        "body": review_marker(old_base, old_head),
+        "submitted_at": (
+            audit_time - timedelta(days=1, minutes=10)
+        ).isoformat(timespec="seconds").replace("+00:00", "Z"),
+    }
+    import base64
+    def readme_response(text: str) -> dict[str, Any]:
+        data = text.encode("utf-8")
+        return {
+            "name": "README.md", "path": "README.md", "type": "file",
+            "encoding": "base64", "size": len(data),
+            "sha": contract.blob_sha(text),
+            "content": base64.b64encode(data).decode("ascii"),
+        }
+
+    prefix = collector.PREFIX
+    pr_number = historical["number"]
+    ref_name = historical["head"]["ref"]
+    listed = prefix + "pulls?state=open&base=main&per_page=100&page=1"
+    reviewers = prefix + f"pulls/{pr_number}/reviews?per_page=100&page=1"
+    comments = prefix + f"issues/{pr_number}/comments?per_page=100&page=1"
+    pr_path = prefix + f"pulls/{pr_number}"
+    ref_path = prefix + "git/ref/heads/" + ref_name
+    main_path = prefix + "git/ref/heads/main"
+    responses = {
+        main_path: {"ref": "refs/heads/main",
+                    "object": {"type": "commit", "sha": new_main}},
+        ref_path: {"ref": "refs/heads/" + ref_name,
+                   "object": {"type": "commit", "sha": old_head}},
+        listed: [historical],
+        pr_path: historical,
+        prefix + f"commits/{old_head}": sample["commit"],
+        prefix + f"contents/README.md?ref={old_base}":
+            readme_response(before),
+        prefix + f"contents/README.md?ref={old_head}":
+            readme_response(historical_readme),
+        prefix + f"contents/README.md?ref={new_main}":
+            readme_response(accepted_today),
+        prefix + f"pulls/{pr_number}/files?per_page=100&page=1":
+            sample["files"],
+        reviewers: [native_review],
+        comments: [],
+    }
+    class ReadOnlyFixture:
+        def __init__(self, values: dict[str, Any]) -> None:
+            self.responses = values
+            self.reads: list[str] = []
+        def get(self, endpoint: str) -> tuple[Any, None]:
+            self.reads.append(endpoint)
+            require(endpoint in self.responses,
+                    "offline native replay requested an unreviewed API path")
+            return copy.deepcopy(self.responses[endpoint]), None
+
+    def threads_fixture(repository: str, number: int) -> dict[str, Any]:
+        require(repository == contract.REPOSITORY and number == pr_number,
+                "offline GraphQL replay lost immutable PR identity")
+        return copy.deepcopy(sample["reviewThreads"])
+
+    replay = ReadOnlyFixture(responses)
+    packet = observe_with_readers(
+        native_app=sample["nativeApp"], observed_now=audit_time,
+        api=replay, native_threads=threads_fixture)
+    require(packet["decision"] == "stale-banner-candidate-comment-then-close-only"
+            and packet["prNumber"] == pr_number
+            and packet["headSha"] == old_head
+            and packet["mainSha"] == new_main
+            and packet["ownerReviewId"] == native_review["id"]
+            and packet["ownerReviewSubmittedAt"] == native_review["submitted_at"],
+            "native offline replay lost reviewed publisher decision fields")
+    require(replay.reads.count(main_path) == 2
+            and replay.reads.count(ref_path) == 2
+            and replay.reads.count(listed) == 2,
+            "offline replay skipped double main/head/PR observation")
+    nobody = copy.deepcopy(responses)
+    nobody[reviewers] = []
+    no_review = observe_with_readers(
+        native_app=sample["nativeApp"], observed_now=audit_time,
+        api=ReadOnlyFixture(nobody), native_threads=threads_fixture)
+    require(no_review["ownerReviewId"] == 0
+            and no_review["ownerReviewSubmittedAt"] == "",
+            "unreviewed complete replay lost explicit zero-owner fields")
+    for case, modifier in (
+        ("unbound marker", lambda rows: rows[reviewers][0].update(
+            body="Manual review")),
+        ("veto", lambda rows: rows[reviewers][0].update(
+            state="CHANGES_REQUESTED")),
+        ("competing discussion", lambda rows: rows[comments].append(
+            {"id": 19})),
+        ("stale main ref", lambda rows: rows[main_path]["object"].update(
+            sha="e" * 40)),
+        ("wrong PR commit", lambda rows: rows[pr_path]["head"].update(
+            sha="e" * 40)),
+    ):
+        damaged = copy.deepcopy(responses)
+        modifier(damaged)
+        try:
+            observe_with_readers(
+                native_app=sample["nativeApp"], observed_now=audit_time,
+                api=ReadOnlyFixture(damaged),
+                native_threads=threads_fixture)
+        except (ValueError, TypeError, KeyError):
+            pass
+        else:
+            raise AssertionError(
+                "offline native publisher replay accepted " + case)
 
     # Lock the actual privileged publisher's post-comment transaction to
     # the same historical-or-current base predicate already authorized by
