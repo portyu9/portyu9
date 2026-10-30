@@ -65,7 +65,11 @@ def sources(args: argparse.Namespace) -> dict[str, dict[str, Path]]:
 
 
 def inspect_svg(path: Path) -> tuple[str, int, int]:
+    require(0 < path.stat().st_size <= 512 * 1024,
+            f'SVG exceeds bounded review payload: {path}')
     svg = path.read_text(encoding='utf-8')
+    require('<!DOCTYPE' not in svg.upper() and '<!ENTITY' not in svg.upper(),
+            f'XML DTD/entity processing forbidden: {path}')
     root = ET.fromstring(svg)
     require(root.tag == SVG_NS + 'svg' and root.get('role') == 'img',
             f'invalid SVG role/namespace: {path}')
@@ -76,8 +80,20 @@ def inspect_svg(path: Path) -> tuple[str, int, int]:
             f'active SVG element present: {path}')
     without_namespace = re.sub(
         r'\s+xmlns(?::[\w-]+)?=["\']https?://www\.w3\.org/[^"\']+["\']', '', svg)
-    require(re.search(r'https?://|javascript:|data:', without_namespace, re.IGNORECASE) is None,
+    require(re.search(r'(?:https?|ftp|file|blob|data|javascript|wss?):|@import',
+                      without_namespace, re.IGNORECASE) is None,
             f'external or active URI detected: {path}')
+    # External fragment and protocol-relative URLs are not covered by the
+    # scheme-only test above. Check both XML attributes and CSS paint URLs.
+    for element in root.iter():
+        for key, value in element.attrib.items():
+            if key.split('}')[-1].lower() in {'href', 'src', 'action'}:
+                require(bool(re.fullmatch(r'#[A-Za-z_][\w.-]*', value)),
+                        f'nonlocal SVG reference: {path}: {key}')
+    for match in re.finditer(r'url\(\s*([^)]+)\)', svg, re.IGNORECASE):
+        target = match.group(1).strip().strip('\"\'').strip()
+        require(bool(re.fullmatch(r'#[A-Za-z_][\w.-]*', target)),
+                f'nonlocal CSS paint reference: {path}')
     width, height = root.get('width'), root.get('height')
     require(bool(width and height and width.isdigit() and height.isdigit()),
             f'noninteger canvas: {path}')
@@ -113,6 +129,11 @@ async def render(browser, family: str, surface: str, path: Path, out: Path,
             is_mobile=is_chromium and surface == 'top-compact'
         )
         try:
+            # Fail closed before a resource can leave the renderer. Observing
+            # requests after rendering alone is not a network isolation gate.
+            async def deny_request(route):
+                await route.abort()
+            await context.route('**/*', deny_request)
             page = await context.new_page()
             page.on('request', lambda request: fetched.append(request.url))
             await page.set_content(svg, wait_until='load')

@@ -7,7 +7,7 @@ This utility renders **actual repository SVGs** for visual review. It is not an 
 - **Approved mode** reads the current `approved-banner-rotation-v7.json` manifest and verifies Git blob identities for all **four** approved desktop/compact/footer triplets. Reserved slots 5–8 are never promoted by the tool.
 - **Review mode** reads exactly complete triplets named `05-...` through `08-...` from an explicitly selected directory. It does **not** assume that rejected or unmerged experimental artwork is approved.
 - Screenshots and a JSON evidence report are written **only outside the repository**, by default to `/tmp/portyu9-banner-review`; no README, catalog, SVG source, workflow, secret, authorization ledger, generated branch, or protected-ref mutation.
-- All inputs must parse as SVG with dimensions, accessible title/description and a reduced-motion rule. Reject active/external SVG elements, nonlocal resource schemes, and network requests observed by the browser.
+- All inputs must parse as SVG with dimensions, accessible title/description and a reduced-motion rule, with an upper source-file bound of 512 KiB. Reject DTD/entities, active SVG elements, external CSS and XML URI references, and unsafe resource schemes. **The browser aborts every outgoing network request before it can load a resource**, and the tool also fails if any request is observed. A successful run therefore produces no permitted renderer egress.
 - Normal-motion and reduced-motion frames are each sampled twice. Normal frames must show at least 0.1% materially changed pixels; reduced-motion frames must remain pixel-identical. This is a motion *smoke test*, not a frame-pacing or perceptual-quality certificate.
 
 ## Run against exact approved art

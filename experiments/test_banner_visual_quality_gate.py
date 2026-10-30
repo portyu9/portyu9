@@ -84,5 +84,36 @@ class BannerGateContractTests(unittest.TestCase):
                 GATE.sources(types.SimpleNamespace(mode='review', review_dir=p))
 
 
+    def test_local_svg_fragment_remains_allowed(self):
+        svg = sample(external='<defs><linearGradient id="local"><stop stop-color="#fff"/>'
+                     '</linearGradient></defs><rect fill="url(#local)"/>'
+                     '<use href="#local"/>')
+        self.inspect(svg)
+
+    def test_rejects_protocol_relative_fragment_reference(self):
+        with self.assertRaisesRegex(ValueError, 'nonlocal SVG'):
+            self.inspect(sample(external='<use href="//outside.example/payload.svg#shape"/>'))
+
+    def test_rejects_relative_fragment_reference(self):
+        with self.assertRaisesRegex(ValueError, 'nonlocal SVG'):
+            self.inspect(sample(external='<use href="outside.svg#shape"/>'))
+
+    def test_rejects_external_css_paint(self):
+        with self.assertRaisesRegex(ValueError, 'nonlocal CSS'):
+            self.inspect(sample(external='<rect fill="url(//outside.example/paint.svg#x)"/>'))
+
+    def test_rejects_css_import(self):
+        with self.assertRaisesRegex(ValueError, 'external or active'):
+            self.inspect(sample(external='<style>@import "evil.css";</style>'))
+
+    def test_rejects_xml_document_type(self):
+        with self.assertRaisesRegex(ValueError, 'DTD'):
+            self.inspect('<!DOCTYPE svg [<!ENTITY t "test">]>' + sample())
+
+    def test_rejects_too_large_payload(self):
+        with self.assertRaisesRegex(ValueError, 'payload'):
+            self.inspect(sample() + ' ' * (512 * 1024))
+
+
 if __name__ == '__main__':
     unittest.main()
