@@ -30,6 +30,7 @@ def require(ok: bool, message: str) -> None:
 def pack_stale_decision(
     proof: dict[str, Any], *, number: int, main_sha: str,
     head_sha: str, head_ref: str, historical_base: str, utc_day: str,
+    observed_now: datetime,
 ) -> dict[str, str | int]:
     """Preserve original authenticated owner review in the publisher packet.
 
@@ -48,7 +49,7 @@ def pack_stale_decision(
         and reviewed_at[10] == "T" and reviewed_at[13] == ":"
         and reviewed_at[16] == ":" and reviewed_at.endswith("Z")
         and datetime.fromisoformat(reviewed_at.replace("Z", "+00:00"))
-        <= datetime.now(timezone.utc)),
+        <= observed_now),
         "native stale decision owner review ID/timestamp inconsistent")
     return {
         "decision": "stale-banner-candidate-comment-then-close-only",
@@ -167,7 +168,7 @@ def observe(*, native_app: dict[str, Any], token: str,
     return pack_stale_decision(
         result, number=number, main_sha=main_sha, head_sha=head_sha,
         head_ref=head_ref, historical_base=original_base,
-        utc_day=observed_now.date().isoformat(),
+        utc_day=observed_now.date().isoformat(), observed_now=observed_now,
     )
 
 
@@ -211,7 +212,8 @@ def self_test() -> None:
     prior = (datetime.now(timezone.utc) - timedelta(days=1)).replace(
         microsecond=0)
     stamp = prior.isoformat(timespec="seconds").replace("+00:00", "Z")
-    params = dict(number=19, main_sha="a" * 40,
+    params = dict(observed_now=datetime.now(timezone.utc),
+                  number=19, main_sha="a" * 40,
                   head_sha="b" * 40,
                   head_ref=("automation/banner-rotation/" +
                             prior.date().isoformat() + "-" + "c" * 12),
@@ -249,6 +251,30 @@ def self_test() -> None:
             pass
         else:
             raise AssertionError("stale owner review handoff accepted " + label)
+
+    # The decision serializer must measure review chronology against the
+    # same authenticated observation clock as the native eligibility proof;
+    # a second wall-clock read may be skewed or a fixture may target a future
+    # banner day. It must still reject reviews newer than the observed event.
+    scoped_future = dict(params)
+    scoped_future["observed_now"] = params["observed_now"] + timedelta(days=3)
+    scoped_review = {"ownerReviewId": reviewed["ownerReviewId"],
+                     "ownerReviewSubmittedAt": (
+                         params["observed_now"] + timedelta(days=2)
+                     ).isoformat(timespec="seconds").replace("+00:00", "Z")}
+    require(pack_stale_decision(scoped_review, **scoped_future)[
+                "ownerReviewSubmittedAt"] == scoped_review["ownerReviewSubmittedAt"],
+            "native owner review chronology wrongly used runner wall clock")
+    not_yet_reviewed = dict(scoped_review)
+    not_yet_reviewed["ownerReviewSubmittedAt"] = (
+        scoped_future["observed_now"] + timedelta(seconds=1)
+    ).isoformat(timespec="seconds").replace("+00:00", "Z")
+    try:
+        pack_stale_decision(not_yet_reviewed, **scoped_future)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("native owner review admitted a future submission")
 
     # Lock the actual privileged publisher's post-comment transaction to
     # the same historical-or-current base predicate already authorized by
