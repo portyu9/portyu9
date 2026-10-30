@@ -115,7 +115,7 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 
 <p align="center">
 <a href="https://github.com/portyu9/ai-qa-automation"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/profile-systems/qualification-ai-qa-control-plane-dark.svg?mobile-corner-topology-v1"><img alt="AI QA Control Plane engineering system card" src="assets/profile-systems/qualification-ai-qa-control-plane-light.svg?mobile-corner-topology-v1"></picture></a><br>
-<a href="https://github.com/portyu9/ai-qa-automation/actions/workflows/current-main-ci-wake.yml"><img alt="AI QA scheduled CI and security recovery workflow" height="24" src="https://github.com/portyu9/ai-qa-automation/actions/workflows/current-main-ci-wake.yml/badge.svg?branch=main&amp;event=schedule"></a>
+<a href="https://github.com/portyu9/ai-qa-automation/actions/workflows/ci.yml"><img alt="AI QA ci" height="24" src="https://github.com/portyu9/ai-qa-automation/actions/workflows/ci.yml/badge.svg?branch=main"></a>&nbsp;<a href="https://github.com/portyu9/ai-qa-automation/actions/workflows/security.yml"><img alt="AI QA security" height="24" src="https://github.com/portyu9/ai-qa-automation/actions/workflows/security.yml/badge.svg?branch=main"></a>
 </p>
 
 <p align="center">
