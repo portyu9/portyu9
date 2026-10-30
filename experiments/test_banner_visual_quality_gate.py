@@ -53,7 +53,7 @@ class BannerGateContractTests(unittest.TestCase):
             self.inspect(sample(external='<image href="local.png"/>'))
 
     def test_rejects_external_resource(self):
-        with self.assertRaisesRegex(ValueError, 'nonlocal'):
+        with self.assertRaisesRegex(ValueError, 'external or active URI'):
             self.inspect(sample(external='<use href="https://evil.example/x.svg#shape"/>'))
 
     def test_review_requires_all_three_surfaces(self):
