@@ -129,9 +129,13 @@ jobs:
           APP_PRIVATE_KEY: ${{ secrets.PORTYU9_RULESET_ADMIN_PRIVATE_KEY }}
           REPOSITORY_ID: ${{ github.repository_id }}
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           set +x
           umask 077
+          # Reveal only a bounded failed guard phase and source line.
+          # Never echo BASH_COMMAND, App JWT, token, private key or HTTP body.
+          BANNER_PHASE=publisher-context
+          trap 'banner_rc=$?; printf "ERROR: banner publish denied phase=%s source-line=%s exit=%s\n" "$BANNER_PHASE" "$LINENO" "$banner_rc" >&2' ERR
           test "$GITHUB_REPOSITORY" = "portyu9/portyu9"
           test "$GITHUB_REF" = "refs/heads/main"
           test "$GITHUB_WORKFLOW_REF" = "$GITHUB_REPOSITORY/.github/workflows/approved-banner-rotation.yml@refs/heads/main"
@@ -141,10 +145,12 @@ jobs:
           [[ "$UTC_DAY" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]
           [[ "$OUTPUT_SHA256" =~ ^[0-9a-f]{64}$ ]]
           python3 source/scripts/verify-python-runtime.py
+          BANNER_PHASE=readme-artifact-verification
           python3 source/scripts/independent_banner_rotation.py \
             --verify banner-candidate --base-sha "$SOURCE_SHA" --date "$UTC_DAY" \
             > /dev/null
           test "$(sha256sum banner-candidate/README.md | cut -d' ' -f1)" = "$OUTPUT_SHA256"
+          BANNER_PHASE=accepted-main-lease
           LIVE_MAIN="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)"
           if [ "$LIVE_MAIN" != "$SOURCE_SHA" ]; then
             echo "Main advanced: decline stale banner PR and retry on next schedule."
@@ -155,6 +161,7 @@ jobs:
           # Read-only App candidate selection and historical salvage occur
           # after independently minted scoped App identity below. Never skip
           # all future UTC rotations merely because an old PR remains open.
+          BANNER_PHASE=construct-reviewed-pr
           BRANCH="automation/banner-rotation/${UTC_DAY}-${SOURCE_SHA:0:12}"
           cp banner-candidate/README.md source/README.md
           git -C source config user.name 'github-actions[bot]'
@@ -169,10 +176,12 @@ jobs:
           }
           # Isolate the existing selected-installation App authority to a
           # ONE-repository, TWO-permission short-lived publishing lease.
+          BANNER_PHASE=scoped-app-input-shapes
           [[ "$APP_ID" =~ ^[1-9][0-9]*$ ]]
           [[ "$INSTALLATION_ID" =~ ^[1-9][0-9]*$ ]]
           [[ "$REPOSITORY_ID" =~ ^[1-9][0-9]*$ ]]
           test -n "$APP_PRIVATE_KEY"
+          BANNER_PHASE=app-jwt-and-scoped-lease
           APP_KEY="$RUNNER_TEMP/banner-app-key.pem"
           APP_INSTALL="$RUNNER_TEMP/banner-app-install.json"
           APP_BOT="$RUNNER_TEMP/banner-app-bot.json"
@@ -195,6 +204,7 @@ jobs:
             -f "repositories[]=portyu9" -f "permissions[contents]=write" \
             -f "permissions[pull_requests]=write" > "$APP_TOKEN_FILE"
           unset APP_JWT
+          BANNER_PHASE=app-installation-identity-attestation
           PYTHONPATH=source/scripts python3 - "$APP_INSTALL" "$APP_BOT" "$APP_TOKEN_FILE" "$APP_ID" "$INSTALLATION_ID" "$REPOSITORY_ID" <<'PY'
           import json, sys
           from datetime import datetime, timezone
@@ -227,6 +237,7 @@ jobs:
             '{installation:$install[0],bot_user:$bot[0],expected_app_id:$appId,
               expected_installation_id:$installationId,expected_repository_id:$repositoryId}' \
             > "$RUNNER_TEMP/banner-app-evidence.json"
+          BANNER_PHASE=stale-native-read-only-evidence
           PYTHONPATH=source/scripts python3 source/scripts/banner_native_stale_recovery.py \
             --app-evidence "$RUNNER_TEMP/banner-app-evidence.json" \
             --decision-out "$RUNNER_TEMP/banner-stale-decision.json" >/dev/null
@@ -258,6 +269,7 @@ jobs:
 
               # Independently repeat the complete read-only salvage proof
               # just before any App token is used for a PR mutation.
+              BANNER_PHASE=stale-second-native-reproof
               PYTHONPATH=source/scripts python3 source/scripts/banner_native_stale_recovery.py \
                 --app-evidence "$RUNNER_TEMP/banner-app-evidence.json" \
                 --decision-out "$RUNNER_TEMP/banner-stale-reproof.json" >/dev/null
@@ -266,6 +278,7 @@ jobs:
               test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/$STALE_REF" --jq .object.sha)" = "$STALE_HEAD"
               test "$(gh api "repos/${GITHUB_REPOSITORY}/pulls/$STALE_PR" --jq .head.sha)" = "$STALE_HEAD"
 
+              BANNER_PHASE=preserve-native-approval-comment
               STALE_COMMENT="Automatic close-only salvage of stale original approved banner PR #${STALE_PR}. Immutable head ${STALE_HEAD} (parent ${HISTORICAL_BASE}) is an exact one-commit README-only historical UTC candidate, no SVGs or source changes. Read-only complete native inventories proved either zero reviews or exactly one previously completed marker-bound native owner APPROVED review (id ${STALE_OWNER_REVIEW_ID}, UTC ${STALE_OWNER_REVIEW_AT}); zero discussion and review threads, correct selected-installation App producer and unchanged accepted-main/head refs. This comment preserves the original owner approval as explicit historical evidence; it is never transferred to the replacement PR. Current main ${SOURCE_SHA} moved; current UTC artwork will be independently re-proposed and must obtain fresh checks and an independent owner approval without forcing the old branch. All original art preserved. This source branch has a PR and is safe for owner deletion; no unique code or tests to salvage."
               COMMENT_RESPONSE="$(GH_TOKEN="$PUBLISH_TOKEN" gh api --include --method POST \
                 "repos/${GITHUB_REPOSITORY}/issues/$STALE_PR/comments" -f body="$STALE_COMMENT")"
@@ -283,6 +296,7 @@ jobs:
               # human review, discussion, changed head or main vetoes close.
               test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"
               test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/$STALE_REF" --jq .object.sha)" = "$STALE_HEAD"
+              BANNER_PHASE=post-comment-native-veto-reproof
               LIVE_PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/$STALE_PR")"
               # Native open PR base.sha may stay at its verified historical
               # parent even after main advances. Bound the ONLY two allowed
@@ -317,6 +331,7 @@ jobs:
                 .totalCount == 0 and (.nodes|length == 0) and
                 .pageInfo.hasNextPage == false' <<< "$LIVE_THREADS" >/dev/null
 
+              BANNER_PHASE=app-authorized-close-only
               CLOSE_RESPONSE="$(GH_TOKEN="$PUBLISH_TOKEN" gh api --include --method PATCH \
                 "repos/${GITHUB_REPOSITORY}/pulls/$STALE_PR" -f state=closed)"
               CLOSE_STATUS="$(head -n 1 <<< "$CLOSE_RESPONSE" | tr -d '\r')"
@@ -338,6 +353,7 @@ jobs:
           # keep the App lease, JWT, or private key in a job artifact.
           rm -f "$RUNNER_TEMP/banner-stale-decision.json" "$RUNNER_TEMP/banner-stale-reproof.json"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)" = "$SOURCE_SHA"
+          BANNER_PHASE=one-current-day-branch
           # Only now is a no-open-candidate verdict available. Keep the
           # orphan-ref guard, but do not reject an already-open current PR.
           if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BRANCH}" >/dev/null 2>&1; then
@@ -353,6 +369,7 @@ jobs:
             fi
           }
           trap 'cleanup; rm -f "$RUNNER_TEMP/banner-app-key.pem" "$RUNNER_TEMP/banner-app-install.json" "$RUNNER_TEMP/banner-app-bot.json" "$RUNNER_TEMP/banner-app-token.json"' EXIT
+          BANNER_PHASE=app-owned-current-pr
           git -C source -c "http.https://github.com/.extraheader=$AUTH_HEADER" push -q origin "HEAD:refs/heads/$BRANCH"
           created=true
           PR_BODY="README-only UTC banner rotation using the reviewed approved v8 catalog. Three image surfaces and marker only; external CI evidence unchanged. Base $SOURCE_SHA. Output SHA256 $OUTPUT_SHA256. Requires normal protected checks."
@@ -364,6 +381,7 @@ jobs:
           # Only a genuine first-attempt unattended schedule may emit an
           # immutable selected-App identity artifact for the separate owner
           # reviewer. A manual dispatch never grants autonomous review.
+          BANNER_PHASE=immutable-app-origin-first-attempt
           if [ "$GITHUB_EVENT_NAME" = "schedule" ] && [ "$GITHUB_RUN_ATTEMPT" = "1" ]; then
             test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"
             test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$BRANCH" --jq .object.sha)" = "$(jq -er .head.sha <<< "$PR_JSON")"
