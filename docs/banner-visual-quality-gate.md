@@ -10,6 +10,16 @@ This utility renders **actual repository SVGs** for visual review. It is not an 
 - All inputs must parse as SVG with dimensions, accessible title/description and a reduced-motion rule, with an upper source-file bound of 512 KiB. Reject DTD/entities, active SVG elements, external CSS and XML URI references, and unsafe resource schemes. **The browser aborts every outgoing network request before it can load a resource**, and the tool also fails if any request is observed. A successful run therefore produces no permitted renderer egress.
 - Normal-motion and reduced-motion frames are each sampled twice. Normal frames must show at least 0.1% materially changed pixels; reduced-motion frames must remain pixel-identical. This is a motion *smoke test*, not a frame-pacing or perceptual-quality certificate.
 
+## Run offline contract tests (standard library only)
+
+Before using the browser gate, independently execute all source safety and complete-triplet tests:
+
+```sh
+python3 -m unittest discover -s experiments -p 'test_banner_visual_quality_gate.py' -v
+```
+
+This standalone test invocation is deliberately **not part of GitHub's protected `validate-contracts` check**; the native green PR status alone is not evidence that these specific tests were executed. Local regression evidence must therefore be recorded separately.
+
 ## Run against exact approved art
 
 Requirements: Python 3.11+, `playwright`, `Pillow`, and an installed browser binary. For example, in a disposable Python environment:
