@@ -145,11 +145,17 @@ def flagship_native_badge_references(readme: str) -> set[str]:
     )
     require(len(cards) == 4 and len(set(cards)) == 4,
             "Flagship badge policy requires four unique repo-bound cards")
-    require("portyu9/ai-qa-automation" in cards,
-            "AI QA must occupy an existing reviewed flagship card")
+    # Flagship layout is independently order-validated: the first card is AI QA.
+    # Derive its GitHub repository from the actual reviewed link, not a second
+    # hardcoded mapping that can silently drift from README.
+    ai_qa_repository = cards[0]
+    ai_qa_start = f'<a href="https://github.com/{ai_qa_repository}"><picture>'
+    require("qualification-ai-qa-control-plane-dark.svg" in
+            block.split(ai_qa_start, 1)[1].split("</a>", 1)[0],
+            "The first reviewed flagship must be the AI QA Control Plane")
     approved: set[str] = set()
     for repository in cards:
-        if repository == "portyu9/ai-qa-automation":
+        if repository == ai_qa_repository:
             target = f"https://github.com/{repository}/actions/workflows/current-main-ci-wake.yml"
             image = f"{target}/badge.svg?branch=main&amp;event=schedule"
             markup = (
