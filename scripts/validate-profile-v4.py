@@ -125,11 +125,14 @@ def require(condition: bool, message: str) -> None:
 
 
 def flagship_native_badge_references(readme: str) -> set[str]:
-    """Require eight first-party GitHub SVGs bound to exact main workflows.
+    """Require GitHub-owned main badges for all four flagship systems.
 
-    Lowercase ci/security is expressed in accessible alt text. GitHub renders
-    the workflow's own name on badge.svg; the badge cannot override its label.
-    Never disguise a third-party badge as a GitHub security status.
+    AI QA's direct CI/Security cron was retired after genuine zero-job
+    startup failures. Its accepted exact-main recovery calls full reusable
+    CI, Security, and CodeQL and runs as a first-party scheduled workflow.
+    Show that *single workflow* rather than two stale or duplicate signals;
+    an idle wake is not proof of a fresh full-validation execution.
+    The other three systems retain their independent ci/security badges.
     """
     start = '<h2 align="center">◇ Selected Engineering Systems</h2>'
     end = '<h3 align="center">↻ Evidence Spotlight</h3>'
@@ -137,13 +140,29 @@ def flagship_native_badge_references(readme: str) -> set[str]:
             "Flagship badge policy requires exactly one bounded engineering section")
     block = readme.split(start, 1)[1].split(end, 1)[0]
     cards = re.findall(
-        r'<a href="https://github\.com/(portyu9/[A-Za-z0-9_.-]+)"><picture>',
+        r'<a href="https://github\\.com/(portyu9/[A-Za-z0-9_.-]+)"><picture>',
         block,
     )
     require(len(cards) == 4 and len(set(cards)) == 4,
             "Flagship badge policy requires four unique repo-bound cards")
+    require("portyu9/ai-qa-automation" in cards,
+            "AI QA must occupy an existing reviewed flagship card")
     approved: set[str] = set()
     for repository in cards:
+        if repository == "portyu9/ai-qa-automation":
+            target = f"https://github.com/{repository}/actions/workflows/current-main-ci-wake.yml"
+            image = f"{target}/badge.svg?branch=main&amp;event=schedule"
+            markup = (
+                f'<a href="{target}"><img alt="AI QA scheduled CI and security recovery workflow" '
+                f'height="24" src="{image}"></a>'
+            )
+            require(block.count(markup) == 1,
+                    "AI QA requires one genuine first-party scheduled recovery badge")
+            for retired in ("ci", "security"):
+                require(f"https://github.com/{repository}/actions/workflows/{retired}.yml" not in block,
+                        f"AI QA retired {retired} status must not masquerade as scheduled validation")
+            approved.add(image.split("?", 1)[0])
+            continue
         for workflow in ("ci", "security"):
             target = f"https://github.com/{repository}/actions/workflows/{workflow}.yml"
             image = f"{target}/badge.svg?branch=main"
@@ -155,8 +174,10 @@ def flagship_native_badge_references(readme: str) -> set[str]:
             require(len(expected.findall(block)) == 1,
                     f"{repository} {workflow}: expected one native main-bound GitHub status")
             approved.add(image.split("?", 1)[0])
-    require(len(approved) == 8 and block.count("/badge.svg?branch=main") == 8,
-            "Selected Engineering Systems badge inventory changed")
+    require(len(approved) == 7 and block.count("/badge.svg?branch=main") == 7,
+            "Selected Engineering Systems GitHub badge inventory changed")
+    require(block.count("/badge.svg?branch=main&amp;event=schedule") == 1,
+            "AI QA must use its unique main-bound schedule-event status source")
     require("img.shields.io" not in block and "label=ci" not in block
             and "label=security" not in block,
             "First-party workflow badge policy prohibits third-party status images")
