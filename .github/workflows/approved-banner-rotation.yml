@@ -129,7 +129,7 @@ jobs:
           APP_PRIVATE_KEY: ${{ secrets.PORTYU9_RULESET_ADMIN_PRIVATE_KEY }}
           REPOSITORY_ID: ${{ github.repository_id }}
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           set +x
           umask 077
           # Reveal only a bounded failed guard phase and source line.
