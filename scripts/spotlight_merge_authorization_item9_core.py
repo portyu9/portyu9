@@ -1006,8 +1006,8 @@ def validate(sync: str, stats: str, policy: str) -> None:
             "Spotlight approval must remain in non-cancellable serialized terminal concurrency")
     require("permissions:\n      contents: read\n      actions: write" in approve,
             "Spotlight approval must retain only contents-read plus Actions-write authority")
-    require("timeout-minutes: 24" in approve and
-            "for attempt in $(seq 1 120); do" in approve and "sleep 10" in approve,
+    require("timeout-minutes: 12" in approve and
+            "for attempt in $(seq 1 60); do" in approve and "sleep 10" in approve,
             "Spotlight Actions-only approval job must own bounded canonical workflow waiting")
     validate_run_provenance(approve)
 
