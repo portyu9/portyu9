@@ -1436,6 +1436,18 @@ def project_item9(sync: str) -> str:
     sync = project_strict_pull_review_schema_to_legacy(sync)
     sync = project_native_review_gate_to_item10_order(sync)
     legacy = ORIGINAL_PROJECT_ITEM9(sync)
+    # Project the separately validated 24-minute cancelled-run recovery window
+    # back to the frozen item-9 12-minute observation contract. Neither this
+    # historical view nor its bounded 60-iteration fixture is production code.
+    approve_start = legacy.index("  approve:\n")
+    approve_end = legacy.index("  authorize:\n", approve_start)
+    approve = legacy[approve_start:approve_end]
+    require(approve.count("timeout-minutes: 24") == 1
+            and approve.count("for attempt in $(seq 1 60); do") == 1,
+            "Spotlight item-9 recovery-window projection anchors changed")
+    legacy = (legacy[:approve_start]
+              + approve.replace("timeout-minutes: 24", "timeout-minutes: 12", 1)
+              + legacy[approve_end:])
     require(legacy.count(IMMUTABLE_ANCHOR) == 1,
             "Spotlight item-9 immutable-candidate projection anchor changed")
     legacy = legacy.replace(IMMUTABLE_ANCHOR, IMMUTABLE_PROJECTED, 1)
