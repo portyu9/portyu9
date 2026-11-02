@@ -1529,7 +1529,7 @@ def validate_protected_workflow_evidence_overlay(sync: str) -> None:
         'error("Spotlight protected workflow definition id is invalid")',
         'error("Spotlight protected workflow definition identity changed")',
         'error("Spotlight protected workflow definition URLs are invalid")',
-        'for attempt in $(seq 1 60); do',
+        'for attempt in $(seq 1 120); do',
         'repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100',
         '> "$RUNNER_TEMP/spotlight-protected-workflow-runs.json"',
         'error("Spotlight protected workflow-run response must be an object")',
