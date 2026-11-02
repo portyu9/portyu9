@@ -996,8 +996,9 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     )
     require(
         spotlight_approve.count('timeout 20s gh api --include --method GET -F page="$page"') == 2
-        and spotlight_approve.count("timeout 20s gh api --include --method") == 2,
-        "Spotlight approval must retain exactly two enumerated paginated page GET retry case arms",
+        and spotlight_approve.count("timeout 20s gh api --include --method") == 3
+        and spotlight_approve.count('timeout 20s gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/jobs/${VALIDATE_JOB_ID}/rerun"') == 1,
+        "Spotlight approval must retain exactly two paginated GET retry arms and one exact fenced cancelled-validation rerun",
     )
     require(
         spotlight_approve.count("gh api --paginate --slurp") == 0,
@@ -1014,7 +1015,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "Spotlight approval paginated retry must delegate each page to the singleton classifier",
     )
     require(
-        spotlight_approve.count("gh api --include --method POST") == 4,
+        spotlight_approve.count("gh api --include --method POST") == 5,
         "Spotlight approval mutation inventory changed while hardening GETs",
     )
     for forbidden in (
@@ -1022,7 +1023,6 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "curl ",
         "wget ",
         "git ",
-        "timeout 20s gh api --include --method POST",
         "timeout 20s gh api --include --method PUT",
         "timeout 20s gh api --include --method PATCH",
         "timeout 20s gh api --include --method DELETE",
