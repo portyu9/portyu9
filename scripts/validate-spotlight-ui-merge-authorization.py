@@ -1436,6 +1436,18 @@ def project_item9(sync: str) -> str:
     sync = project_strict_pull_review_schema_to_legacy(sync)
     sync = project_native_review_gate_to_item10_order(sync)
     legacy = ORIGINAL_PROJECT_ITEM9(sync)
+    # Project the separately validated 24-minute cancelled-run recovery window
+    # back to the frozen item-9 12-minute observation contract. Neither this
+    # historical view nor its bounded 60-iteration fixture is production code.
+    approve_start = legacy.index("  approve:\n")
+    approve_end = legacy.index("  merge:\n", approve_start)
+    approve = legacy[approve_start:approve_end]
+    require(approve.count("timeout-minutes: 24") == 1
+            and approve.count("for attempt in $(seq 1 60); do") == 1
+            and approve.count('test "$attempt" -lt 60') == 1,
+            "Spotlight item-9 recovery-window projection anchors changed")
+    historical_approve = approve.replace("timeout-minutes: 24", "timeout-minutes: 12", 1)
+    legacy = legacy[:approve_start] + historical_approve + legacy[approve_end:]
     require(legacy.count(IMMUTABLE_ANCHOR) == 1,
             "Spotlight item-9 immutable-candidate projection anchor changed")
     legacy = legacy.replace(IMMUTABLE_ANCHOR, IMMUTABLE_PROJECTED, 1)
@@ -1517,7 +1529,8 @@ def validate_protected_workflow_evidence_overlay(sync: str) -> None:
         'error("Spotlight protected workflow definition id is invalid")',
         'error("Spotlight protected workflow definition identity changed")',
         'error("Spotlight protected workflow definition URLs are invalid")',
-        'for attempt in $(seq 1 60); do',
+        'for attempt in $(seq 1 120); do',
+        'test "$attempt" -lt 120',
         'repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100',
         '> "$RUNNER_TEMP/spotlight-protected-workflow-runs.json"',
         'error("Spotlight protected workflow-run response must be an object")',

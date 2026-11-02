@@ -392,7 +392,7 @@ def self_test(policy: dict[str, Any], root: Path) -> None:
     expect_source_failure(
         "spotlight-link-sync",
         under_timeout,
-        spotlight_source.replace("LEASE_MIN_REMAINING_SECONDS=780", "LEASE_MIN_REMAINING_SECONDS=719", 1),
+        spotlight_source.replace("LEASE_MIN_REMAINING_SECONDS=1440", "LEASE_MIN_REMAINING_SECONDS=719", 1),
         "lease reserve is below its hard timeout",
     )
     expect_source_failure(

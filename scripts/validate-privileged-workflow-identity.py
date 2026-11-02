@@ -23,7 +23,7 @@ EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7153412c8251538028c1e7911c266c0f6c87f429",
     ".github/workflows/profile-quality.yml": "befba2071db852792eb46f7c8444011eb3375458",
     ".github/workflows/profile-stats.yml": "eb9af8f63d4db7b35306ebf3c38f5004e7e1c0a8",
-    ".github/workflows/spotlight-link-sync.yml": "c323bd3a29d4dd4d62ad564879bb0b2bc8339128",
+    ".github/workflows/spotlight-link-sync.yml": "03e3a9b4b39fa026d851e5cabdbdd451e8f6e8c8",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
@@ -717,7 +717,7 @@ def validate_leases(profile: str, spotlight: str) -> None:
     for fragment in (
         "LEASE_MIN_REMAINING_SECONDS=240",
         "LEASE_MIN_REMAINING_SECONDS=300",
-        "LEASE_MIN_REMAINING_SECONDS=780",
+        "LEASE_MIN_REMAINING_SECONDS=1440",
         "LEASE_MIN_REMAINING_SECONDS=180",
     ):
         require(fragment in spotlight, f"Spotlight mutation-lease reserve contract is missing: {fragment}")
@@ -5341,7 +5341,7 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
 
     capability_dispatch = 'actions/workflows/capability-admission.yml/dispatches'
     reviewer_dispatch = 'actions/workflows/bot-pr-user-approval.yml/dispatches'
-    convergence_start = '          APPROVAL_REQUESTED_RUN_IDS=""\n          REVIEW_DISPATCHED=false\n          for attempt in $(seq 1 60); do'
+    convergence_start = '          APPROVAL_REQUESTED_RUN_IDS=""\n          REVIEW_DISPATCHED=false\n          VALIDATE_RECOVERY_REQUESTED=false\n          for attempt in $(seq 1 120); do'
     readiness_loop = 'for CONTEXT in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do'
     review_observation = 'Observed exact-base/head marker-bound portyu9 approval before merge authorization.'
     require(
@@ -6260,7 +6260,7 @@ def validate_spotlight_dispatch_status_contract(spotlight: str) -> None:
     capability_status = spotlight.index(capability_guard)
     capability_success = spotlight.index('Dispatched event-driven Spotlight admission proof from trusted main;')
     convergence = spotlight.index(
-        '          APPROVAL_REQUESTED_RUN_IDS=""\n          REVIEW_DISPATCHED=false\n          for attempt in $(seq 1 60); do'
+        '          APPROVAL_REQUESTED_RUN_IDS=""\n          REVIEW_DISPATCHED=false\n          VALIDATE_RECOVERY_REQUESTED=false\n          for attempt in $(seq 1 120); do'
     )
     readiness = spotlight.index(
         'for CONTEXT in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do',

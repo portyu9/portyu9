@@ -238,10 +238,15 @@ def validate_bounded_observation(policy: dict[str, Any], texts: dict[str, str]) 
                 if "/actions/workflows/bot-pr-user-approval.yml/dispatches" in row
                 and "--method POST" in row
             ]
+            recovery_mutations = [
+                row for row in mutations
+                if "/actions/jobs/${VALIDATE_JOB_ID}/rerun" in row and "--method POST" in row
+            ]
             require(
-                len(mutations) == 2
+                len(mutations) == 3
                 and len(approval_mutations) == 1
-                and len(reviewer_dispatch_mutations) == 1,
+                and len(reviewer_dispatch_mutations) == 1
+                and len(recovery_mutations) == 1,
                 f"mixed guarded observation mutation surface changed: {rule.get('id')}",
             )
             block = loop["block"]
@@ -270,6 +275,10 @@ def validate_bounded_observation(policy: dict[str, Any], texts: dict[str, str]) 
                 'for CONTEXT in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do',
                 'if [ "$REVIEW_READY" = "true" ]; then',
                 'REVIEW_DISPATCHED=true',
+                'VALIDATE_RECOVERY_REQUESTED=false',
+                'VALIDATE_RECOVERY_REQUESTED=true',
+                'if [ "$CONTEXT" = "validate-contracts" ] && [ "$CONTEXT_CONCLUSION" = "cancelled" ]; then',
+                'test "$VALIDATE_DETAILS_URL" = "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}/job/${VALIDATE_JOB_ID}"',
                 'test "$REVIEW_DISPATCHED" = "true"',
             ):
                 require(
@@ -987,8 +996,9 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     )
     require(
         spotlight_approve.count('timeout 20s gh api --include --method GET -F page="$page"') == 2
-        and spotlight_approve.count("timeout 20s gh api --include --method") == 2,
-        "Spotlight approval must retain exactly two enumerated paginated page GET retry case arms",
+        and spotlight_approve.count("timeout 20s gh api --include --method") == 3
+        and spotlight_approve.count('timeout 20s gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/jobs/${VALIDATE_JOB_ID}/rerun"') == 1,
+        "Spotlight approval must retain exactly two paginated GET retry arms and one exact fenced cancelled-validation rerun",
     )
     require(
         spotlight_approve.count("gh api --paginate --slurp") == 0,
@@ -1005,7 +1015,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "Spotlight approval paginated retry must delegate each page to the singleton classifier",
     )
     require(
-        spotlight_approve.count("gh api --include --method POST") == 4,
+        spotlight_approve.count("gh api --include --method POST") == 5,
         "Spotlight approval mutation inventory changed while hardening GETs",
     )
     for forbidden in (
@@ -1013,7 +1023,6 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "curl ",
         "wget ",
         "git ",
-        "timeout 20s gh api --include --method POST",
         "timeout 20s gh api --include --method PUT",
         "timeout 20s gh api --include --method PATCH",
         "timeout 20s gh api --include --method DELETE",

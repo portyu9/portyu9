@@ -393,7 +393,7 @@ def validate_mutation_leases(profile: str, spotlight: str) -> None:
             "Profile Stats signing jobs must each reserve five minutes of lease lifetime")
     for fragment in ("LEASE_MIN_REMAINING_SECONDS=240", "LEASE_MIN_REMAINING_SECONDS=180"):
         require(fragment in profile, f"Profile Stats mutation-lease reserve contract is missing: {fragment}")
-    for fragment in ("LEASE_MIN_REMAINING_SECONDS=240", "LEASE_MIN_REMAINING_SECONDS=300", "LEASE_MIN_REMAINING_SECONDS=780"):
+    for fragment in ("LEASE_MIN_REMAINING_SECONDS=240", "LEASE_MIN_REMAINING_SECONDS=300", "LEASE_MIN_REMAINING_SECONDS=1440"):
         require(fragment in spotlight, f"Spotlight mutation-lease reserve contract is missing: {fragment}")
 
 

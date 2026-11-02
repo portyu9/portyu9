@@ -1350,6 +1350,13 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/jobs/${VALIDATE_JOB_ID}/rerun",
+              "method": "POST",
+              "mutating": true,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve",
               "method": "POST",
               "mutating": true,
@@ -1506,6 +1513,12 @@
           "artifacts": [],
           "id": "approve",
           "mutations": [
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Approve and wait for only the exact README-only automation checks",
+              "target": "repos/${GITHUB_REPOSITORY}/actions/jobs/${VALIDATE_JOB_ID}/rerun"
+            },
             {
               "class": "issue-or-pr-metadata",
               "method": "POST",
