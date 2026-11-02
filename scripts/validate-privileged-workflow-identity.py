@@ -717,7 +717,7 @@ def validate_leases(profile: str, spotlight: str) -> None:
     for fragment in (
         "LEASE_MIN_REMAINING_SECONDS=240",
         "LEASE_MIN_REMAINING_SECONDS=300",
-        "LEASE_MIN_REMAINING_SECONDS=780",
+        "LEASE_MIN_REMAINING_SECONDS=1440",
         "LEASE_MIN_REMAINING_SECONDS=180",
     ):
         require(fragment in spotlight, f"Spotlight mutation-lease reserve contract is missing: {fragment}")
