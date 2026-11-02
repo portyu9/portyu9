@@ -2370,7 +2370,7 @@ jobs:
               fi
             fi
             if [ "$ALL_SUCCESS" = "true" ]; then break; fi
-            test "$attempt" -lt 60
+            test "$attempt" -lt 120
             sleep 10
           done
           spotlight_require_current_source_epoch "after protected-check convergence"
