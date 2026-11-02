@@ -1523,7 +1523,7 @@ jobs:
     name: approve-bot-pr-checks-only
     needs: [plan, lease, reconcile, budget, propose]
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 24
     concurrency:
       group: spotlight-link-sync-terminal
       cancel-in-progress: false
@@ -2128,7 +2128,8 @@ jobs:
 
           APPROVAL_REQUESTED_RUN_IDS=""
           REVIEW_DISPATCHED=false
-          for attempt in $(seq 1 60); do
+          VALIDATE_RECOVERY_REQUESTED=false
+          for attempt in $(seq 1 120); do
             spotlight_require_current_source_epoch "during protected-check convergence"
             spotlight_singleton_get protected-runs \
               > "$RUNNER_TEMP/spotlight-protected-workflow-runs.json"
@@ -2244,7 +2245,7 @@ jobs:
                 case "$NAME" in
                   "CodeQL") CODEQL_RUN_ID="$RUN_ID"; CODEQL_CHECK_SUITE_ID="$CHECK_SUITE_ID" ;;
                   "Dependency review") DEPENDENCY_RUN_ID="$RUN_ID"; DEPENDENCY_CHECK_SUITE_ID="$CHECK_SUITE_ID" ;;
-                  "Profile quality") PROFILE_RUN_ID="$RUN_ID"; PROFILE_CHECK_SUITE_ID="$CHECK_SUITE_ID" ;;
+                  "Profile quality") PROFILE_RUN_ID="$RUN_ID"; PROFILE_CHECK_SUITE_ID="$CHECK_SUITE_ID"; PROFILE_RUN_ATTEMPT="$RUN_ATTEMPT"; PROFILE_RUN_STATUS="$STATUS" ;;
                   *) exit 1 ;;
                 esac
                 if [ "$STATUS" = "action_required" ] || [ "$STATUS" = "waiting" ] || [ "$CONCLUSION" = "action_required" ]; then
@@ -2314,8 +2315,38 @@ jobs:
                   if [ "$CONTEXT_STATUS" != "completed" ]; then
                     REVIEW_READY=false
                   elif [ "$CONTEXT_CONCLUSION" != "success" ]; then
-                    echo "ERROR: Spotlight reviewer prerequisite $CONTEXT completed unsuccessfully ($CONTEXT_CONCLUSION)." >&2
-                    exit 1
+                    if [ "$CONTEXT" = "validate-contracts" ] && [ "$CONTEXT_CONCLUSION" = "cancelled" ]; then
+                      # An interrupted runner is not a passed check. Only retry the exact cancelled
+                      # validate-contracts job, never a genuine failure or the review gate itself.
+                      REVIEW_READY=false
+                      if [ "$PROFILE_RUN_STATUS" != "completed" ]; then
+                        echo "Exact Profile quality run is still active; cancelled validation is not rerunnable yet."
+                      elif [ "$PROFILE_RUN_ATTEMPT" -gt 2 ]; then
+                        echo "ERROR: exact cancelled validation exhausted the two-attempt recovery ceiling." >&2
+                        exit 1
+                      elif [ "$VALIDATE_RECOVERY_REQUESTED" = "false" ]; then
+                        VALIDATE_JOB_ID="$(jq -r --arg name "$CONTEXT" '[.check_runs[] | select(.name == $name)][0].id' <<<"$REVIEW_CHECKS")"
+                        VALIDATE_DETAILS_URL="$(jq -r --arg name "$CONTEXT" '[.check_runs[] | select(.name == $name)][0].details_url' <<<"$REVIEW_CHECKS")"
+                        [[ "$VALIDATE_JOB_ID" =~ ^[1-9][0-9]*$ ]]
+                        test "$VALIDATE_DETAILS_URL" = "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}/job/${VALIDATE_JOB_ID}" || {
+                          echo "ERROR: cancelled validate-contracts job is not bound to the exact Profile quality workflow run." >&2
+                          exit 1
+                        }
+                        spotlight_require_current_source_epoch "before exact cancelled validation re-entry"
+                        # Single-shot mutation. A transport ambiguity fails closed; do not repeat it.
+                        VALIDATE_RECOVERY_REQUESTED=true
+                        VALIDATE_RERUN_RESPONSE="$(timeout 20s gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/jobs/${VALIDATE_JOB_ID}/rerun")"
+                        VALIDATE_RERUN_STATUS_LINE="$(head -n 1 <<<"$VALIDATE_RERUN_RESPONSE" | tr -d '\r')"
+                        [[ "$VALIDATE_RERUN_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+                          echo "ERROR: cancelled validate-contracts rerun returned an unexpected HTTP status." >&2
+                          exit 1
+                        }
+                        echo "Re-entered exact cancelled validate-contracts job ${VALIDATE_JOB_ID} once, without altering gate requirements."
+                      fi
+                    else
+                      echo "ERROR: Spotlight reviewer prerequisite $CONTEXT completed unsuccessfully ($CONTEXT_CONCLUSION)." >&2
+                      exit 1
+                    fi
                   fi
                 done
 

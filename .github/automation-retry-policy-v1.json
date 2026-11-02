@@ -595,11 +595,11 @@
       "step": "Approve and wait for only the exact README-only automation checks",
       "ordinal": 1,
       "variable": "attempt",
-      "maxIterations": 60,
+      "maxIterations": 120,
       "sleepSeconds": 10,
       "class": "bounded-observation",
       "operationRetry": false,
-      "purpose": "Wait for exact protected workflow/check state; approve each action_required run at most once and dispatch the reviewer at most once only after the six exact-head review-independent prerequisites are green.",
+      "purpose": "Wait for exact protected checks; approve each action_required run once, rerun only a bound cancelled validate-contracts job once on an eligible Profile Quality attempt, and dispatch the reviewer only after six exact-head green prerequisites. Genuine failures and retry exhaustion remain terminal.",
       "mutationMode": "guarded-once-per-run-id-plus-state-conditioned-review-dispatch"
     },
     {

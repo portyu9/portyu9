@@ -238,10 +238,15 @@ def validate_bounded_observation(policy: dict[str, Any], texts: dict[str, str]) 
                 if "/actions/workflows/bot-pr-user-approval.yml/dispatches" in row
                 and "--method POST" in row
             ]
+            recovery_mutations = [
+                row for row in mutations
+                if "/actions/jobs/${VALIDATE_JOB_ID}/rerun" in row and "--method POST" in row
+            ]
             require(
-                len(mutations) == 2
+                len(mutations) == 3
                 and len(approval_mutations) == 1
-                and len(reviewer_dispatch_mutations) == 1,
+                and len(reviewer_dispatch_mutations) == 1
+                and len(recovery_mutations) == 1,
                 f"mixed guarded observation mutation surface changed: {rule.get('id')}",
             )
             block = loop["block"]
@@ -270,6 +275,10 @@ def validate_bounded_observation(policy: dict[str, Any], texts: dict[str, str]) 
                 'for CONTEXT in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do',
                 'if [ "$REVIEW_READY" = "true" ]; then',
                 'REVIEW_DISPATCHED=true',
+                'VALIDATE_RECOVERY_REQUESTED=false',
+                'VALIDATE_RECOVERY_REQUESTED=true',
+                'if [ "$CONTEXT" = "validate-contracts" ] && [ "$CONTEXT_CONCLUSION" = "cancelled" ]; then',
+                'test "$VALIDATE_DETAILS_URL" = "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}/job/${VALIDATE_JOB_ID}"',
                 'test "$REVIEW_DISPATCHED" = "true"',
             ):
                 require(
