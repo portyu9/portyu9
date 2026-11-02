@@ -1444,10 +1444,9 @@ def project_item9(sync: str) -> str:
     approve = legacy[approve_start:approve_end]
     require(approve.count("timeout-minutes: 24") == 1
             and approve.count("for attempt in $(seq 1 60); do") == 1
-            and approve.count('test "$attempt" -lt 120') == 1,
+            and approve.count('test "$attempt" -lt 60') == 1,
             "Spotlight item-9 recovery-window projection anchors changed")
     historical_approve = approve.replace("timeout-minutes: 24", "timeout-minutes: 12", 1)
-    historical_approve = historical_approve.replace('test "$attempt" -lt 120', 'test "$attempt" -lt 60', 1)
     legacy = legacy[:approve_start] + historical_approve + legacy[approve_end:]
     require(legacy.count(IMMUTABLE_ANCHOR) == 1,
             "Spotlight item-9 immutable-candidate projection anchor changed")
@@ -1531,6 +1530,7 @@ def validate_protected_workflow_evidence_overlay(sync: str) -> None:
         'error("Spotlight protected workflow definition identity changed")',
         'error("Spotlight protected workflow definition URLs are invalid")',
         'for attempt in $(seq 1 120); do',
+        'test "$attempt" -lt 120',
         'repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100',
         '> "$RUNNER_TEMP/spotlight-protected-workflow-runs.json"',
         'error("Spotlight protected workflow-run response must be an object")',
