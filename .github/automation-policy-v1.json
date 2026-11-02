@@ -588,7 +588,7 @@
         "minimumRemainingSeconds": {
           "reconcile": 240,
           "propose": 300,
-          "approve": 780,
+          "approve": 1440,
           "authorize_attest": 180,
           "merge": 240,
           "decision_receipt_attest": 180

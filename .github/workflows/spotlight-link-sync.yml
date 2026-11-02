@@ -1985,7 +1985,7 @@ jobs:
           echo "approval_requests_json=$APPROVAL_REQUESTS_JSON" >> "$GITHUB_OUTPUT"
           # Verify exact short-lived mutation lease.
           LEASE_TTL_SECONDS=1800
-          LEASE_MIN_REMAINING_SECONDS=780
+          LEASE_MIN_REMAINING_SECONDS=1440
           EXPECTED_BASE_SHA="$BASE_SHA"
           EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$EXPECTED_BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
           test "$LEASE_BASE_SHA" = "$EXPECTED_BASE_SHA"
@@ -2321,10 +2321,12 @@ jobs:
                       REVIEW_READY=false
                       if [ "$PROFILE_RUN_STATUS" != "completed" ]; then
                         echo "Exact Profile quality run is still active; cancelled validation is not rerunnable yet."
+                      elif [ "$VALIDATE_RECOVERY_REQUESTED" = "true" ]; then
+                        echo "Waiting for the single previously requested cancelled-validation rerun to materialize."
                       elif [ "$PROFILE_RUN_ATTEMPT" -gt 2 ]; then
                         echo "ERROR: exact cancelled validation exhausted the two-attempt recovery ceiling." >&2
                         exit 1
-                      elif [ "$VALIDATE_RECOVERY_REQUESTED" = "false" ]; then
+                      else
                         VALIDATE_JOB_ID="$(jq -r --arg name "$CONTEXT" '[.check_runs[] | select(.name == $name)][0].id' <<<"$REVIEW_CHECKS")"
                         VALIDATE_DETAILS_URL="$(jq -r --arg name "$CONTEXT" '[.check_runs[] | select(.name == $name)][0].details_url' <<<"$REVIEW_CHECKS")"
                         [[ "$VALIDATE_JOB_ID" =~ ^[1-9][0-9]*$ ]]
