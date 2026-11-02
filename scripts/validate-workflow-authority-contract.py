@@ -1128,7 +1128,7 @@ def project_state_driven_spotlight_reviewer_to_legacy(sync: str) -> str:
     sync = sync[:start] + sync[block_end:]
     for old, new, label in (
         (
-            '          APPROVAL_REQUESTED_RUN_IDS=""\n          REVIEW_DISPATCHED=false\n          for attempt in $(seq 1 60); do\n',
+            '          APPROVAL_REQUESTED_RUN_IDS=""\n          REVIEW_DISPATCHED=false\n          VALIDATE_RECOVERY_REQUESTED=false\n          for attempt in $(seq 1 120); do\n',
             '          APPROVAL_REQUESTED_RUN_IDS=""\n          for attempt in $(seq 1 60); do\n',
             "review-dispatch initialization",
         ),
@@ -1264,7 +1264,7 @@ def project_item9_sync_with_marker(sync: str) -> str:
     reviewer_marker = 'Dispatched exact pre-convergence portyu9 review evaluation from trusted main.'
     capability_dispatch = 'actions/workflows/capability-admission.yml/dispatches'
     state_driven_dispatch = 'actions/workflows/bot-pr-user-approval.yml/dispatches'
-    convergence_anchor = '          APPROVAL_REQUESTED_RUN_IDS=""\n          REVIEW_DISPATCHED=false\n          for attempt in $(seq 1 60); do\n'
+    convergence_anchor = '          APPROVAL_REQUESTED_RUN_IDS=""\n          REVIEW_DISPATCHED=false\n          VALIDATE_RECOVERY_REQUESTED=false\n          for attempt in $(seq 1 120); do\n'
     core.require(SPOTLIGHT_PRE_CONVERGENCE_REVIEW_WAKE not in sync and reviewer_marker not in sync,
             "Spotlight must not regain the retired main/global reviewer scan wake")
     core.require(
