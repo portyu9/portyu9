@@ -5341,7 +5341,7 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
 
     capability_dispatch = 'actions/workflows/capability-admission.yml/dispatches'
     reviewer_dispatch = 'actions/workflows/bot-pr-user-approval.yml/dispatches'
-    convergence_start = '          APPROVAL_REQUESTED_RUN_IDS=""\n          REVIEW_DISPATCHED=false\n          for attempt in $(seq 1 60); do'
+    convergence_start = '          APPROVAL_REQUESTED_RUN_IDS=""\n          REVIEW_DISPATCHED=false\n          VALIDATE_RECOVERY_REQUESTED=false\n          for attempt in $(seq 1 120); do'
     readiness_loop = 'for CONTEXT in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do'
     review_observation = 'Observed exact-base/head marker-bound portyu9 approval before merge authorization.'
     require(
@@ -6260,7 +6260,7 @@ def validate_spotlight_dispatch_status_contract(spotlight: str) -> None:
     capability_status = spotlight.index(capability_guard)
     capability_success = spotlight.index('Dispatched event-driven Spotlight admission proof from trusted main;')
     convergence = spotlight.index(
-        '          APPROVAL_REQUESTED_RUN_IDS=""\n          REVIEW_DISPATCHED=false\n          for attempt in $(seq 1 60); do'
+        '          APPROVAL_REQUESTED_RUN_IDS=""\n          REVIEW_DISPATCHED=false\n          VALIDATE_RECOVERY_REQUESTED=false\n          for attempt in $(seq 1 120); do'
     )
     readiness = spotlight.index(
         'for CONTEXT in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do',
@@ -7868,8 +7868,6 @@ def main() -> int:
         )
         return 0
     except (OSError, ValueError) as exc:
-        import traceback
-        traceback.print_exc()
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
