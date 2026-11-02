@@ -2477,8 +2477,6 @@ def main() -> int:
         )
         return 0
     except (OSError, ValueError) as exc:
-        import traceback
-        traceback.print_exc()
         print(f"ERROR: {exc}", file=core.sys.stderr)
         return 1
 
