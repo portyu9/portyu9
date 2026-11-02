@@ -1891,6 +1891,13 @@
       "rationale": "Authorize frozen #1311 measured by closed #1312: move the Spotlight mutation-budget artifact-history GET to the accepted bounded authenticated GET helper. Add contents:read only for literal-main checkout, sealed BASE_SHA and exact-helper proof before pinned Python. Preserve endpoint, typed completeness/duplicate/current-run/MAX_ATTEMPTS=2/quarantine ordering. No write authority, trigger, mutation replay, secret/OIDC, check reduction, direct-main, merge/ruleset authority, or bypass."
     },
     {
+      "baseBomSha256": "8be8b84764ae39b738e46f111baf79969b34a9292a72054322e83fdc98495c9c",
+      "candidateBomSha256": "6db41fe292ac035e1fe198a06a9174f68b80f21e6107963b361a2a7e6e282d27",
+      "expansionSha256": "674ab0a78478a00684eb0112a831949df0ef5fd87695b536f13320ea1d682dcf",
+      "id": "cap-spotlight-cancelled-validation-recovery-v1",
+      "rationale": "Authorize PR #2003's exact trusted-source change and one tightly scoped GitHub Actions POST to rerun only the existing exact-head Profile Quality validate-contracts job after verified cancellation, with exact run/job identity, bounded attempt ceiling, single-shot mutation, unchanged six-context reviewer prerequisites, owner-issued marker-bound review and manual veto, no rerun on genuine test failure, no new credentials, no direct-main write, no required-check reduction or bypass. This grants only the measured candidate code and TCB digest; expired mutation leases remain terminal."
+    },
+    {
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "expansionSha256": "268fb2bd114a49c6ec06e1530900661a583ff6e259031c780030c3ac2d65ef74",
