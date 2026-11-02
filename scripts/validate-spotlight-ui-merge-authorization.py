@@ -1440,7 +1440,7 @@ def project_item9(sync: str) -> str:
     # back to the frozen item-9 12-minute observation contract. Neither this
     # historical view nor its bounded 60-iteration fixture is production code.
     approve_start = legacy.index("  approve:\n")
-    approve_end = legacy.index("  authorize:\n", approve_start)
+    approve_end = legacy.index("  merge:\n", approve_start)
     approve = legacy[approve_start:approve_end]
     require(approve.count("timeout-minutes: 24") == 1
             and approve.count("for attempt in $(seq 1 60); do") == 1,
