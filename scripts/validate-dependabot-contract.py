@@ -1115,8 +1115,10 @@ def validate_reviewer_latest_check_proof() -> None:
     required = (
         'git -C reviewer-main rev-parse HEAD)" = "$GITHUB_SHA"',
         'git -C reviewer-main rev-parse HEAD:scripts/dependabot_latest_authentic_checks.py)" = "397daa392862cee022c45164182c2f1c4d2ce4ca"',
+        'git -C reviewer-main rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
         'bot_reviewer_get required-checks',
-        'bot_reviewer_get quiescent-runs',
+        'reviewer-main/scripts/automation_github_read.py',
+        'actions/runs?head_sha=${head}&per_page=100',
         'reviewer-main/scripts/dependabot_latest_authentic_checks.py select',
         'for key in profile dependency codeql; do',
         'reviewer-main/scripts/automation_github_read.py',
@@ -1131,8 +1133,8 @@ def validate_reviewer_latest_check_proof() -> None:
     )
     for marker in required:
         require(marker in block, f"reviewer latest check proof lost: {marker}")
-    in_order = (required[0], required[2], required[3], required[4],
-                required[5], required[7], required[8], required[10])
+    in_order = (required[0], required[2], required[3], required[5],
+                required[6], required[8], required[10], required[12])
     require([block.index(x) for x in in_order]
             == sorted(block.index(x) for x in in_order),
             "reviewer must prove source and runs before owner review")
