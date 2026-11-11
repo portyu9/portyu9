@@ -106,19 +106,25 @@ PROFILE_STATS_SHARED_EPOCH_SEQUENCE = (
 SPOTLIGHT_SHARED_EPOCH_SEQUENCE = (
     'main_source_sha:',
     'generated_publication_sha:',
+    'superseded: ${{ steps.shared_epoch.outputs.superseded }}',
     'name: Verify optional shared publication epoch',
+    'id: shared_epoch',
     'UPSTREAM_MAIN_SOURCE_SHA: ${{ inputs.main_source_sha }}',
     'UPSTREAM_GENERATED_PUBLICATION_SHA: ${{ inputs.generated_publication_sha }}',
-    'if [ -z "$UPSTREAM_MAIN_SOURCE_SHA" ] && [ -z "$UPSTREAM_GENERATED_PUBLICATION_SHA" ]; then',
-    'test "$GITHUB_EVENT_NAME" = "workflow_dispatch"',
-    'test -n "$UPSTREAM_MAIN_SOURCE_SHA"',
-    'test -n "$UPSTREAM_GENERATED_PUBLICATION_SHA"',
-    '[[ "$UPSTREAM_MAIN_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]',
-    '[[ "$UPSTREAM_GENERATED_PUBLICATION_SHA" =~ ^[0-9a-f]{40}$ ]]',
-    'test "$UPSTREAM_MAIN_SOURCE_SHA" = "$GITHUB_SHA"',
-    'test "$(git -C published rev-parse HEAD)" = "$UPSTREAM_GENERATED_PUBLICATION_SHA"',
-    'GENERATED_SHA="$(git -C published rev-parse HEAD)"',
+    'python3 source/scripts/spotlight_shared_epoch.py',
+    '--source-repo source',
+    '--published-repo published',
+    '--main "$GITHUB_SHA"',
+    '--upstream-main "$UPSTREAM_MAIN_SOURCE_SHA"',
+    '--upstream-generated "$UPSTREAM_GENERATED_PUBLICATION_SHA"',
+    '--event "$GITHUB_EVENT_NAME"',
+    '--actor "$GITHUB_ACTOR"',
+    '--ref "$GITHUB_REF"',
+    '--output "$GITHUB_OUTPUT"',
+    "if: steps.shared_epoch.outputs.superseded != 'true'",
+    "if: needs.plan.outputs.superseded != 'true'",
 )
+
 
 PROFILE_STATS_RECEIPT_SEQUENCE = (
     'published_sha: ${{ steps.publish.outputs.published_sha }}',
@@ -452,8 +458,8 @@ def self_test() -> None:
     for sequence, target_index, label in (
         (PROFILE_STATS_SHARED_EPOCH_SEQUENCE, 6, "main-source dispatch input"),
         (PROFILE_STATS_SHARED_EPOCH_SEQUENCE, 7, "generated-publication dispatch input"),
-        (SPOTLIGHT_SHARED_EPOCH_SEQUENCE, 7, "paired main-source input"),
-        (SPOTLIGHT_SHARED_EPOCH_SEQUENCE, 12, "exact generated-publication equality"),
+        (SPOTLIGHT_SHARED_EPOCH_SEQUENCE, 7, "trusted shared-epoch classifier"),
+        (SPOTLIGHT_SHARED_EPOCH_SEQUENCE, 12, "upstream generated-publication input"),
     ):
         profile_fixture = profile_epoch
         spotlight_fixture = spotlight_epoch
