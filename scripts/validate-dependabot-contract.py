@@ -3273,44 +3273,6 @@ def main() -> int:
         self_test_profile_quality_signed_repository_inventory(QUALITY.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
 
-        # Temporary read-only capability preflight: run the *accepted main*
-        # admission compiler against the exact PR checkout and emit only the
-        # documented public measurement tuple. This instrumentation is removed
-        # before merging the source change.
-        import json as _json
-        import os as _os
-        import subprocess as _subprocess
-        import tempfile as _tempfile
-        if _os.environ.get("GITHUB_ACTIONS") == "true" and _os.environ.get("GITHUB_EVENT_NAME") == "pull_request":
-            event = _json.loads(Path(_os.environ["GITHUB_EVENT_PATH"]).read_text())
-            base = event["pull_request"]["base"]["sha"]
-            require(re.fullmatch(r"[0-9a-f]{40}", base) is not None,
-                    "candidate measurement base SHA is not canonical")
-            tree = _subprocess.check_output(
-                ["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, text=True).strip()
-            require(re.fullmatch(r"[0-9a-f]{40}", tree) is not None,
-                    "candidate measurement Git tree SHA is not canonical")
-            _subprocess.run(
-                ["git", "fetch", "--no-tags", "--depth=1", "origin", base],
-                cwd=ROOT, check=True, stdout=_subprocess.PIPE, stderr=_subprocess.PIPE)
-            with _tempfile.TemporaryDirectory(prefix="trusted-capability-measure-") as directory:
-                trusted = Path(directory) / "main"
-                _subprocess.run(
-                    ["git", "worktree", "add", "--detach", str(trusted), base],
-                    cwd=ROOT, check=True, stdout=_subprocess.PIPE, stderr=_subprocess.PIPE)
-                try:
-                    measured = _subprocess.run(
-                        [sys.executable, str(trusted / "scripts/workflow_capability_admission.py"),
-                         str(ROOT), "--candidate-tree-sha", tree, "--measure"],
-                        cwd=trusted, check=True, text=True, capture_output=True)
-                    print("BEGIN READ-ONLY TRUSTED-MAIN CAPABILITY MEASUREMENT")
-                    print(measured.stdout.strip())
-                    print("END READ-ONLY TRUSTED-MAIN CAPABILITY MEASUREMENT")
-                finally:
-                    _subprocess.run(
-                        ["git", "worktree", "remove", "--force", str(trusted)],
-                        cwd=ROOT, check=True, stdout=_subprocess.PIPE, stderr=_subprocess.PIPE)
-
         print(
             "Dependabot governance validation passed: canonical discovery/grouping remains locked; exact native bot identity, "
             "atomic single-repository pin closure, forward SemVer, public release tag-to-SHA provenance, deterministic governance "
