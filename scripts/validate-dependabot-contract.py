@@ -3022,6 +3022,64 @@ def self_test_isolated_rebase_main_push_wake_contract(text: str) -> None:
             raise ValueError(f"isolated rebase accepted weakened workflow_run guard: {marker}")
 
 
+
+def validate_isolated_rebase_supersession_boundary(text: str) -> None:
+    """An old main wake may exit only with verified read-only supersession."""
+    require(text.count("  workflow_rebase:\n") == 1, "isolated rebase section changed")
+    section = text.split("  workflow_rebase:\n", 1)[1]
+    markers = (
+        'CHECKED_OUT_MAIN_SHA="$(git rev-parse HEAD)"',
+        'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
+        'if [ "$CHECKED_OUT_MAIN_SHA" != "$TRUSTED_MAIN_SHA" ]; then',
+        '"repos/${REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/workflow-rebase-superseded-main.json"',
+        '"repos/${REPOSITORY}/compare/${TRUSTED_MAIN_SHA}...${CHECKED_OUT_MAIN_SHA}"',
+        '"repos/${REPOSITORY}/pulls?state=open&per_page=100" > "$RUNNER_TEMP/workflow-rebase-superseded-prs.json"',
+        "from dependabot_workflow_rebase_admission import verify_superseded_main_noop",
+        "verify_superseded_main_noop(",
+        "comparison=read(sys.argv[5]), open_prs=read(sys.argv[6]))",
+        'echo "Authenticated superseded old-main rebase wake; no stale native candidate and no App token issued."',
+        'exit 0\n          fi\n          python3 scripts/automation_github_read.py "repos/${REPOSITORY}/git/ref/heads/main"',
+        'KEY="$RUNNER_TEMP/workflow-rebase-key.pem"',
+        'GH_TOKEN="$APP_JWT" gh api',
+        'GH_TOKEN="$WORKFLOW_TOKEN" gh api --include graphql',
+    )
+    for marker in markers:
+        require(section.count(marker) == 1,
+                f"isolated stale-main rebase proof anchor changed: {marker[:70]}")
+    require([section.index(marker) for marker in markers] ==
+            sorted(section.index(marker) for marker in markers),
+            "isolated rebase token minted or mutation reached before no-op proof")
+    require("      - name: Checkout exact main for isolated App authority" in section
+            and "          ref: main" in section
+            and '          test "$GITHUB_REF" = "refs/heads/main"' in section
+            and '          test "$REPOSITORY" = "$GITHUB_REPOSITORY"' in section,
+            "isolated supersession lost authenticated checkout/main source")
+
+
+def self_test_isolated_rebase_supersession_boundary(text: str) -> None:
+    validate_isolated_rebase_supersession_boundary(text)
+    for old, new in (
+        ('if [ "$CHECKED_OUT_MAIN_SHA" != "$TRUSTED_MAIN_SHA" ]; then',
+         'if [ "$CHECKED_OUT_MAIN_SHA" = "$TRUSTED_MAIN_SHA" ]; then'),
+        ('"repos/${REPOSITORY}/compare/${TRUSTED_MAIN_SHA}...${CHECKED_OUT_MAIN_SHA}"',
+         '"repos/${REPOSITORY}/compare/main...main"'),
+        ("from dependabot_workflow_rebase_admission import verify_superseded_main_noop",
+         "from dependabot_workflow_rebase_admission import select_stale_native_pr"),
+        ("comparison=read(sys.argv[5]), open_prs=read(sys.argv[6]))",
+         "comparison={}, open_prs=[])"),
+        ('KEY="$RUNNER_TEMP/workflow-rebase-key.pem"',
+         'KEY="$(echo fabricated)"'),
+    ):
+        require(text.count(old) == 1, "isolated supersession negative fixture changed")
+        try:
+            validate_isolated_rebase_supersession_boundary(text.replace(old, new, 1))
+        except ValueError:
+            pass
+        else:
+            raise ValueError("isolated supersession proof accepted control-order bypass")
+
+
+
 def validate_governance(text: str) -> None:
     for phrase in (
         "## Dependency update automation",
@@ -3180,6 +3238,7 @@ def main() -> int:
         controller_text = CONTROLLER.read_text(encoding="utf-8")
         validate_controller_wake_contract(controller_text)
         self_test_isolated_rebase_main_push_wake_contract(controller_text)
+        self_test_isolated_rebase_supersession_boundary(controller_text)
         self_test_controller_wake_affinity_contract(controller_text)
         self_test_controller_scheduled_fairness_contract(controller_text)
         self_test_controller_native_rebase_permission_defer_contract(controller_text)
