@@ -911,6 +911,13 @@
       "rationale": "Prior-authorize frozen #1732 head cc080d800b7db7ced0015c63ac2aedf3168f3692, tree 9714aa77d644e7d26a77a10f8fa1f6e73ae59d20, measured by closed read-only #1733 run 38908796990: one protected-source expansion, zero reductions; TCB SHA256 a497d83f5fe384f48ba3fd27a8be29db57f4cac9a7fc16bdc3c4aff54659efed. Repair observed App installation-token POST HTTP 401 using proven explicit Bearer JWT, typed HTTP 201 and temporary secret handling. No new permissions, mutation, bypass or token scope."
     },
     {
+      "baseBomSha256": "bd477388f595ff74ced0f19a96e87e1de5d2ec2c2745f7d364f5b9a2e430e03b",
+      "candidateBomSha256": "8e47fe617bfbeb79662eee27d5e68a25fa3b524dbed22071a7c6508a9f21160b",
+      "expansionSha256": "bd26a2a71a833bde8822597544c061a7564ce1e271f3cf9af593e8a82a9641be",
+      "id": "cap-dependabot-latest-authentic-workflow-attempt-job-bound-v1",
+      "rationale": "Prior-authorize frozen #2048 head ee79399f1668d6edd5e70aed13c8ebdeb4c83d82/tree 740a0b7861954c5471f9c729db70af0a8481bac8 measured in read-only run 42950628072: 3 expansions, 0 reductions, TCB SHA256 74a86e606790b3b67e1a8b72d262871ca80b99df5d49ac8aee294a21d6bec18b. Require latest authentic Actions run/attempt/suite/job identities for bot checks; reviewer executes pinned no-credential accepted-main proof. No new mutation, secret, status, owner-veto, merge or rule bypass."
+    },
+    {
       "baseBomSha256": "d25d34d36eeeb89f02bbe204a5dc38857e8964ebf01158bb68e160f5ed3ef201",
       "candidateBomSha256": "d25d34d36eeeb89f02bbe204a5dc38857e8964ebf01158bb68e160f5ed3ef201",
       "expansionSha256": "1d9e3b4b73946be77287ef5f48aadc293463e5d7829781ce04a2a2f2acc56211",
