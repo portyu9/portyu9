@@ -1,0 +1,77 @@
+name: Temporary Spotlight admission proof diagnostic
+on:
+  push:
+permissions:
+  actions: read
+  checks: read
+  contents: read
+  pull-requests: read
+jobs:
+  proof-boundary-read-only:
+    name: Read-only exact proof boundary diagnostic
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Exercise same native check and issuer evidence transport
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          main_sha="$(gh api "repos/$repo/git/ref/heads/main" --jq '.object.sha')"
+          [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]]
+          prs="$(gh api "repos/$repo/pulls?state=open&base=main&per_page=100")"
+          candidate="$(jq -ce '
+            [.[] | select(
+              .user.login == "github-actions[bot]" and
+              (.head.ref | startswith("automation/spotlight-links/")) and
+              .base.sha == $base
+            )] | if length == 1 then .[0] else error("exactly one current-main Spotlight candidate required") end
+          ' --arg base "$main_sha" <<<"$prs")"
+          head="$(jq -r '.head.sha' <<<"$candidate")"
+          pr="$(jq -r '.number' <<<"$candidate")"
+          [[ "$head" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$pr" =~ ^[1-9][0-9]*$ ]]
+          checks="$(gh api "repos/$repo/commits/$head/check-runs?app_id=15368&filter=latest&per_page=100")"
+          name_count="$(jq '[.check_runs[] | select(.name == "trusted-capability-admission")] | length' <<<"$checks")"
+          external="$(jq -r '[.check_runs[] |
+            select(.name == "trusted-capability-admission") |
+            .external_id // ""] |
+            if length == 0 then "" elif length == 1 then .[0]
+            else error("duplicate check label") end' <<<"$checks")"
+          echo "Observation only: candidate-count=1, native-check-count=$name_count, external-id-present=$([ -n "$external" ] && echo true || echo false), external-id-bytes=${#external}"
+          [ "$name_count" = "1" ]
+          [[ "$external" =~ ^spotlight-admission:([1-9][0-9]*):([1-9][0-9]*):([1-9][0-9]*):([0-9a-f]{40}):([0-9a-f]{40})$ ]]
+          issuer="${BASH_REMATCH[1]}"
+          [ "${BASH_REMATCH[3]}" = "$pr" ]
+          [ "${BASH_REMATCH[4]}" = "$main_sha" ]
+          [ "${BASH_REMATCH[5]}" = "$head" ]
+          source="$(gh api "repos/$repo/actions/runs/$issuer")"
+          jq -e --argjson run "$issuer" --arg base "$main_sha" '
+            type == "object" and
+            (.id | type == "number" and . == $run) and
+            (.name == "Capability admission") and
+            (.path == ".github/workflows/capability-admission.yml") and
+            (.head_sha == $base) and
+            (.head_branch == "main") and
+            (.run_attempt | type == "number" and . == 1) and
+            (.status == "completed") and (.conclusion == "success")
+          ' <<<"$source" >/dev/null
+          python3 - --admission-run <(printf '%s\\n' "$source") <<'PY'
+          import argparse
+          import json
+          from pathlib import Path
+          p = argparse.ArgumentParser()
+          p.add_argument("--admission-run", required=True)
+          a = p.parse_args()
+          value = json.loads(Path(a.admission_run).read_text(encoding="utf-8"))
+          assert isinstance(value, dict) and value.get("id", 0) > 0
+          print("Observed exact native issuer in anonymous proof pipe: TRUE")
+          PY
+          echo "Read-only diagnostic completed; no review/status/branch mutation."
