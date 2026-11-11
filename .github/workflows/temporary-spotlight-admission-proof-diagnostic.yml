@@ -53,6 +53,42 @@ jobs:
           [ "${BASH_REMATCH[4]}" = "$main_sha" ]
           [ "${BASH_REMATCH[5]}" = "$head" ]
           source="$(gh api "repos/$repo/actions/runs/$issuer")"
+          # Reproduce the production reviewer branch, not only the direct native lookup.
+          lane="spotlight"
+          admission_run="null"
+          if [ "$lane" = "spotlight" ]; then
+            admission_external="$(jq -r '[.check_runs[] |
+                select(.name == "trusted-capability-admission") |
+                .external_id // ""] |
+                if length == 0 then "" elif length == 1 then .[0]
+                else error("multiple independent Spotlight admission checks") end'
+                <<<"$checks")"
+            echo "Production jq extraction: present=$([ -n "$admission_external" ] && echo yes || echo no), length=${#admission_external}"
+            if [ -n "$admission_external" ]; then
+              if [[ "$admission_external" =~ ^spotlight-admission:([1-9][0-9]*):([1-9][0-9]*):([1-9][0-9]*):([0-9a-f]{40}):([0-9a-f]{40})$ ]]; then
+                admission_run_id="${BASH_REMATCH[1]}"
+                test "${BASH_REMATCH[3]}" = "$pr"
+                test "${BASH_REMATCH[4]}" = "$main_sha"
+                test "${BASH_REMATCH[5]}" = "$head"
+                admission_run="$(gh api "repos/$repo/actions/runs/$admission_run_id")"
+              else
+                echo "ERROR: production extraction rejected external identity"
+                exit 1
+              fi
+            fi
+          fi
+          echo "Production branch source JSON non-null=$( [ "$admission_run" = "null" ] && echo false || echo true )"
+          python3 - --admission-run <(printf '%s\n' "$admission_run") <<'PY'
+          import argparse, json
+          from pathlib import Path
+          p = argparse.ArgumentParser()
+          p.add_argument("--admission-run")
+          a = p.parse_args()
+          value = json.loads(Path(a.admission_run).read_text())
+          print("Production exact-run pipe is object:", isinstance(value, dict))
+          assert isinstance(value, dict)
+          PY
+
           jq -e --argjson run "$issuer" --arg base "$main_sha" '
             type == "object" and
             (.id | type == "number" and . == $run) and
