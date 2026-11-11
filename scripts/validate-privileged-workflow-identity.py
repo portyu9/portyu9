@@ -24,7 +24,7 @@ EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7b369310e67a1bfb285767e06258c8cc370bd684",
     ".github/workflows/profile-quality.yml": "0c94756c3da81f709bea05a3dd266f06d9054c60",
     ".github/workflows/profile-stats.yml": "eb9af8f63d4db7b35306ebf3c38f5004e7e1c0a8",
-    ".github/workflows/spotlight-link-sync.yml": "bc95965fff237629ba8c5539de880f2230a72ad6",
+    ".github/workflows/spotlight-link-sync.yml": "4eed6be49844ca7c3019c3762841039132342a19",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
