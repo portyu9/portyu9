@@ -1,0 +1,33 @@
+# Temporary read-only one-off exact-source measurement, never for protected merge.
+# Delete this file after obtaining the trusted-base authorization tuple.
+name: Temporary trusted capability measurement
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/temporary-capability-measurement.yml'
+permissions:
+  contents: read
+jobs:
+  measure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Read frozen accepted-main trusted measurement implementation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 4916cd9ecfca793ebfed91a43da82ba8fd9f2e10
+          path: trusted-main
+          persist-credentials: false
+      - name: Read frozen candidate tree as data only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 9f3635509c7eaf752e50ba4b882c1930ac9b726d
+          path: candidate
+          persist-credentials: false
+      - name: Verify frozen commit identities and measure exact capability tuple
+        run: |
+          set -euo pipefail
+          test "$(git -C trusted-main rev-parse HEAD)" = "4916cd9ecfca793ebfed91a43da82ba8fd9f2e10"
+          test "$(git -C candidate rev-parse HEAD)" = "9f3635509c7eaf752e50ba4b882c1930ac9b726d"
+          test "$(git -C candidate rev-parse HEAD^{tree})" = "300ee6181275e651979cd9f52a56874b06ae6157"
+          python3 trusted-main/scripts/workflow_capability_admission.py             candidate --candidate-tree-sha 300ee6181275e651979cd9f52a56874b06ae6157 --measure
