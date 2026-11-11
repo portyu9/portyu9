@@ -1859,8 +1859,36 @@ jobs:
           test "$GITHUB_REF" = "refs/heads/main"
           test "$REPOSITORY" = "$GITHUB_REPOSITORY"
           [[ "$TRUSTED_MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
-          test "$(git rev-parse HEAD)" = "$TRUSTED_MAIN_SHA"
+          CHECKED_OUT_MAIN_SHA="$(git rev-parse HEAD)"
+          [[ "$CHECKED_OUT_MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
+          if [ "$CHECKED_OUT_MAIN_SHA" != "$TRUSTED_MAIN_SHA" ]; then
+            # An earlier successful push wake may be queued until *after* a
+            # protected merge. Prove exact live main, ancestry and exhaustive
+            # current native PR inventory before treating it as a no-op.
+            # If a stale candidate remains, fail closed for the next fresh wake.
+            # All evidence is read-only: no App JWT, installation token or
+            # GraphQL mutation has been issued at this point.
+            python3 scripts/automation_github_read.py "repos/${REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/workflow-rebase-superseded-main.json"
+            python3 scripts/automation_github_read.py "repos/${REPOSITORY}/compare/${TRUSTED_MAIN_SHA}...${CHECKED_OUT_MAIN_SHA}" > "$RUNNER_TEMP/workflow-rebase-superseded-ancestry.json"
+            python3 scripts/automation_github_read.py "repos/${REPOSITORY}/pulls?state=open&per_page=100" > "$RUNNER_TEMP/workflow-rebase-superseded-prs.json"
+            PYTHONPATH=scripts python3 - "$REPOSITORY" "$TRUSTED_MAIN_SHA" "$CHECKED_OUT_MAIN_SHA" \
+              "$RUNNER_TEMP/workflow-rebase-superseded-main.json" \
+              "$RUNNER_TEMP/workflow-rebase-superseded-ancestry.json" \
+              "$RUNNER_TEMP/workflow-rebase-superseded-prs.json" <<'PY'
+          import json, sys
+          from dependabot_workflow_rebase_admission import verify_superseded_main_noop
+          def read(path):
+              with open(path, encoding="utf-8") as stream:
+                  return json.load(stream)
+          verify_superseded_main_noop(
+              repository=sys.argv[1], event_main_sha=sys.argv[2],
+              checkout_sha=sys.argv[3], live_main=read(sys.argv[4]),
+              comparison=read(sys.argv[5]), open_prs=read(sys.argv[6]))
+          PY
+            echo "Authenticated superseded old-main rebase wake; no stale native candidate and no App token issued."
+            exit 0
+          fi
           python3 scripts/automation_github_read.py "repos/${REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/workflow-rebase-main.json"
           jq -e --arg sha "$TRUSTED_MAIN_SHA" '.ref == "refs/heads/main" and .object.type == "commit" and .object.sha == $sha' "$RUNNER_TEMP/workflow-rebase-main.json" >/dev/null
           python3 scripts/automation_github_read.py "repos/${REPOSITORY}/pulls?state=open&per_page=100" > "$RUNNER_TEMP/workflow-rebase-open-prs.json"
