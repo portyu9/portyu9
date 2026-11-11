@@ -134,7 +134,7 @@ def main() -> int:
     try:
         if args.self_test:
             self_test()
-            print("Spotlight shared publication-epoch 17-case self-test passed.")
+            print("Spotlight shared publication-epoch 18-case self-test passed.")
             return 0
         require(args.source_repo is not None and args.published_repo is not None
                 and args.output is not None, "required provenance inputs are missing")
