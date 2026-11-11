@@ -1625,6 +1625,13 @@
       "rationale": "Authorize frozen #1308 measured by closed #1309: replace Profile Quality governed-review's raw accepted-base gate Contents GET with pinned exact-base actions/checkout, prove checked-out HEAD equals the PR base SHA, and retain exact gate Git-blob verification. The BOM records the GET removal and existing pinned checkout action. No permission, trigger, secret, mutation, endpoint, retry, ruleset, required-check reduction, merge/direct-main authority, or bypass is added."
     },
     {
+      "baseBomSha256": "8e47fe617bfbeb79662eee27d5e68a25fa3b524dbed22071a7c6508a9f21160b",
+      "candidateBomSha256": "7a0de500fff37886d5455274a7f72fb637ee707fc77c4fafd25f91ca057c95af",
+      "expansionSha256": "b4825821e4887e1417bcaa8cbb14746c9b58ab619073f19a4be6f33525aa7e85",
+      "id": "cap-profile-quality-same-run-artifact-transport-v1",
+      "rationale": "Prior exact authorization for frozen PR #2061 tree 1b6e4ca5f3c17587db5df94e74788a21c625c6ff, independently measured in first-attempt trusted run 43041688713: switch one Profile Quality Signal Field artifact round-trip from cross-run REST listing to native same-run immutable-ID transport. Preserve exact artifact ID, digest-mismatch error, authenticated separate visibility and downstream SVG validators. Two measured expansion records represent the revised artifact source contract and pinned trusted-control-source bytes; one reduction removes redundant cross-run REST selection. No new token permission, API mutation, workflow trigger, secret/OIDC, direct-main write, owner approval or terminal merge bypass. Exact accepted main 2bf01c0962dbea8458e586be63422e1be2b83ff1 and frozen subject remain bound by measurement hashes."
+    },
+    {
       "baseBomSha256": "064955edce467b646ff1f3404fb11d42a87d6f856dafb5d1dfa54e447f74eb31",
       "candidateBomSha256": "40fd5a6821802adc9ce1364b9da28a69159ed8a23aab2a57dc142fc104fbb8bb",
       "expansionSha256": "8780843ca5182884f16e8830f7428c134a60110661468c154eb0df1fc5890113",
