@@ -86,9 +86,13 @@ jobs:
           # Every reviewer job owns one exclusive, mode-0700 evidence directory.
           # Fixed cross-runner temp basenames can be inaccessible or shadowed;
           # never reuse them for governance proof or credential-bearing reads.
-          REVIEW_PROOF_DIR="$(mktemp -d "${RUNNER_TEMP}/bot-review-proof.XXXXXXXXXXXX")"
+          REVIEW_PROOF_DIR="$(mktemp -d "${GITHUB_WORKSPACE}/.bot-review-proof.XXXXXXXXXXXX")"
           test -d "$REVIEW_PROOF_DIR" && test ! -L "$REVIEW_PROOF_DIR"
           test "$(stat -c %a "$REVIEW_PROOF_DIR")" = "700"
+          test "$(stat -c %u "$REVIEW_PROOF_DIR")" = "$(id -u)"
+          test -w "$REVIEW_PROOF_DIR"
+          : > "$REVIEW_PROOF_DIR/.access-probe"
+          rm -- "$REVIEW_PROOF_DIR/.access-probe"
           trap 'rm -rf -- "$REVIEW_PROOF_DIR"' EXIT
           echo "reviewed=false" >> "$GITHUB_OUTPUT"
           echo "pr_number=" >> "$GITHUB_OUTPUT"
@@ -633,6 +637,14 @@ jobs:
               echo "ERROR: failed to fetch exact-head workflow run snapshot for ${head}." >&2
               return 1
             }
+            # The first real proof write occurs after authenticated network reads.
+            # Fail closed if filesystem ownership/access changed within this step.
+            test -d "$REVIEW_PROOF_DIR" && test ! -L "$REVIEW_PROOF_DIR"
+            test "$(stat -c %u "$REVIEW_PROOF_DIR")" = "$(id -u)"
+            test "$(stat -c %a "$REVIEW_PROOF_DIR")" = "700"
+            test -w "$REVIEW_PROOF_DIR"
+            : > "$REVIEW_PROOF_DIR/.access-probe"
+            rm -- "$REVIEW_PROOF_DIR/.access-probe"
             printf '%s\n' "$checks" > "$REVIEW_PROOF_DIR/checks.json"
             printf '%s\n' "$required_workflow_history" > "$REVIEW_PROOF_DIR/runs.json"
             python3 -B reviewer-main/scripts/dependabot_latest_authentic_checks.py select \
