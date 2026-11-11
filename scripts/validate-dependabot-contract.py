@@ -1028,18 +1028,18 @@ def validate_controller_required_check_snapshot_contract(text: str) -> None:
         'commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100',
         'actions/runs?head_sha=${HEAD_SHA}&per_page=100',
         'python3 scripts/dependabot_latest_authentic_checks.py select',
-        '--runs "$RUNNER_TEMP/dependabot-authentic-runs.json"',
+        '--runs "$DEPENDABOT_PROOF_DIR/runs.json"',
         '--head "$HEAD_SHA" --branch "$HEAD_REF" --repository "$TARGET_REPOSITORY"',
-        '--out "$RUNNER_TEMP/dependabot-authentic-selected.json"',
+        '--out "$DEPENDABOT_PROOF_DIR/selected.json"',
         'for key in profile dependency codeql; do',
         'run_id="$(jq -r --arg key "$key" \'.runs[$key].id\'',
         'actions/runs/${run_id}/jobs?filter=latest&per_page=100',
         'python3 scripts/dependabot_latest_authentic_checks.py verify',
-        '--checks "$RUNNER_TEMP/dependabot-authentic-checks.json"',
-        '--selection "$RUNNER_TEMP/dependabot-authentic-selected.json"',
-        '--profile-jobs "$RUNNER_TEMP/dependabot-authentic-profile-jobs.json"',
-        '--dependency-jobs "$RUNNER_TEMP/dependabot-authentic-dependency-jobs.json"',
-        '--codeql-jobs "$RUNNER_TEMP/dependabot-authentic-codeql-jobs.json"',
+        '--checks "$DEPENDABOT_PROOF_DIR/checks.json"',
+        '--selection "$DEPENDABOT_PROOF_DIR/selected.json"',
+        '--profile-jobs "$DEPENDABOT_PROOF_DIR/profile-jobs.json"',
+        '--dependency-jobs "$DEPENDABOT_PROOF_DIR/dependency-jobs.json"',
+        '--codeql-jobs "$DEPENDABOT_PROOF_DIR/codeql-jobs.json"',
         'if [ "$proof_state" = "blocked" ]; then',
         'exit 1',
         'if [ "$proof_state" != "ready" ]; then',
@@ -1050,6 +1050,15 @@ def validate_controller_required_check_snapshot_contract(text: str) -> None:
     for marker in required:
         require(block.count(marker) >= 1,
                 f"trusted latest-run readiness proof is missing: {marker}")
+    for fragment in (
+        'DEPENDABOT_PROOF_DIR="$(mktemp -d "${RUNNER_TEMP}/dependabot-proof.XXXXXXXXXXXX")"',
+        'test "$(stat -c %a "$DEPENDABOT_PROOF_DIR")" = "700"',
+        "trap 'rm -rf -- \"$DEPENDABOT_PROOF_DIR\"' EXIT",
+        '--out "$DEPENDABOT_PROOF_DIR/verdict.json"',
+    ):
+        require(fragment in block, f"Dependabot private proof contract is missing: {fragment}")
+    require('$RUNNER_TEMP/dependabot-authentic-' not in block,
+            "Dependabot must not reuse fixed-named authenticated proof files")
     require(
         block.count('--head "$HEAD_SHA" --branch "$HEAD_REF" --repository "$TARGET_REPOSITORY"') == 2,
         "both the selector and the verifier must be bound to the exact same head/branch/repository",
