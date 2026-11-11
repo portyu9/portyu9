@@ -177,8 +177,6 @@ def verify_ready(
         selected = canonical["runs"][key]
         if selected["status"] != "completed":
             missing.append(f"{key} workflow run is active")
-        elif selected["conclusion"] != "success":
-            blocked.append(f"{key} latest workflow run failed: {selected['conclusion']}")
         jobs_entries = envelope(jobs[key], "jobs")
         observed: dict[str, list[Mapping[str, Any]]] = {n: [] for n in required}
         seen_job_ids: set[int] = set()
@@ -207,6 +205,41 @@ def verify_ready(
             run_status(job, f"{key} job")
             if job["name"] in observed:
                 observed[job["name"]].append(job)
+
+        if selected["status"] == "completed" and selected["conclusion"] != "success":
+            # The review gate necessarily fails before the exact owner approval
+            # exists. Only that *one* authentic failed job may defer the Profile
+            # Quality workflow conclusion; no other failure is permissible.
+            # Required checks remain independently proved below and the
+            # terminal governed review gate still must succeed before merge.
+            gate_name = "trusted-governed-bot-review"
+            gate = [j for j in jobs_entries if j["name"] == gate_name]
+            others = [j for j in jobs_entries
+                      if j["name"] not in (*required, gate_name)]
+            if key != "profile" or selected["conclusion"] != "failure":
+                blocked.append(f"{key} latest workflow run failed: {selected['conclusion']}")
+            elif len(gate) != 1 or any(
+                j["status"] != "completed" or j["conclusion"] not in ("success", "skipped")
+                for j in others
+            ):
+                blocked.append("profile has ambiguous gate or unrelated failing job")
+            else:
+                gate_job = gate[0]
+                matched_gate = [c for c in checks_by_id.values()
+                                if c["name"] == gate_name
+                                and c["check_suite"]["id"] == selected["suiteId"]]
+                require(len(matched_gate) == 1,
+                        "profile pre-review gate check is absent or ambiguous")
+                gate_check = matched_gate[0]
+                require(gate_check["id"] == gate_job["id"]
+                        and gate_check.get("details_url")
+                        == f"https://github.com/{repo}/actions/runs/{selected['id']}/job/{gate_job['id']}",
+                        "profile pre-review gate job is not authentic")
+                if not (
+                    gate_job["status"] == gate_check["status"] == "completed"
+                    and gate_job["conclusion"] == gate_check["conclusion"] == "failure"
+                ):
+                    blocked.append("profile failure is not the exact pre-review gate")
 
         for required_name in required:
             matches = observed[required_name]
@@ -345,6 +378,82 @@ def self_test() -> None:
                       details_url=f"https://github.com/{repo}/actions/runs/80/job/800")
     require(verify_ready(**{**args, "checks": snapshot(check_items + [historical], "check_runs")})
             ["state"] == "ready", "older failed suite poisoned current success")
+
+    # The exact governed owner-review gate fails before approval. This is
+    # not permission to waive an unrelated failing required job or run.
+    profile_run = runs[0]
+    profile_gate_id = 13003
+    profile_gate_job = {
+        "id": profile_gate_id, "run_id": profile_run["id"],
+        "run_attempt": profile_run["run_attempt"],
+        "name": "trusted-governed-bot-review",
+        "head_sha": head, "workflow_name": "Profile quality",
+        "status": "completed", "conclusion": "failure",
+        "check_run_url": f"https://api.github.com/repos/{repo}/check-runs/{profile_gate_id}",
+    }
+    profile_gate_check = {
+        "id": profile_gate_id, "name": "trusted-governed-bot-review",
+        "head_sha": head, "app": {"id": APP_ID},
+        "check_suite": {"id": profile_run["check_suite_id"]},
+        "details_url": f"https://github.com/{repo}/actions/runs/{profile_run['id']}/job/{profile_gate_id}",
+        "status": "completed", "conclusion": "failure",
+    }
+    pre_review_run = dict(profile_run, conclusion="failure")
+    pre_review_runs = snapshot([pre_review_run, *runs[1:]], "workflow_runs")
+    pre_review_jobs = snapshot([*job_sets["profile"]["jobs"], profile_gate_job], "jobs")
+    pre_review_checks = snapshot([*check_items, profile_gate_check], "check_runs")
+    pre_review = {
+        **args,
+        "runs": pre_review_runs,
+        "selection": select_runs(pre_review_runs, head=head, branch=branch, repo=repo),
+        "jobs": {**job_sets, "profile": pre_review_jobs},
+        "checks": pre_review_checks,
+    }
+    require(verify_ready(**pre_review)["state"] == "ready",
+            "exact authentic pre-review profile gate should not deadlock owner approval")
+    for name, corrupted in (
+        ("absent", snapshot(job_sets["profile"]["jobs"], "jobs")),
+        ("duplicate", snapshot([*pre_review_jobs["jobs"], profile_gate_job], "jobs")),
+        ("other failure", snapshot([*pre_review_jobs["jobs"],
+          dict(profile_gate_job, id=13004, name="extra",
+               check_run_url=f"https://api.github.com/repos/{repo}/check-runs/13004")], "jobs")),
+    ):
+        bad = {**pre_review, "jobs": {**job_sets, "profile": corrupted}}
+        if name == "other failure":
+            require(verify_ready(**bad)["state"] == "blocked",
+                    "unrelated profile failure was mistaken for a pre-review gate")
+        else:
+            try:
+                result = verify_ready(**bad)
+            except ValueError:
+                continue
+            require(result["state"] != "ready",
+                    f"{name} profile gate was incorrectly accepted")
+    for wrong_state in ("success", "skipped", "cancelled"):
+        incorrect = dict(profile_gate_job, conclusion=wrong_state)
+        bad = {**pre_review, "jobs": {**job_sets, "profile":
+               snapshot([*job_sets["profile"]["jobs"], incorrect], "jobs")}}
+        require(verify_ready(**bad)["state"] == "blocked",
+                "non-failing owner review was used to explain a failing profile run")
+    for invalid_check in (
+        dict(profile_gate_check, id=13005),
+        dict(profile_gate_check, check_suite={"id": 7777}),
+        dict(profile_gate_check, conclusion="success"),
+    ):
+        bad_checks = snapshot([*check_items, invalid_check], "check_runs")
+        bad = {**pre_review, "checks": bad_checks}
+        try:
+            result = verify_ready(**bad)
+        except ValueError:
+            continue
+        require(result["state"] != "ready",
+                "counterfeit pre-review check cleared a failing profile run")
+    newer_failed = dict(pre_review_run, conclusion="timed_out")
+    timed_out_runs = snapshot([newer_failed, *runs[1:]], "workflow_runs")
+    require(verify_ready(**{**pre_review, "runs": timed_out_runs,
+            "selection": select_runs(timed_out_runs, head=head, branch=branch, repo=repo)})
+            ["state"] == "blocked",
+            "non-review workflow failure was accepted as a pre-review deferral")
 
     def forbidden(change: dict[str, Any], reason: str) -> None:
         try:
