@@ -1107,6 +1107,13 @@
       "rationale": "Prior-authorize exact frozen #1726 head 5e51b9a864aa84d0e12bc893c46fc11ce4cc8479, tree abaacae86575b716789154effde48538a1db1ecd, measured by closed read-only #1727 (run 38904401764): one protected-source expansion, zero reductions, candidate TCB SHA256 53b21e8c484aee43a1b6a54f85d936f93fbb7a1b48047a9ec8ec0fdeb91a43b2. Accept absent optional PR-list advisory but retain malformed-value rejection and all immutable identity, token, rebase and merge gates. No new permissions or bypass."
     },
     {
+      "baseBomSha256": "e45193c34723b5f415ff986c310d3f06676e317760411df7a6897130c988e96c",
+      "candidateBomSha256": "e45193c34723b5f415ff986c310d3f06676e317760411df7a6897130c988e96c",
+      "expansionSha256": "0a0c8dacf4b1bfb88648d742b542cc2c8ef898c525da18d50c6fb1c3b21fabd4",
+      "id": "cap-dependabot-rebase-pr-snapshot-binding-v1",
+      "rationale": "Prior exact authorization for PR #2067 frozen tree 5689bd683ae79f231363ee2095c5f5af0b800987 measured by trusted first-attempt run 43055125741. One protected source change ensures the successful native Dependabot rebase replaces the stale pre-rebase PR snapshot with the already typed, exact-current-head and base snapshot before existing sealed probe/admission. Semantic BOM unchanged. No new privileges, mutations, triggers, secrets, approval/merge bypass or weakened checks."
+    },
+    {
       "baseBomSha256": "7f91352fc1f77fbb890b058b86e71592ff85012777b149fecff0deb378fd37c3",
       "candidateBomSha256": "7f91352fc1f77fbb890b058b86e71592ff85012777b149fecff0deb378fd37c3",
       "expansionSha256": "f9a4a499b5edd8d06b089674686ec437d2b427127bce61c340d8e0ebd53e6a6e",
