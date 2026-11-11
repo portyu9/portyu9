@@ -15,20 +15,22 @@ import workflow_capability_diff
 import workflow_capability_snapshot
 import generated_publication_epoch
 import spotlight_profile_links
+import spotlight_shared_epoch
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v161"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "43a1d6e3cf43768deaa7bc084e7ec0afebc915bb",
+    ".github/workflows/bot-pr-user-approval.yml": "7b369310e67a1bfb285767e06258c8cc370bd684",
     ".github/workflows/profile-quality.yml": "0c94756c3da81f709bea05a3dd266f06d9054c60",
     ".github/workflows/profile-stats.yml": "eb9af8f63d4db7b35306ebf3c38f5004e7e1c0a8",
-    ".github/workflows/spotlight-link-sync.yml": "03e3a9b4b39fa026d851e5cabdbdd451e8f6e8c8",
+    ".github/workflows/spotlight-link-sync.yml": "bc95965fff237629ba8c5539de880f2230a72ad6",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
 ACCEPTED_BASE_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
 SPOTLIGHT_BUDGET_JQ_RUNTIME_TEST_BLOB = "be08b177e329343ff547b66c742e221d9cf9afed"
+SPOTLIGHT_SHARED_EPOCH_HELPER_BLOB = "598297994b11f000f0117fca65a161b36a736d95"
 
 OLD_MERGE_IF = (
     "    if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && "
@@ -5077,6 +5079,21 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         and 'bounded 48-attempt window' not in bot_review,
         "Bot PR reviewer must remain event-driven and must not restore the 48x readiness poll",
     )
+    for required in (
+        "for REVIEW_READ_ATTEMPT in $(seq 1 16); do",
+        'if [ "$READY_STATUS" -ne 2 ] || [ "$LANE" != "spotlight" ]; then',
+        'if [ "$REVIEW_READ_ATTEMPT" -lt 16 ]; then',
+        'sleep 10',
+        'CURRENT_MAIN_RECHECK="$(bot_reviewer_get main-ref)"',
+        'CURRENT_HEAD_RECHECK="$(bot_reviewer_get head-ref)"',
+        "validate_git_ref_object \"$CURRENT_MAIN_RECHECK\" \"main\"",
+        'validate_git_ref_object "$CURRENT_HEAD_RECHECK" "$HEAD_REF"',
+        'printf \'%s\\n\' "$verdict_json" >&2',
+    ):
+        require(required in bot_review,
+                f"bounded Spotlight reviewer readiness/reproof contract missing: {required}")
+    require(bot_review.count("for REVIEW_READ_ATTEMPT in $(seq 1 16); do") == 1,
+            "Spotlight readiness retry must remain a single bounded read-only loop")
     require(
         bot_review.count('check_required_contexts "$HEAD_SHA" "$LANE"') == 2,
         "Bot PR reviewer must perform one initial and one final exact-head prerequisite re-proof",
@@ -7070,6 +7087,7 @@ def validate_automation_safety_property_model() -> None:
 
 def self_test() -> None:
     v21.self_test()
+    spotlight_shared_epoch.self_test()
     self_test_spotlight_same_base_supersession()
     validate_integrated_failure_injection_matrix()
     validate_automation_safety_property_model()
@@ -7809,6 +7827,12 @@ def main() -> int:
             runtime_test_blob == SPOTLIGHT_BUDGET_JQ_RUNTIME_TEST_BLOB,
             "Spotlight mutation-budget jq runtime-test bytes changed; "
             f"expected Git blob {SPOTLIGHT_BUDGET_JQ_RUNTIME_TEST_BLOB}, got {runtime_test_blob}",
+        )
+
+        shared_epoch_blob = v21.git_blob_sha(ROOT / "scripts/spotlight_shared_epoch.py")
+        require(
+            shared_epoch_blob == SPOTLIGHT_SHARED_EPOCH_HELPER_BLOB,
+            "Spotlight shared-epoch classifier bytes differ from the reviewed 18-case invariant",
         )
 
         profile_quality = (ROOT / ".github/workflows/profile-quality.yml").read_text(encoding="utf-8")
