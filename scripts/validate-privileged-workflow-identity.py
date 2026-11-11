@@ -5032,13 +5032,13 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'reviewer-main/scripts/dependabot_latest_authentic_checks.py select',
         'actions/runs/${run_id}/jobs?filter=latest&per_page=100',
         'reviewer-main/scripts/dependabot_latest_authentic_checks.py verify',
-        '--checks "$RUNNER_TEMP/bot-review-authentic-checks.json"',
-        '--runs "$RUNNER_TEMP/bot-review-authentic-runs.json"',
+        '--checks "$REVIEW_PROOF_DIR/checks.json"',
+        '--runs "$REVIEW_PROOF_DIR/runs.json"',
         'if [ "$verdict" = "ready" ]; then' if False else 'ready) return 0',
         'blocked)',
     ):
         require(fragment in bot_review, f"Bot PR latest authentic prerequisite proof is missing: {fragment}")
-    require('all(.check_runs[] | select(.name == $name);' not in bot_review,
+    # Reviewer proof files must be job-exclusive and private: fixed names in\n    # RUNNER_TEMP caused an actual production permission-denied regression.\n    for fragment in (\n        'REVIEW_PROOF_DIR="$(mktemp -d "${RUNNER_TEMP}/bot-review-proof.XXXXXXXXXXXX")"',\n        'test "$(stat -c %a "$REVIEW_PROOF_DIR")" = "700"',\n        "trap 'rm -rf -- \"$REVIEW_PROOF_DIR\"' EXIT",\n        '--profile-jobs "$REVIEW_PROOF_DIR/profile-jobs.json"',\n        '--dependency-jobs "$REVIEW_PROOF_DIR/dependency-jobs.json"',\n        '--codeql-jobs "$REVIEW_PROOF_DIR/codeql-jobs.json"',\n        '--out "$REVIEW_PROOF_DIR/verdict.json"',\n    ):\n        require(fragment in bot_review, f"Bot reviewer private proof contract missing: {fragment}")\n    require('$RUNNER_TEMP/bot-review-authentic-' not in bot_review,\n            "Bot reviewer must not reuse fixed-name proof files")\n    require('all(.check_runs[] | select(.name == $name);' not in bot_review,
             "Bot reviewer regressed to old same-name history poisoning")
     require(
         'check_name=${name}' not in bot_review,
