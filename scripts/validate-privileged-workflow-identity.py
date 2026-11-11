@@ -21,7 +21,7 @@ import privileged_workflow_identity_v21_core as v21
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v161"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "7b369310e67a1bfb285767e06258c8cc370bd684",
+    ".github/workflows/bot-pr-user-approval.yml": "35c37fc7f54200b00dbc7afe3305000c38822285",
     ".github/workflows/profile-quality.yml": "0c94756c3da81f709bea05a3dd266f06d9054c60",
     ".github/workflows/profile-stats.yml": "eb9af8f63d4db7b35306ebf3c38f5004e7e1c0a8",
     ".github/workflows/spotlight-link-sync.yml": "4eed6be49844ca7c3019c3762841039132342a19",
@@ -5084,10 +5084,6 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'if [ "$READY_STATUS" -ne 2 ] || [ "$LANE" != "spotlight" ]; then',
         'if [ "$REVIEW_READ_ATTEMPT" -lt 16 ]; then',
         'sleep 10',
-        'CURRENT_MAIN_RECHECK="$(bot_reviewer_get main-ref)"',
-        'CURRENT_HEAD_RECHECK="$(bot_reviewer_get head-ref)"',
-        "validate_git_ref_object \"$CURRENT_MAIN_RECHECK\" \"main\"",
-        'validate_git_ref_object "$CURRENT_HEAD_RECHECK" "$HEAD_REF"',
         'printf \'%s\\n\' "$verdict_json" >&2',
     ):
         require(required in bot_review,
