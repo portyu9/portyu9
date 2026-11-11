@@ -745,6 +745,31 @@ def validate_controller_pr_response_contract(text: str) -> None:
         update_consume_pos < post_update_fetch < post_update_schema < post_update_consume < rebound_head < output_target,
         "Dependabot branch-update convergence must type the refreshed PR before exact-head rebinding and target publication",
     )
+    # The pre-rebase PR snapshot is bound to PRE_UPDATE_HEAD_SHA; leaving it in
+    # dependabot-pr.json after the branch advances makes the next exact-head
+    # probe fail deterministically even when the update succeeded.
+    refresh_head = 'test "$(jq -r .headSha "$RUNNER_TEMP/dependabot-post-update-pr-normalized.json")" = "$HEAD_SHA"'
+    refresh_base = 'test "$(jq -r .baseSha "$RUNNER_TEMP/dependabot-post-update-pr-normalized.json")" = "$BASE_SHA"'
+    refresh_raw = 'cp -- "$RUNNER_TEMP/dependabot-post-update-pr.json" dependabot-pr.json'
+    refresh_normalized = 'cp -- "$RUNNER_TEMP/dependabot-post-update-pr-normalized.json" dependabot-pr-normalized.json'
+    for fragment in (refresh_head, refresh_base, refresh_raw, refresh_normalized):
+        require(text.count(fragment) == 1,
+                f"post-rebase exact-head PR snapshot refresh is missing or duplicated: {fragment}")
+    rebound_base = text.index('BASE_SHA="$UPDATED_BASE_SHA"', rebound_head)
+    refreshed_head = text.index(refresh_head, rebound_base)
+    refreshed_base = text.index(refresh_base, refreshed_head)
+    refreshed_raw = text.index(refresh_raw, refreshed_base)
+    refreshed_normalized = text.index(refresh_normalized, refreshed_raw)
+    convergence = text.index('UPDATE_CONVERGED=true', refreshed_normalized)
+    proof_step = text.index('      - name: Prove bot identity, atomic pin closure, and public release provenance', output_target)
+    require(
+        post_update_schema < rebound_head < rebound_base < refreshed_head
+        < refreshed_base < refreshed_raw < refreshed_normalized < convergence
+        < output_target < proof_step,
+        "Dependabot downstream exact-head admission must consume the authenticated"
+        " rebased PR snapshot, never the stale pre-rebase PR input",
+    )
+
 
     require(
         text.count('> "$RUNNER_TEMP/dependabot-pr-snapshot.json"') == 2
