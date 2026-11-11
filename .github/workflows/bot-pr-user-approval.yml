@@ -83,17 +83,7 @@ jobs:
           WAKE_LANE: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.lane || '' }}
         run: |
           set -euo pipefail
-          # Every reviewer job owns one exclusive, mode-0700 evidence directory.
-          # Fixed cross-runner temp basenames can be inaccessible or shadowed;
-          # never reuse them for governance proof or credential-bearing reads.
-          REVIEW_PROOF_DIR="$(mktemp -d "${GITHUB_WORKSPACE}/.bot-review-proof.XXXXXXXXXXXX")"
-          test -d "$REVIEW_PROOF_DIR" && test ! -L "$REVIEW_PROOF_DIR"
-          test "$(stat -c %a "$REVIEW_PROOF_DIR")" = "700"
-          test "$(stat -c %u "$REVIEW_PROOF_DIR")" = "$(id -u)"
-          test -w "$REVIEW_PROOF_DIR"
-          : > "$REVIEW_PROOF_DIR/.access-probe"
-          rm -- "$REVIEW_PROOF_DIR/.access-probe"
-          trap 'rm -rf -- "$REVIEW_PROOF_DIR"' EXIT
+          # Authenticated prerequisite evidence stays in anonymous pipes, not reusable proof files.
           echo "reviewed=false" >> "$GITHUB_OUTPUT"
           echo "pr_number=" >> "$GITHUB_OUTPUT"
           echo "base_sha=" >> "$GITHUB_OUTPUT"
@@ -610,6 +600,8 @@ jobs:
 
           check_required_contexts() {
             local head="$1" lane="$2" checks runs state verdict key run_id
+            local required_workflow_history selection profile_jobs dependency_jobs codeql_jobs jobs verdict_json
+            local admission_run admission_external admission_run_id
             case "$lane" in
               spotlight|dependabot|codeql-autofix) ;;
               *)
@@ -637,75 +629,69 @@ jobs:
               echo "ERROR: failed to fetch exact-head workflow run snapshot for ${head}." >&2
               return 1
             }
-            # The first real proof write occurs after authenticated network reads.
-            # Fail closed if filesystem ownership/access changed within this step.
-            test -d "$REVIEW_PROOF_DIR" && test ! -L "$REVIEW_PROOF_DIR"
-            test "$(stat -c %u "$REVIEW_PROOF_DIR")" = "$(id -u)"
-            test "$(stat -c %a "$REVIEW_PROOF_DIR")" = "700"
-            test -w "$REVIEW_PROOF_DIR"
-            : > "$REVIEW_PROOF_DIR/.access-probe"
-            rm -- "$REVIEW_PROOF_DIR/.access-probe"
-            printf '%s\n' "$checks" > "$REVIEW_PROOF_DIR/checks.json"
-            printf '%s\n' "$required_workflow_history" > "$REVIEW_PROOF_DIR/runs.json"
-            python3 -B reviewer-main/scripts/dependabot_latest_authentic_checks.py select \
-              --runs "$REVIEW_PROOF_DIR/runs.json" \
+            # Pure selector: keep authenticated JSON in anonymous read-only process-substitution streams.
+            # /dev/stdout carries the sole immutable selector result; no filesystem evidence is created.
+            selection="$(python3 -B reviewer-main/scripts/dependabot_latest_authentic_checks.py select \
+              --runs <(printf '%s\n' "$required_workflow_history") \
               --head "$head" --branch "$HEAD_REF" --repository "$TARGET_REPOSITORY" \
-              --out "$REVIEW_PROOF_DIR/selected.json" || return 1
-            state="$(jq -r .state "$REVIEW_PROOF_DIR/selected.json")"
+              --out /dev/stdout)" || return 1
+            state="$(jq -er .state <<<"$selection")" || return 1
             if [ "$state" != "selected" ]; then
               echo "Governed bot required canonical workflow runs have not materialized."
               return 2
             fi
             for key in profile dependency codeql; do
-              run_id="$(jq -r --arg key "$key" '.runs[$key].id' "$REVIEW_PROOF_DIR/selected.json")"
+              run_id="$(jq -er --arg key "$key" '.runs[$key].id' <<<"$selection")" || return 1
               [[ "$run_id" =~ ^[1-9][0-9]*$ ]] || return 1
-              python3 -B reviewer-main/scripts/automation_github_read.py \
-                "repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/jobs?filter=latest&per_page=100" \
-                > "$REVIEW_PROOF_DIR/${key}-jobs.json" || return 1
+              jobs="$(python3 -B reviewer-main/scripts/automation_github_read.py \
+                "repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/jobs?filter=latest&per_page=100")" || return 1
+              case "$key" in
+                profile) profile_jobs="$jobs" ;;
+                dependency) dependency_jobs="$jobs" ;;
+                codeql) codeql_jobs="$jobs" ;;
+                *) return 1 ;;
+              esac
             done
             # Spotlight admission is emitted by a separate, trusted
             # Capability Admission workflow, not the Dependabot-only
             # Profile Quality job. Prove the custom check's exact PR subject
             # against the actual accepted-main issuing workflow.
             local -a spotlight_admission_args=()
+            admission_run="null"
             if [ "$lane" = "spotlight" ]; then
-              spotlight_admission_file="$REVIEW_PROOF_DIR/spotlight-admission-run.json"
               admission_external="$(jq -r '[.check_runs[] |
                   select(.name == "trusted-capability-admission") |
                   .external_id // ""] |
                   if length == 0 then "" elif length == 1 then .[0]
                   else error("multiple independent Spotlight admission checks") end'
-                  "$REVIEW_PROOF_DIR/checks.json")" || return 1
+                  <<<"$checks")" || return 1
               if [ -n "$admission_external" ]; then
                 if [[ "$admission_external" =~ ^spotlight-admission:([1-9][0-9]*):([1-9][0-9]*):([1-9][0-9]*):([0-9a-f]{40}):([0-9a-f]{40})$ ]]; then
                   admission_run_id="${BASH_REMATCH[1]}"
                   test "${BASH_REMATCH[3]}" = "$PR_NUMBER" || return 1
                   test "${BASH_REMATCH[4]}" = "$MAIN_SHA" || return 1
                   test "${BASH_REMATCH[5]}" = "$head" || return 1
-                  python3 -B reviewer-main/scripts/automation_github_read.py \
-                    "repos/${TARGET_REPOSITORY}/actions/runs/${admission_run_id}" \
-                    > "$spotlight_admission_file" || return 1
+                  admission_run="$(python3 -B reviewer-main/scripts/automation_github_read.py \
+                    "repos/${TARGET_REPOSITORY}/actions/runs/${admission_run_id}")" || return 1
                 else
                   echo "ERROR: unreviewed Spotlight admission external identity." >&2
                   return 1
                 fi
-              else
-                printf 'null\n' > "$spotlight_admission_file"
               fi
-              spotlight_admission_args=(--base-sha "$MAIN_SHA"
-                --pr-number "$PR_NUMBER" --admission-run "$spotlight_admission_file")
+              spotlight_admission_args=(--base-sha "$MAIN_SHA" --pr-number "$PR_NUMBER")
             fi
-            python3 -B reviewer-main/scripts/dependabot_latest_authentic_checks.py verify \
-              --checks "$REVIEW_PROOF_DIR/checks.json" \
-              --runs "$REVIEW_PROOF_DIR/runs.json" \
-              --selection "$REVIEW_PROOF_DIR/selected.json" \
-              --profile-jobs "$REVIEW_PROOF_DIR/profile-jobs.json" \
-              --dependency-jobs "$REVIEW_PROOF_DIR/dependency-jobs.json" \
-              --codeql-jobs "$REVIEW_PROOF_DIR/codeql-jobs.json" \
+            verdict_json="$(python3 -B reviewer-main/scripts/dependabot_latest_authentic_checks.py verify \
+              --checks <(printf '%s\n' "$checks") \
+              --runs <(printf '%s\n' "$required_workflow_history") \
+              --selection <(printf '%s\n' "$selection") \
+              --profile-jobs <(printf '%s\n' "$profile_jobs") \
+              --dependency-jobs <(printf '%s\n' "$dependency_jobs") \
+              --codeql-jobs <(printf '%s\n' "$codeql_jobs") \
+              --admission-run <(printf '%s\n' "$admission_run") \
               --head "$head" --branch "$HEAD_REF" --repository "$TARGET_REPOSITORY" \
               "${spotlight_admission_args[@]}" \
-              --out "$REVIEW_PROOF_DIR/verdict.json" || return 1
-            verdict="$(jq -r .state "$REVIEW_PROOF_DIR/verdict.json")"
+              --out /dev/stdout)" || return 1
+            verdict="$(jq -er .state <<<"$verdict_json")" || return 1
             case "$verdict" in
               ready) return 0 ;;
               pending)
@@ -714,7 +700,7 @@ jobs:
                 ;;
               blocked)
                 echo "ERROR: latest authentic required workflow/job has failed." >&2
-                cat "$REVIEW_PROOF_DIR/verdict.json" >&2
+                printf '%s\n' "$verdict_json" >&2
                 return 1
                 ;;
               *)
