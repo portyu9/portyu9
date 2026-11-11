@@ -21,7 +21,7 @@ import privileged_workflow_identity_v21_core as v21
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v161"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "b731cee03038814cc0eced12a88648846c175ddc",
+    ".github/workflows/bot-pr-user-approval.yml": "a3b632df7293886f606af9775bfb6323b43bbed2",
     ".github/workflows/profile-quality.yml": "0c94756c3da81f709bea05a3dd266f06d9054c60",
     ".github/workflows/profile-stats.yml": "eb9af8f63d4db7b35306ebf3c38f5004e7e1c0a8",
     ".github/workflows/spotlight-link-sync.yml": "4eed6be49844ca7c3019c3762841039132342a19",
@@ -2615,6 +2615,7 @@ def validate_bot_review_spotlight_admission_source_positive_only(bot_review: str
         'spotlight-admission-source)',
         '[[ "$page" =~ ^[1-9][0-9]*$ ]]',
         'response="$(timeout 20s gh api --include "repos/${TARGET_REPOSITORY}/actions/runs/${page}" 2>&1)"',
+        '''else error("multiple independent Spotlight admission checks") end' <<<"$checks")" || return 1''',
         'admission_run_id="${BASH_REMATCH[1]}"',
         'admission_run="$(bot_reviewer_get spotlight-admission-source "$admission_run_id")" || return 1',
         'jq -e --argjson run "$admission_run_id" --arg base "$MAIN_SHA"',
@@ -2640,6 +2641,20 @@ def validate_bot_review_spotlight_admission_source_positive_only(bot_review: str
 
 def validate_bot_review_spotlight_admission_source(bot_review: str) -> None:
     validate_bot_review_spotlight_admission_source_positive_only(bot_review)
+    # Regression for observed 2026-11-11 failure: a newline between the jq
+    # closing quote and <<< creates an empty-input jq command plus a separate
+    # no-op redirection. That silently emits no external_id and passes null
+    # to an otherwise valid independent admission verifier.
+    extraction = '''else error("multiple independent Spotlight admission checks") end' <<<"$checks")" || return 1'''
+    require(bot_review.count(extraction) == 1,
+            "Spotlight admission jq input must be bound to the same command")
+    disconnected = bot_review.replace(extraction, extraction.replace(" end' <<<", " end'\n                  <<<"), 1)
+    try:
+        validate_bot_review_spotlight_admission_source_positive_only(disconnected)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Spotlight admission disconnected-stdin negative fixture escaped detection")
     for original, weaker in (
         ('(.id | type == "number" and . == $run)', '(.id | type == "number")'),
         ('(.head_sha == $base)', '(.head_sha | type == "string")'),
