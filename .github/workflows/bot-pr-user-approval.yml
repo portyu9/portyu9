@@ -143,6 +143,12 @@ jobs:
               open-prs-page)
                 [[ "$page" =~ ^([1-9]|[12][0-9]|30)$ ]] || { echo "ERROR: invalid governed reviewer open-PR page: ${page:-unset}" >&2; return 1; }
                 ;;
+              spotlight-admission-source)
+                [[ "$page" =~ ^[1-9][0-9]*$ ]] || {
+                  echo "ERROR: malformed exact Spotlight admission workflow run ID." >&2
+                  return 1
+                }
+                ;;
               reviews-page)
                 [[ "$page" =~ ^([1-9]|1[0-9]|20)$ ]] || { echo "ERROR: invalid governed reviewer review page: ${page:-unset}" >&2; return 1; }
                 ;;
@@ -173,6 +179,11 @@ jobs:
                 quiescent-runs)
                   [[ "$head" =~ ^[0-9a-f]{40}$ ]] || { echo "ERROR: invalid governed reviewer run head." >&2; return 1; }
                   response="$(timeout 20s gh api --include "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${head}&per_page=100" 2>&1)"
+                  ;;
+                spotlight-admission-source)
+                  # The custom check binds the exact accepted-main issuing workflow ID.
+                  # Use the existing HTTP-status/content-type checked reviewer transport.
+                  response="$(timeout 20s gh api --include "repos/${TARGET_REPOSITORY}/actions/runs/${page}" 2>&1)"
                   ;;
                 prior-attempt)
                   [[ "$HISTORY_ATTEMPT" =~ ^([1-9]|1[0-9]|20)$ ]] || { echo "ERROR: invalid governed reviewer prior attempt." >&2; return 1; }
@@ -671,8 +682,18 @@ jobs:
                   test "${BASH_REMATCH[3]}" = "$PR_NUMBER" || return 1
                   test "${BASH_REMATCH[4]}" = "$MAIN_SHA" || return 1
                   test "${BASH_REMATCH[5]}" = "$head" || return 1
-                  admission_run="$(python3 -B reviewer-main/scripts/automation_github_read.py \
-                    "repos/${TARGET_REPOSITORY}/actions/runs/${admission_run_id}")" || return 1
+                  admission_run="$(bot_reviewer_get spotlight-admission-source "$admission_run_id")" || return 1
+                  jq -e --argjson run "$admission_run_id" --arg base "$MAIN_SHA" '
+                    type == "object" and
+                    (.id | type == "number" and . == $run) and
+                    (.name == "Capability admission") and
+                    (.path == ".github/workflows/capability-admission.yml") and
+                    (.head_sha == $base) and
+                    (.head_branch == "main")
+                  ' <<<"$admission_run" >/dev/null || {
+                    echo "ERROR: Spotlight admission issuing workflow read is not exact accepted-main evidence." >&2
+                    return 1
+                  }
                 else
                   echo "ERROR: unreviewed Spotlight admission external identity." >&2
                   return 1

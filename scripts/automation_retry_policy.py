@@ -748,6 +748,8 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         'test "$status" = "200" || {',
         "application/json*) : ;;",
         'test "${#body}" -le 8000000 || {',
+        'response="$(timeout 20s gh api --include "repos/${TARGET_REPOSITORY}/actions/runs/${page}" 2>&1)"',
+        "spotlight-admission-source)",
         "bot_reviewer_paginated_get() {",
         "local page=1 max_pages body count first=true",
         "open-prs) max_pages=30",
@@ -760,7 +762,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         require(fragment in reviewer,
                 f"governed reviewer shell-read retry contract is missing: {fragment}")
     require(
-        reviewer.count("timeout 20s gh api --include") == 10
+        reviewer.count("timeout 20s gh api --include") == 11
         and reviewer.count("timeout 20s gh api --include graphql") == 1
         and reviewer.count('timeout 20s gh api --include --method GET -F page="$page"') == 2,
         "governed reviewer enumerated GET/query retry case inventory changed",

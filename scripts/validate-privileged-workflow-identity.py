@@ -21,7 +21,7 @@ import privileged_workflow_identity_v21_core as v21
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v161"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "35c37fc7f54200b00dbc7afe3305000c38822285",
+    ".github/workflows/bot-pr-user-approval.yml": "b731cee03038814cc0eced12a88648846c175ddc",
     ".github/workflows/profile-quality.yml": "0c94756c3da81f709bea05a3dd266f06d9054c60",
     ".github/workflows/profile-stats.yml": "eb9af8f63d4db7b35306ebf3c38f5004e7e1c0a8",
     ".github/workflows/spotlight-link-sync.yml": "4eed6be49844ca7c3019c3762841039132342a19",
@@ -2608,6 +2608,54 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
 
 
 
+def validate_bot_review_spotlight_admission_source_positive_only(bot_review: str) -> None:
+    """Require the exact native admission workflow identity before proof verification."""
+    approve = job_block(bot_review, "approve", "converge")
+    for marker in (
+        'spotlight-admission-source)',
+        '[[ "$page" =~ ^[1-9][0-9]*$ ]]',
+        'response="$(timeout 20s gh api --include "repos/${TARGET_REPOSITORY}/actions/runs/${page}" 2>&1)"',
+        'admission_run_id="${BASH_REMATCH[1]}"',
+        'admission_run="$(bot_reviewer_get spotlight-admission-source "$admission_run_id")" || return 1',
+        'jq -e --argjson run "$admission_run_id" --arg base "$MAIN_SHA"',
+        '(.id | type == "number" and . == $run)',
+        '(.name == "Capability admission")',
+        '(.path == ".github/workflows/capability-admission.yml")',
+        '(.head_sha == $base)',
+        '(.head_branch == "main")',
+        'ERROR: Spotlight admission issuing workflow read is not exact accepted-main evidence.',
+        '--admission-run <(printf',
+    ):
+        require(approve.count(marker) >= 1,
+                f"Spotlight issuing source workflow identity/transport changed: {marker}")
+    positions = (
+        approve.index('admission_run_id="${BASH_REMATCH[1]}"'),
+        approve.index('admission_run="$(bot_reviewer_get spotlight-admission-source "$admission_run_id")"'),
+        approve.index('jq -e --argjson run "$admission_run_id" --arg base "$MAIN_SHA"'),
+        approve.index('verdict_json="$(python3 -B reviewer-main/scripts/dependabot_latest_authentic_checks.py verify'),
+    )
+    require(list(positions) == sorted(positions),
+            "Spotlight issuing admission source must be parsed, fetched, checked, then verified")
+
+
+def validate_bot_review_spotlight_admission_source(bot_review: str) -> None:
+    validate_bot_review_spotlight_admission_source_positive_only(bot_review)
+    for original, weaker in (
+        ('(.id | type == "number" and . == $run)', '(.id | type == "number")'),
+        ('(.head_sha == $base)', '(.head_sha | type == "string")'),
+        ('(.head_branch == "main")', '(.head_branch | type == "string")'),
+    ):
+        require(bot_review.count(original) == 1,
+                f"Spotlight admission proof has ambiguous weakening target: {original}")
+        weakened = bot_review.replace(original, weaker, 1)
+        try:
+            validate_bot_review_spotlight_admission_source_positive_only(weakened)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("Spotlight admission source identity weakening escaped regression test")
+
+
 def project_bot_reviewer_shell_reads_to_raw(bot_review: str) -> str:
     """Project reviewer REST/GraphQL retry transport to the accepted pre-hardening semantic shape."""
     has_reviewer_kernel = "          bot_reviewer_get() {\n" in bot_review
@@ -2650,6 +2698,8 @@ def project_bot_reviewer_shell_reads_to_raw(bot_review: str) -> str:
          'REVIEW_IDENTITY_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api user)"', 1),
         ('PR_PAGES="$(bot_reviewer_paginated_get open-prs)"',
          'PR_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"', 1),
+        ('admission_run="$(bot_reviewer_get spotlight-admission-source "$admission_run_id")"',
+         'admission_run="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs/${admission_run_id}")"', 1),
         ('checks="$(bot_reviewer_get required-checks)"',
          'checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&filter=latest&per_page=100")"', 1),
         ('runs="$(bot_reviewer_get quiescent-runs)"',
@@ -7849,6 +7899,7 @@ def main() -> int:
         validate_codeql_autofix_constructive_response_schemas(autofix)
         validate_codeql_autofix_read_singleton_evidence(autofix)
         validate_codeql_autofix_approval_comment_evidence(autofix)
+        validate_bot_review_spotlight_admission_source(bot_review)
         validate_bot_review_liveness(bot_review, dependabot, autofix, spotlight)
         validate_dependabot_prereconciliation_wake_isolation(bot_review)
         unsafe = bot_review.replace(
