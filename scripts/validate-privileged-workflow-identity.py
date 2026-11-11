@@ -4908,9 +4908,9 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     )
 
     common_fragments = (
-        'local -a required=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review)',
+        'reviewer-main/scripts/dependabot_latest_authentic_checks.py select',
         'spotlight|dependabot|codeql-autofix)',
-        'required+=(trusted-capability-admission)',
+        'reviewer-main/scripts/dependabot_latest_authentic_checks.py verify',
         'LANE="dependabot"',
         'LANE="codeql-autofix"',
         'LANE="spotlight"',
@@ -5026,13 +5026,20 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         "Bot PR reviewer must derive all lane prerequisites from one exact-head GitHub-Actions snapshot per observation",
     )
     for fragment in (
-        '(.total_count == (.check_runs | length))',
-        '(([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))',
-        '[.check_runs[] | select(.name == $name)] | length',
-        '[.check_runs[] | select(.name == $name and .status != "completed")] | length',
-        '[.check_runs[] | select(.name == $name and .status == "completed" and .conclusion != "success")] | length',
+        'git -C reviewer-main rev-parse HEAD)" = "$GITHUB_SHA"',
+        'git -C reviewer-main rev-parse HEAD:scripts/dependabot_latest_authentic_checks.py)" = "397daa392862cee022c45164182c2f1c4d2ce4ca"',
+        'required_workflow_history="$(python3 -B reviewer-main/scripts/automation_github_read.py',
+        'reviewer-main/scripts/dependabot_latest_authentic_checks.py select',
+        'actions/runs/${run_id}/jobs?filter=latest&per_page=100',
+        'reviewer-main/scripts/dependabot_latest_authentic_checks.py verify',
+        '--checks "$RUNNER_TEMP/bot-review-authentic-checks.json"',
+        '--runs "$RUNNER_TEMP/bot-review-authentic-runs.json"',
+        'if [ "$verdict" = "ready" ]; then' if False else 'ready) return 0',
+        'blocked)',
     ):
-        require(fragment in bot_review, f"Bot PR exact-head prerequisite snapshot contract is missing: {fragment}")
+        require(fragment in bot_review, f"Bot PR latest authentic prerequisite proof is missing: {fragment}")
+    require('all(.check_runs[] | select(.name == $name);' not in bot_review,
+            "Bot reviewer regressed to old same-name history poisoning")
     require(
         'check_name=${name}' not in bot_review,
         "Bot PR reviewer regressed to one GitHub API read per required check context",
