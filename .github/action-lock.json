@@ -51,18 +51,18 @@
     },
     "github/codeql-action/analyze": {
       "repositoryId": 259445878,
-      "releaseId": 432567618,
-      "sha": "1fc58d04a4d4374f921bdac573c3811c240f9c26",
-      "tag": "v4.39.2",
-      "tagRefSha": "bd01fe9e80db3cb1eb1368bd8f61d3eb5f43d1f4",
+      "releaseId": 434191629,
+      "sha": "33d7b85da1a04171e211befe2c739303b9a4c066",
+      "tag": "v4.39.3",
+      "tagRefSha": "f3bbb05694c2f74569081c28664c0866d64dec21",
       "tagRefType": "tag"
     },
     "github/codeql-action/init": {
       "repositoryId": 259445878,
-      "releaseId": 432567618,
-      "sha": "1fc58d04a4d4374f921bdac573c3811c240f9c26",
-      "tag": "v4.39.2",
-      "tagRefSha": "bd01fe9e80db3cb1eb1368bd8f61d3eb5f43d1f4",
+      "releaseId": 434191629,
+      "sha": "33d7b85da1a04171e211befe2c739303b9a4c066",
+      "tag": "v4.39.3",
+      "tagRefSha": "f3bbb05694c2f74569081c28664c0866d64dec21",
       "tagRefType": "tag"
     },
     "shinpr/github-profile-stats": {
