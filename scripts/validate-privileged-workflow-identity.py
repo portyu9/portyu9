@@ -3367,65 +3367,48 @@ def validate_dependabot_readiness_run_check_evidence_schema(dependabot: str) -> 
     check_end = dependabot.index(check_end_marker, check_start)
     checks = dependabot[check_start:check_end]
 
-    snapshot_endpoint = (
-        "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/"
-        "check-runs?app_id=15368&filter=latest&per_page=100"
+    # This proof now binds the checked job to an authenticated latest canonical
+    # workflow run and attempt, rather than requiring every historical same-name
+    # check from unrelated suites to have succeeded.
+    markers = (
+        "python3 scripts/automation_github_read.py",
+        "commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100",
+        "actions/runs?head_sha=${HEAD_SHA}&per_page=100",
+        "python3 scripts/dependabot_latest_authentic_checks.py select",
+        'for key in profile dependency codeql; do',
+        "actions/runs/${run_id}/jobs?filter=latest&per_page=100",
+        "python3 scripts/dependabot_latest_authentic_checks.py verify",
+        '--checks "$RUNNER_TEMP/dependabot-authentic-checks.json"',
+        '--runs "$RUNNER_TEMP/dependabot-authentic-runs.json"',
+        '--profile-jobs "$RUNNER_TEMP/dependabot-authentic-profile-jobs.json"',
+        '--dependency-jobs "$RUNNER_TEMP/dependabot-authentic-dependency-jobs.json"',
+        '--codeql-jobs "$RUNNER_TEMP/dependabot-authentic-codeql-jobs.json"',
+        '--head "$HEAD_SHA" --branch "$HEAD_REF" --repository "$TARGET_REPOSITORY"',
+        'if [ "$proof_state" = "blocked" ]; then',
+        'ERROR: newest authentic workflow/job failure is a hard stop',
+        'exit 1',
     )
-    governed_fetch = "python3 scripts/automation_github_read.py"
-    required_loop = (
-        "for NAME in validate-contracts integration-pinned-upstream dependency-review "
-        "trusted-capability-admission analyze-actions analyze-python; do"
+    for marker in markers:
+        require(marker in checks,
+                f"Dependabot latest authentic run/job proof contract is missing: {marker}")
+    order = (
+        "commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100",
+        "actions/runs?head_sha=${HEAD_SHA}&per_page=100",
+        "python3 scripts/dependabot_latest_authentic_checks.py select",
+        'for key in profile dependency codeql; do',
+        "actions/runs/${run_id}/jobs?filter=latest&per_page=100",
+        "python3 scripts/dependabot_latest_authentic_checks.py verify",
+        'if [ "$proof_state" = "blocked" ]; then',
     )
-    for fragment in (
-        governed_fetch,
-        snapshot_endpoint,
-        '(.check_runs | type == "array" and length <= 100) and',
-        '(.name | type == "string" and length > 0) and',
-        '(.app | type == "object" and (.id == 15368)) and',
-        '(([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))',
-        'ERROR: malformed or incomplete exact-head required-check snapshot for ${HEAD_SHA}.',
-        required_loop,
-        '''count="$(jq --arg name "$NAME" '[.check_runs[] | select(.name == $name)] | length' <<<"$checks")"''',
-        '[ "$count" -lt 1 ]',
+    require([checks.index(x) for x in order] == sorted(checks.index(x) for x in order),
+            "Dependabot latest authentic source must be verified before readiness decisions")
+    for forbidden in (
         'all(.check_runs[] | select(.name == $name);',
-        '.status == "completed" and .conclusion == "success"',
+        'any(.check_runs[];',
+        'check_name=${NAME}',
     ):
-        require(
-            fragment in checks,
-            f"Dependabot readiness check-snapshot contract is missing: {fragment}",
-        )
-    require(
-        checks.count('(.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and') == 1,
-        "Dependabot readiness must strictly validate one bounded complete check snapshot",
-    )
-    require(
-        checks.count('(.id | (type == "number") and . == floor and . > 0) and') == 1,
-        "Dependabot readiness must require positive integer ids in the complete check snapshot",
-    )
-    require(
-        checks.count('. == "queued" or . == "in_progress" or . == "requested" or') == 1
-        and checks.count('. == "waiting" or . == "pending" or . == "completed"') == 1,
-        "Dependabot readiness check snapshot must lock the documented six-state status set",
-    )
-    require(
-        checks.count(snapshot_endpoint) == 1
-        and checks.count(governed_fetch) == 1
-        and "check_name=${NAME}" not in checks,
-        "Dependabot readiness must use exactly one governed complete snapshot rather than per-context reads",
-    )
-    require(
-        checks.count("malformed or incomplete exact-head required-check snapshot") == 1
-        and 'echo "ERROR: malformed or incomplete exact-head required-check snapshot for ${HEAD_SHA}." >&2\n              exit 1' in checks,
-        "Dependabot malformed required-check snapshot evidence must terminate the transaction",
-    )
-
-    check_fetch = checks.index(governed_fetch)
-    check_schema = checks.index('(.check_runs | type == "array" and length <= 100) and', check_fetch)
-    check_ready = checks.index(required_loop, check_schema)
-    require(
-        check_fetch < check_schema < check_ready,
-        "Dependabot must validate one complete check snapshot before readiness decisions",
-    )
+        require(forbidden not in checks,
+                f"Dependabot required checks became an unauthenticated historical selection: {forbidden}")
 
     run_start_marker = "          workflow_dispatch_runs() {\n"
     run_end_marker = "\n\n          delegated_admission_attempt_ready() {\n"
