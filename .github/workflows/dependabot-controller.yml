@@ -297,6 +297,13 @@ jobs:
                 fi
                 HEAD_SHA="$UPDATED_HEAD_SHA"
                 BASE_SHA="$UPDATED_BASE_SHA"
+                # The initial dependabot-pr.json is bound to PRE_UPDATE_HEAD_SHA.
+                # The immediately preceding authenticated, typed post-update PR
+                # snapshot is the only valid input for downstream exact-head proof.
+                test "$(jq -r .headSha "$RUNNER_TEMP/dependabot-post-update-pr-normalized.json")" = "$HEAD_SHA"
+                test "$(jq -r .baseSha "$RUNNER_TEMP/dependabot-post-update-pr-normalized.json")" = "$BASE_SHA"
+                cp -- "$RUNNER_TEMP/dependabot-post-update-pr.json" dependabot-pr.json
+                cp -- "$RUNNER_TEMP/dependabot-post-update-pr-normalized.json" dependabot-pr-normalized.json
                 UPDATE_CONVERGED=true
                 echo "Dependabot exact-head update converged to current main on bounded attempt ${UPDATE_ATTEMPT}/24: ${PRE_UPDATE_HEAD_SHA} -> ${HEAD_SHA}."
                 break
