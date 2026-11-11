@@ -1133,9 +1133,18 @@ def validate_reviewer_latest_check_proof() -> None:
     )
     for marker in required:
         require(marker in block, f"reviewer latest check proof lost: {marker}")
-    in_order = (required[0], required[2], required[3], required[5],
-                required[6], required[8], required[10], required[12])
-    require([block.index(x) for x in in_order]
+    in_order = (
+        'git -C reviewer-main rev-parse HEAD)" = "$GITHUB_SHA"',
+        'checks="$(bot_reviewer_get required-checks)"',
+        'required_workflow_history="$(python3 -B reviewer-main/scripts/automation_github_read.py',
+        'reviewer-main/scripts/dependabot_latest_authentic_checks.py select',
+        'for key in profile dependency codeql; do',
+        'actions/runs/${run_id}/jobs?filter=latest&per_page=100',
+        'reviewer-main/scripts/dependabot_latest_authentic_checks.py verify',
+        'case "$verdict" in',
+    )
+    require(all(x in block for x in in_order)
+            and [block.index(x) for x in in_order]
             == sorted(block.index(x) for x in in_order),
             "reviewer must prove source and runs before owner review")
     require("all(.check_runs[] | select(.name == $name);" not in block,
