@@ -271,14 +271,14 @@ def validate(text: str) -> None:
     for fragment in (
         f"uses: {DOWNLOAD_USES}",
         "artifact-ids: ${{ steps.signal_field_review_upload.outputs.artifact-id }}",
-        "github-token: ${{ github.token }}",
-        "repository: ${{ github.repository }}",
-        "run-id: ${{ github.run_id }}",
         "path: roundtrip-signal-field",
         "digest-mismatch: error",
     ):
         require(fragment in roundtrip_download,
                 f"Signal Field review artifact exact-ID download contract changed: {fragment}")
+    for cross_run_selector in ("github-token:", "repository:", "run-id:"):
+        require(cross_run_selector not in roundtrip_download,
+                f"Same-run artifact download must not route via cross-run REST: {cross_run_selector}")
     require("\n          name: signal-field-publishable-review\n" not in roundtrip_download,
             "Signal Field review artifact download must not regress to race-prone name lookup")
     require(roundtrip_download.count(f"uses: {DOWNLOAD_USES}") == 1,
