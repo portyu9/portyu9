@@ -612,7 +612,7 @@ jobs:
               echo "ERROR: governed reviewer source is not exact accepted main." >&2
               return 1
             }
-            test "$(git -C reviewer-main rev-parse HEAD:scripts/dependabot_latest_authentic_checks.py)" = "71280abf53bba961b3207a0a482e61fb70a6f1f4" || {
+            test "$(git -C reviewer-main rev-parse HEAD:scripts/dependabot_latest_authentic_checks.py)" = "0c7d261ad2602ad108dfe378017de22f11248abd" || {
               echo "ERROR: required-check proof source blob changed." >&2
               return 1
             }
@@ -644,6 +644,38 @@ jobs:
                 "repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/jobs?filter=latest&per_page=100" \
                 > "$RUNNER_TEMP/bot-review-authentic-${key}-jobs.json" || return 1
             done
+            # Spotlight admission is emitted by a separate, trusted
+            # Capability Admission workflow, not the Dependabot-only
+            # Profile Quality job. Prove the custom check's exact PR subject
+            # against the actual accepted-main issuing workflow.
+            local -a spotlight_admission_args=()
+            if [ "$lane" = "spotlight" ]; then
+              spotlight_admission_file="$RUNNER_TEMP/bot-review-spotlight-admission-run.json"
+              admission_external="$(jq -r '[.check_runs[] |
+                  select(.name == "trusted-capability-admission") |
+                  .external_id // ""] |
+                  if length == 0 then "" elif length == 1 then .[0]
+                  else error("multiple independent Spotlight admission checks") end'
+                  "$RUNNER_TEMP/bot-review-authentic-checks.json")" || return 1
+              if [ -n "$admission_external" ]; then
+                if [[ "$admission_external" =~ ^spotlight-admission:([1-9][0-9]*):([1-9][0-9]*):([1-9][0-9]*):([0-9a-f]{40}):([0-9a-f]{40})$ ]]; then
+                  admission_run_id="${BASH_REMATCH[1]}"
+                  test "${BASH_REMATCH[3]}" = "$PR_NUMBER" || return 1
+                  test "${BASH_REMATCH[4]}" = "$MAIN_SHA" || return 1
+                  test "${BASH_REMATCH[5]}" = "$head" || return 1
+                  python3 -B reviewer-main/scripts/automation_github_read.py \
+                    "repos/${TARGET_REPOSITORY}/actions/runs/${admission_run_id}" \
+                    > "$spotlight_admission_file" || return 1
+                else
+                  echo "ERROR: unreviewed Spotlight admission external identity." >&2
+                  return 1
+                fi
+              else
+                printf 'null\n' > "$spotlight_admission_file"
+              fi
+              spotlight_admission_args=(--base-sha "$MAIN_SHA"
+                --pr-number "$PR_NUMBER" --admission-run "$spotlight_admission_file")
+            fi
             python3 -B reviewer-main/scripts/dependabot_latest_authentic_checks.py verify \
               --checks "$RUNNER_TEMP/bot-review-authentic-checks.json" \
               --runs "$RUNNER_TEMP/bot-review-authentic-runs.json" \
@@ -652,6 +684,7 @@ jobs:
               --dependency-jobs "$RUNNER_TEMP/bot-review-authentic-dependency-jobs.json" \
               --codeql-jobs "$RUNNER_TEMP/bot-review-authentic-codeql-jobs.json" \
               --head "$head" --branch "$HEAD_REF" --repository "$TARGET_REPOSITORY" \
+              "${spotlight_admission_args[@]}" \
               --out "$RUNNER_TEMP/bot-review-authentic-verdict.json" || return 1
             verdict="$(jq -r .state "$RUNNER_TEMP/bot-review-authentic-verdict.json")"
             case "$verdict" in
