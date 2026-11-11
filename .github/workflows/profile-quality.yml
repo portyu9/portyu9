@@ -580,10 +580,9 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
+          # Same-run immutable artifact ID uses the Actions artifact service directly.
+          # Do not force the public REST listing, which can be stale after upload.
           artifact-ids: ${{ steps.signal_field_review_upload.outputs.artifact-id }}
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ github.run_id }}
           path: roundtrip-signal-field
           digest-mismatch: error
 
