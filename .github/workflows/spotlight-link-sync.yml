@@ -168,9 +168,9 @@ jobs:
           retention-days: 1
 
   lease:
-    if: needs.plan.outputs.superseded != 'true'
     name: mint-mutation-lease-read-only
     needs: plan
+    if: needs.plan.outputs.superseded != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     concurrency:
@@ -276,9 +276,9 @@ jobs:
           echo "candidate_id=$CANDIDATE_ID" >> "$GITHUB_OUTPUT"
 
   reconcile:
-    if: needs.plan.outputs.superseded != 'true'
     name: reconcile-stale-candidates-write
     needs: [plan, lease]
+    if: needs.plan.outputs.superseded != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     concurrency:
