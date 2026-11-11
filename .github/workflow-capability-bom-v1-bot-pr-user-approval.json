@@ -8,7 +8,15 @@
       "id": "bot-pr-user-approval",
       "jobs": [
         {
-          "actions": [],
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact accepted-main required-check proof"
+            }
+          ],
           "apiSurfaces": [
             {
               "client": "gh-api",

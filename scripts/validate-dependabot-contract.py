@@ -18,6 +18,7 @@ from artifact_delegation_contract import self_test as artifact_delegation_contra
 from dependabot_capability_admission import self_test as capability_admission_self_test
 from dependabot_controller import self_test as controller_self_test
 from dependabot_workflow_rebase_admission import self_test as rebase_permission_self_test
+from dependabot_latest_authentic_checks import self_test as latest_authentic_checks_self_test
 from dependabot_admission_proof import self_test as admission_proof_self_test
 from dependabot_pin_diff import self_test as pin_diff_self_test
 from dependabot_pr_identity import self_test as pr_identity_self_test
@@ -1007,101 +1008,154 @@ def validate_controller_collection_contract(text: str) -> None:
 
 
 def validate_controller_required_check_snapshot_contract(text: str) -> None:
+    """Only latest verified workflow-run/attempt/job IDs can satisfy a gate."""
     start_marker = "          checks_ready() {\n"
     end_marker = "\n\n          approve_exact_pr_workflows() {\n"
-    require(
-        text.count(start_marker) == 1 and text.count(end_marker) == 1,
-        "Dependabot required-check snapshot block anchors changed",
-    )
-    start = text.index(start_marker)
-    end = text.index(end_marker, start)
-    block = text[start:end]
+    require(text.count(start_marker) == 1 and text.count(end_marker) == 1,
+            "Dependabot required-check proof block anchors changed")
+    block = text.split(start_marker, 1)[1].split(end_marker, 1)[0]
 
     proof_run_fetch = (
         'python3 scripts/automation_github_read.py '
         '"repos/${TARGET_REPOSITORY}/actions/runs/${proof_run_id}/attempts/${proof_run_attempt}"'
     )
-    require(
-        text.count(proof_run_fetch) == 1,
-        "Dependabot delegated admission must use one governed exact proof-run singleton read",
-    )
-    require(
-        'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${proof_run_id}/attempts/${proof_run_attempt}"'
-        not in text,
-        "Dependabot delegated admission regained direct proof-run singleton transport",
-    )
-    proof_fetch_pos = text.index(proof_run_fetch)
-    proof_verify_pos = text.index(
-        "python3 scripts/dependabot_admission_proof.py verify-current",
-        proof_fetch_pos,
-    )
-    require(
-        proof_fetch_pos < proof_verify_pos,
-        "Dependabot delegated proof-run evidence must be fetched before current-run verification",
-    )
-
-    snapshot_endpoint = (
-        "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/"
-        "check-runs?app_id=15368&filter=latest&per_page=100"
-    )
-    governed_fetch = "python3 scripts/automation_github_read.py"
-    require(
-        block.count(snapshot_endpoint) == 1 and block.count(governed_fetch) == 1,
-        "Dependabot checks_ready must use one governed complete exact-head GitHub-Actions snapshot",
-    )
-    require(
-        "check_name=${NAME}" not in block,
-        "Dependabot checks_ready regressed to one GitHub API read per required context",
-    )
-    required_names = (
-        "for NAME in validate-contracts integration-pinned-upstream dependency-review "
-        "trusted-capability-admission analyze-actions analyze-python; do"
-    )
-    for fragment in (
-        '(.total_count | type == "number" and . == floor and . >= 0 and . <= 100)',
-        '(.total_count == (.check_runs | length))',
-        '(.name | type == "string" and length > 0)',
-        '(.head_sha == $head)',
-        '(.app | type == "object" and (.id == 15368))',
-        '(([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))',
-        required_names,
-        '''count="$(jq --arg name "$NAME" '[.check_runs[] | select(.name == $name)] | length' <<<"$checks")"''',
-        '[ "$count" -lt 1 ]',
-        'all(.check_runs[] | select(.name == $name);',
-        '.status == "completed" and .conclusion == "success"',
-        'echo "ERROR: malformed or incomplete exact-head required-check snapshot for ${HEAD_SHA}." >&2',
-        "exit 1",
+    require(text.count(proof_run_fetch) == 1,
+            "delegated admission lost exact authenticated proof-run read")
+    require("python3 scripts/dependabot_admission_proof.py verify-current" in text,
+            "delegated proof-run current-attempt verification is missing")
+    required = (
+        'python3 scripts/automation_github_read.py',
+        'commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100',
+        'actions/runs?head_sha=${HEAD_SHA}&per_page=100',
+        'python3 scripts/dependabot_latest_authentic_checks.py select',
+        '--runs "$RUNNER_TEMP/dependabot-authentic-runs.json"',
+        '--head "$HEAD_SHA" --branch "$HEAD_REF" --repository "$TARGET_REPOSITORY"',
+        '--out "$RUNNER_TEMP/dependabot-authentic-selected.json"',
+        'for key in profile dependency codeql; do',
+        'run_id="$(jq -r --arg key "$key" \'.runs[$key].id\'',
+        'actions/runs/${run_id}/jobs?filter=latest&per_page=100',
+        'python3 scripts/dependabot_latest_authentic_checks.py verify',
+        '--checks "$RUNNER_TEMP/dependabot-authentic-checks.json"',
+        '--selection "$RUNNER_TEMP/dependabot-authentic-selected.json"',
+        '--profile-jobs "$RUNNER_TEMP/dependabot-authentic-profile-jobs.json"',
+        '--dependency-jobs "$RUNNER_TEMP/dependabot-authentic-dependency-jobs.json"',
+        '--codeql-jobs "$RUNNER_TEMP/dependabot-authentic-codeql-jobs.json"',
+        'if [ "$proof_state" = "blocked" ]; then',
+        'exit 1',
+        'if [ "$proof_state" != "ready" ]; then',
+        'workflow_dispatch_runs',
+        'delegated_admission_attempt_ready',
         'test "$ready" = "true"',
-    ):
-        require(
-            fragment in block,
-            f"Dependabot required-check snapshot contract is missing: {fragment}",
-        )
-
-    fetch_pos = block.index(governed_fetch)
-    endpoint_pos = block.index(snapshot_endpoint, fetch_pos)
-    envelope_pos = block.index('(.total_count == (.check_runs | length))', endpoint_pos)
-    loop_pos = block.index(required_names, envelope_pos)
-    require(
-        fetch_pos < endpoint_pos < envelope_pos < loop_pos,
-        "Dependabot required-check snapshot must be fetched once, fully typed, then consumed",
     )
-
+    for marker in required:
+        require(block.count(marker) >= 1,
+                f"trusted latest-run readiness proof is missing: {marker}")
+    require(
+        block.count('--head "$HEAD_SHA" --branch "$HEAD_REF" --repository "$TARGET_REPOSITORY"') == 2,
+        "both the selector and the verifier must be bound to the exact same head/branch/repository",
+    )
+    in_order = (
+        'commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100',
+        'actions/runs?head_sha=${HEAD_SHA}&per_page=100',
+        'python3 scripts/dependabot_latest_authentic_checks.py select',
+        'for key in profile dependency codeql; do',
+        'actions/runs/${run_id}/jobs?filter=latest&per_page=100',
+        'python3 scripts/dependabot_latest_authentic_checks.py verify',
+        'if [ "$proof_state" = "blocked" ]; then',
+        'workflow_dispatch_runs',
+        'delegated_admission_attempt_ready',
+    )
+    positions = [block.index(marker) for marker in in_order]
+    require(positions == sorted(positions),
+            "latest-run verification must precede every credentialed approval")
     for forbidden in (
-        'gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=',
-        'ready=false\n                continue',
-        'ERROR: malformed or incomplete required-check evidence for ${NAME}',
+        'all(.check_runs[] | select(.name == $name);',
+        'select(.name == $NAME) | .conclusion == "success"',
+        'any(.check_runs[];',
+        'check_name=${NAME}',
+        'gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs',
     ):
-        require(
-            forbidden not in block,
-            f"Dependabot required-check snapshot regressed to softened/repeated evidence: {forbidden}",
-        )
+        require(forbidden not in block,
+                f"historical or ungoverned check selection returned: {forbidden}")
+    require(text.count("for ATTEMPT in $(seq 1 24); do") == 1
+            and 'for ATTEMPT in $(seq 1 24); do\n              sleep 15\n              assert_transaction\n              if checks_ready; then' in text,
+            "24x15s same-transaction convergence contract changed")
 
-    require(
-        text.count("for ATTEMPT in $(seq 1 24); do") == 1
-        and 'for ATTEMPT in $(seq 1 24); do\n              sleep 15\n              assert_transaction\n              if checks_ready; then' in text,
-        "Dependabot 24x15s same-transaction convergence contract changed",
+
+def self_test_controller_latest_check_proof(text: str) -> None:
+    validate_controller_required_check_snapshot_contract(text)
+    for old, new in (
+        ('actions/runs/${run_id}/jobs?filter=latest&per_page=100',
+         'actions/runs/${run_id}/jobs?filter=all&per_page=100'),
+        ('--head "$HEAD_SHA" --branch "$HEAD_REF" --repository "$TARGET_REPOSITORY"',
+         '--head "$HEAD_SHA" --branch "main" --repository "$TARGET_REPOSITORY"'),
+        ('if [ "$proof_state" = "blocked" ]; then',
+         'if [ "$proof_state" = "ready" ]; then'),
+        ('python3 scripts/dependabot_latest_authentic_checks.py verify',
+         'python3 scripts/dependabot_latest_authentic_checks.py select'),
+    ):
+        require(text.count(old) >= 1, "latest-authentic negative mutation anchor vanished")
+        try:
+            validate_controller_required_check_snapshot_contract(text.replace(old, new, 1))
+        except ValueError:
+            pass
+        else:
+            raise ValueError("invalid latest-authentic proof mutation passed governance")
+
+
+def validate_reviewer_latest_check_proof() -> None:
+    reviewer = (WORKFLOWS / "bot-pr-user-approval.yml").read_text(encoding="utf-8")
+    require(reviewer.count('name: Checkout exact accepted-main required-check proof') == 1
+            and reviewer.count('uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1') == 1
+            and reviewer.count('ref: ${{ github.sha }}') == 1
+            and reviewer.count('path: reviewer-main') == 1
+            and reviewer.count('persist-credentials: false') >= 1,
+            "reviewer must execute only immutable main-owned proof without credentials")
+    start = "          check_required_contexts() {\n"
+    end = "\n\n          check_quiescent_runs() {\n"
+    require(reviewer.count(start) == 1 and reviewer.count(end) == 1,
+            "reviewer proof boundaries changed")
+    block = reviewer.split(start, 1)[1].split(end, 1)[0]
+    required = (
+        'git -C reviewer-main rev-parse HEAD)" = "$GITHUB_SHA"',
+        'git -C reviewer-main rev-parse HEAD:scripts/dependabot_latest_authentic_checks.py)" = "71280abf53bba961b3207a0a482e61fb70a6f1f4"',
+        'git -C reviewer-main rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
+        'bot_reviewer_get required-checks',
+        'reviewer-main/scripts/automation_github_read.py',
+        'actions/runs?head_sha=${head}&per_page=100',
+        'reviewer-main/scripts/dependabot_latest_authentic_checks.py select',
+        'for key in profile dependency codeql; do',
+        'reviewer-main/scripts/automation_github_read.py',
+        'actions/runs/${run_id}/jobs?filter=latest&per_page=100',
+        'reviewer-main/scripts/dependabot_latest_authentic_checks.py verify',
+        '--head "$head" --branch "$HEAD_REF" --repository "$TARGET_REPOSITORY"',
+        'case "$verdict" in',
+        'ready) return 0',
+        'pending)',
+        'blocked)',
+        'return 1',
     )
+    for marker in required:
+        require(marker in block, f"reviewer latest check proof lost: {marker}")
+    require(block.count('--head "$head" --branch "$HEAD_REF" --repository "$TARGET_REPOSITORY"') == 2,
+            "reviewer selection and verification must both bind the exact PR identity")
+    in_order = (
+        'git -C reviewer-main rev-parse HEAD)" = "$GITHUB_SHA"',
+        'checks="$(bot_reviewer_get required-checks)"',
+        'required_workflow_history="$(python3 -B reviewer-main/scripts/automation_github_read.py',
+        'reviewer-main/scripts/dependabot_latest_authentic_checks.py select',
+        'for key in profile dependency codeql; do',
+        'actions/runs/${run_id}/jobs?filter=latest&per_page=100',
+        'reviewer-main/scripts/dependabot_latest_authentic_checks.py verify',
+        'case "$verdict" in',
+    )
+    require(all(x in block for x in in_order)
+            and [block.index(x) for x in in_order]
+            == sorted(block.index(x) for x in in_order),
+            "reviewer must prove source and runs before owner review")
+    require("all(.check_runs[] | select(.name == $name);" not in block,
+            "reviewer historical all-checks poisoning was reintroduced")
+
 
 
 def validate_controller_delegated_proof_collection_contract(text: str) -> None:
@@ -3253,6 +3307,9 @@ def main() -> int:
         self_test_controller_reviewer_request_status(controller_text)
         validate_controller_collection_contract(controller_text)
         validate_controller_required_check_snapshot_contract(controller_text)
+        self_test_controller_latest_check_proof(controller_text)
+        validate_reviewer_latest_check_proof()
+        latest_authentic_checks_self_test()
         self_test_controller_delegated_proof_collection_contract(controller_text)
         validate_controller_residual_read_transport_contract(controller_text)
         validate_controller_git_read_response_contract(controller_text)

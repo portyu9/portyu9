@@ -20,7 +20,7 @@ import privileged_workflow_identity_v21_core as v21
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v161"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "7153412c8251538028c1e7911c266c0f6c87f429",
+    ".github/workflows/bot-pr-user-approval.yml": "f92d462b88f344213f64bb872a64443cb0840f94",
     ".github/workflows/profile-quality.yml": "befba2071db852792eb46f7c8444011eb3375458",
     ".github/workflows/profile-stats.yml": "eb9af8f63d4db7b35306ebf3c38f5004e7e1c0a8",
     ".github/workflows/spotlight-link-sync.yml": "03e3a9b4b39fa026d851e5cabdbdd451e8f6e8c8",
@@ -3070,73 +3070,70 @@ def validate_bot_review_identity_ref_evidence_schema(bot_review: str) -> None:
 
 
 def validate_bot_review_run_check_evidence_schema(bot_review: str) -> None:
+    """Review authorization requires latest real run+job proof, not old check-name copies."""
     bot_review = project_bot_reviewer_shell_reads_to_raw(bot_review)
     approve = job_block(bot_review, "approve", "converge")
     check_fetch = (
         'checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/'
         'check-runs?app_id=15368&filter=latest&per_page=100")"'
     )
-    for fragment in (
+    run_fetch = 'runs="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${head}&per_page=100")"'
+    for marker in (
         check_fetch,
-        '(.check_runs | type == "array" and length <= 100) and',
-        '(.name | type == "string" and length > 0) and',
-        '(.app | type == "object" and .id == 15368) and',
-        '(([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))',
-        'ERROR: malformed or incomplete exact-head GitHub Actions check snapshot for ${head}.',
-        'count="$(jq --arg name "$name" \'[.check_runs[] | select(.name == $name)] | length\' <<<"$checks")"',
-        'if [ "$count" -lt 1 ]; then',
-        'active="$(jq --arg name "$name" \'[.check_runs[] | select(.name == $name and .status != "completed")] | length\' <<<"$checks")"',
-        'if [ "$active" -gt 0 ]; then',
-        'failed="$(jq --arg name "$name" \'[.check_runs[] | select(.name == $name and .status == "completed" and .conclusion != "success")] | length\' <<<"$checks")"',
-        'if [ "$failed" -gt 0 ]; then',
+        'git -C reviewer-main rev-parse HEAD)" = "$GITHUB_SHA"',
+        'git -C reviewer-main rev-parse HEAD:scripts/dependabot_latest_authentic_checks.py)" = "71280abf53bba961b3207a0a482e61fb70a6f1f4"',
+        'git -C reviewer-main rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
+        'required_workflow_history="$(python3 -B reviewer-main/scripts/automation_github_read.py',
+        'actions/runs?head_sha=${head}&per_page=100',
+        'reviewer-main/scripts/dependabot_latest_authentic_checks.py select',
+        'for key in profile dependency codeql; do',
+        'actions/runs/${run_id}/jobs?filter=latest&per_page=100',
+        'reviewer-main/scripts/dependabot_latest_authentic_checks.py verify',
+        '--head "$head" --branch "$HEAD_REF" --repository "$TARGET_REPOSITORY"',
+        'if [ "$state" != "selected" ]; then',
+        'case "$verdict" in',
+        'ready) return 0',
+        'pending)',
+        'blocked)',
+        'ERROR: latest authentic required workflow/job has failed.',
+        run_fetch,
         '(.workflow_runs | type == "array" and length <= 100) and',
         '(.head_repository | type == "object" and',
         '(([.workflow_runs[] | .id] | length) == ([.workflow_runs[] | .id] | unique | length))',
         'ERROR: malformed or incomplete workflow-run quiescence evidence for ${head}.',
     ):
-        require(fragment in approve, f"Bot PR reviewer run/check schema contract is missing: {fragment}")
-
-    require(
-        approve.count('(.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and') == 2,
-        "Bot PR reviewer must strictly validate both bounded REST collection totals",
+        require(marker in approve,
+                f"Bot reviewer latest-run/job or quiescence schema contract is missing: {marker}")
+    order = (
+        'git -C reviewer-main rev-parse HEAD)" = "$GITHUB_SHA"',
+        check_fetch,
+        'required_workflow_history="$(python3 -B reviewer-main/scripts/automation_github_read.py',
+        'reviewer-main/scripts/dependabot_latest_authentic_checks.py select',
+        'for key in profile dependency codeql; do',
+        'actions/runs/${run_id}/jobs?filter=latest&per_page=100',
+        'reviewer-main/scripts/dependabot_latest_authentic_checks.py verify',
+        'case "$verdict" in',
     )
-    require(
-        approve.count('. == "queued" or . == "in_progress" or . == "requested" or') == 2
-        and approve.count('. == "waiting" or . == "pending" or . == "completed"') == 2,
-        "Bot PR reviewer must lock the documented six-state check/workflow-run status set",
-    )
-    require(
-        approve.count('select(.status != "completed")') == 2,
-        "Bot PR reviewer must classify validated non-completed workflow runs as active",
-    )
-    require(
-        'check_name=${name}' not in approve,
-        "Bot PR reviewer regressed to one check-run request per required context",
-    )
-    require(
-        'required check ${name} is not singleton in the exact-head snapshot.' not in approve
-        and '[ "$count" = "1" ]' not in approve,
-        "Bot PR reviewer must tolerate duplicate same-name checks only through all-copies evidence",
-    )
-    require(
-        'if [ "$count" -lt 1 ]; then' in approve
-        and 'if [ "$active" -gt 0 ]; then' in approve
-        and 'if [ "$failed" -gt 0 ]; then' in approve,
-        "Bot PR reviewer multiplicity contract must require at least one copy, defer on any active copy, and fail on any unsuccessful copy",
-    )
-    check_schema = '(.check_runs | type == "array" and length <= 100) and'
-    check_ready = 'for name in "${required[@]}"; do'
-    require(
-        approve.index(check_fetch) < approve.index(check_schema) < approve.index(check_ready),
-        "Bot PR reviewer must validate one complete exact-head check snapshot before readiness decisions",
-    )
-    run_fetch = 'runs="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${head}&per_page=100")"'
-    run_schema = '(.workflow_runs | type == "array" and length <= 100) and'
-    active_profile = 'active_profile="$(jq --arg head "$head"'
-    require(
-        approve.index(run_fetch) < approve.index(run_schema) < approve.index(active_profile),
-        "Bot PR reviewer must validate workflow-run evidence before quiescence filtering",
-    )
+    require([approve.index(x) for x in order] == sorted(approve.index(x) for x in order),
+            "Bot reviewer must bind immutable source, run, attempt and job before owner review")
+    require(approve.count('(.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and') == 1,
+            "Bot reviewer must retain complete bounded quiescence source validation")
+    require(approve.count('. == "queued" or . == "in_progress" or . == "requested" or') == 1
+            and approve.count('. == "waiting" or . == "pending" or . == "completed"') == 1,
+            "Bot reviewer quiescence must retain six-state workflow run validation")
+    require(approve.count('select(.status != "completed")') == 2,
+            "Bot reviewer must continue to block nonquiescent non-Profile workflow runs")
+    require(approve.index(run_fetch)
+            < approve.index('(.workflow_runs | type == "array" and length <= 100) and', approve.index(run_fetch))
+            < approve.index('active_profile="$(jq --arg head "$head"'),
+            "Bot reviewer must validate quiescence before active-run classification")
+    for forbidden in (
+        'all(.check_runs[] | select(.name == $name);',
+        'any(.check_runs[];',
+        'check_name=${name}',
+    ):
+        require(forbidden not in approve,
+                f"Bot reviewer reintroduced historical check-name authorization: {forbidden}")
 
 
 
@@ -3370,65 +3367,48 @@ def validate_dependabot_readiness_run_check_evidence_schema(dependabot: str) -> 
     check_end = dependabot.index(check_end_marker, check_start)
     checks = dependabot[check_start:check_end]
 
-    snapshot_endpoint = (
-        "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/"
-        "check-runs?app_id=15368&filter=latest&per_page=100"
+    # This proof now binds the checked job to an authenticated latest canonical
+    # workflow run and attempt, rather than requiring every historical same-name
+    # check from unrelated suites to have succeeded.
+    markers = (
+        "python3 scripts/automation_github_read.py",
+        "commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100",
+        "actions/runs?head_sha=${HEAD_SHA}&per_page=100",
+        "python3 scripts/dependabot_latest_authentic_checks.py select",
+        'for key in profile dependency codeql; do',
+        "actions/runs/${run_id}/jobs?filter=latest&per_page=100",
+        "python3 scripts/dependabot_latest_authentic_checks.py verify",
+        '--checks "$RUNNER_TEMP/dependabot-authentic-checks.json"',
+        '--runs "$RUNNER_TEMP/dependabot-authentic-runs.json"',
+        '--profile-jobs "$RUNNER_TEMP/dependabot-authentic-profile-jobs.json"',
+        '--dependency-jobs "$RUNNER_TEMP/dependabot-authentic-dependency-jobs.json"',
+        '--codeql-jobs "$RUNNER_TEMP/dependabot-authentic-codeql-jobs.json"',
+        '--head "$HEAD_SHA" --branch "$HEAD_REF" --repository "$TARGET_REPOSITORY"',
+        'if [ "$proof_state" = "blocked" ]; then',
+        'ERROR: newest authentic workflow/job failure is a hard stop',
+        'exit 1',
     )
-    governed_fetch = "python3 scripts/automation_github_read.py"
-    required_loop = (
-        "for NAME in validate-contracts integration-pinned-upstream dependency-review "
-        "trusted-capability-admission analyze-actions analyze-python; do"
+    for marker in markers:
+        require(marker in checks,
+                f"Dependabot latest authentic run/job proof contract is missing: {marker}")
+    order = (
+        "commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100",
+        "actions/runs?head_sha=${HEAD_SHA}&per_page=100",
+        "python3 scripts/dependabot_latest_authentic_checks.py select",
+        'for key in profile dependency codeql; do',
+        "actions/runs/${run_id}/jobs?filter=latest&per_page=100",
+        "python3 scripts/dependabot_latest_authentic_checks.py verify",
+        'if [ "$proof_state" = "blocked" ]; then',
     )
-    for fragment in (
-        governed_fetch,
-        snapshot_endpoint,
-        '(.check_runs | type == "array" and length <= 100) and',
-        '(.name | type == "string" and length > 0) and',
-        '(.app | type == "object" and (.id == 15368)) and',
-        '(([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))',
-        'ERROR: malformed or incomplete exact-head required-check snapshot for ${HEAD_SHA}.',
-        required_loop,
-        '''count="$(jq --arg name "$NAME" '[.check_runs[] | select(.name == $name)] | length' <<<"$checks")"''',
-        '[ "$count" -lt 1 ]',
+    require([checks.index(x) for x in order] == sorted(checks.index(x) for x in order),
+            "Dependabot latest authentic source must be verified before readiness decisions")
+    for forbidden in (
         'all(.check_runs[] | select(.name == $name);',
-        '.status == "completed" and .conclusion == "success"',
+        'any(.check_runs[];',
+        'check_name=${NAME}',
     ):
-        require(
-            fragment in checks,
-            f"Dependabot readiness check-snapshot contract is missing: {fragment}",
-        )
-    require(
-        checks.count('(.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and') == 1,
-        "Dependabot readiness must strictly validate one bounded complete check snapshot",
-    )
-    require(
-        checks.count('(.id | (type == "number") and . == floor and . > 0) and') == 1,
-        "Dependabot readiness must require positive integer ids in the complete check snapshot",
-    )
-    require(
-        checks.count('. == "queued" or . == "in_progress" or . == "requested" or') == 1
-        and checks.count('. == "waiting" or . == "pending" or . == "completed"') == 1,
-        "Dependabot readiness check snapshot must lock the documented six-state status set",
-    )
-    require(
-        checks.count(snapshot_endpoint) == 1
-        and checks.count(governed_fetch) == 1
-        and "check_name=${NAME}" not in checks,
-        "Dependabot readiness must use exactly one governed complete snapshot rather than per-context reads",
-    )
-    require(
-        checks.count("malformed or incomplete exact-head required-check snapshot") == 1
-        and 'echo "ERROR: malformed or incomplete exact-head required-check snapshot for ${HEAD_SHA}." >&2\n              exit 1' in checks,
-        "Dependabot malformed required-check snapshot evidence must terminate the transaction",
-    )
-
-    check_fetch = checks.index(governed_fetch)
-    check_schema = checks.index('(.check_runs | type == "array" and length <= 100) and', check_fetch)
-    check_ready = checks.index(required_loop, check_schema)
-    require(
-        check_fetch < check_schema < check_ready,
-        "Dependabot must validate one complete check snapshot before readiness decisions",
-    )
+        require(forbidden not in checks,
+                f"Dependabot required checks became an unauthenticated historical selection: {forbidden}")
 
     run_start_marker = "          workflow_dispatch_runs() {\n"
     run_end_marker = "\n\n          delegated_admission_attempt_ready() {\n"
@@ -4928,9 +4908,9 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     )
 
     common_fragments = (
-        'local -a required=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review)',
+        'reviewer-main/scripts/dependabot_latest_authentic_checks.py select',
         'spotlight|dependabot|codeql-autofix)',
-        'required+=(trusted-capability-admission)',
+        'reviewer-main/scripts/dependabot_latest_authentic_checks.py verify',
         'LANE="dependabot"',
         'LANE="codeql-autofix"',
         'LANE="spotlight"',
@@ -5046,13 +5026,20 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         "Bot PR reviewer must derive all lane prerequisites from one exact-head GitHub-Actions snapshot per observation",
     )
     for fragment in (
-        '(.total_count == (.check_runs | length))',
-        '(([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))',
-        '[.check_runs[] | select(.name == $name)] | length',
-        '[.check_runs[] | select(.name == $name and .status != "completed")] | length',
-        '[.check_runs[] | select(.name == $name and .status == "completed" and .conclusion != "success")] | length',
+        'git -C reviewer-main rev-parse HEAD)" = "$GITHUB_SHA"',
+        'git -C reviewer-main rev-parse HEAD:scripts/dependabot_latest_authentic_checks.py)" = "71280abf53bba961b3207a0a482e61fb70a6f1f4"',
+        'required_workflow_history="$(python3 -B reviewer-main/scripts/automation_github_read.py',
+        'reviewer-main/scripts/dependabot_latest_authentic_checks.py select',
+        'actions/runs/${run_id}/jobs?filter=latest&per_page=100',
+        'reviewer-main/scripts/dependabot_latest_authentic_checks.py verify',
+        '--checks "$RUNNER_TEMP/bot-review-authentic-checks.json"',
+        '--runs "$RUNNER_TEMP/bot-review-authentic-runs.json"',
+        'if [ "$verdict" = "ready" ]; then' if False else 'ready) return 0',
+        'blocked)',
     ):
-        require(fragment in bot_review, f"Bot PR exact-head prerequisite snapshot contract is missing: {fragment}")
+        require(fragment in bot_review, f"Bot PR latest authentic prerequisite proof is missing: {fragment}")
+    require('all(.check_runs[] | select(.name == $name);' not in bot_review,
+            "Bot reviewer regressed to old same-name history poisoning")
     require(
         'check_name=${name}' not in bot_review,
         "Bot PR reviewer regressed to one GitHub API read per required check context",
