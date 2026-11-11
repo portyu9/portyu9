@@ -1893,9 +1893,9 @@
     {
       "baseBomSha256": "e45193c34723b5f415ff986c310d3f06676e317760411df7a6897130c988e96c",
       "candidateBomSha256": "7a9ba4349c05ca3e96666ff0e73749c47ff0181950f049886260f916d5b46e53",
-      "expansionSha256": "9d29c72d0b45294704c64d2849e4e7b5a543c4f336ee2bda65565aa98700b414",
+      "expansionSha256": "e69c02be4843200480c89378603d8b8ffccd75120c646e42370ec6993f9c8f60",
       "id": "cap-spotlight-admission-source-read-v1",
-      "rationale": "Prior-authorize Spotlight reviewer repair #2076 tree d16e55111cd4b4b651fcc7179902a11660c85316: independently measured by read-only accepted-main run 43083843557, exact one issuing-admission GET capability expansion, zero reductions, no candidate TCB expansion. No new mutation, scope, secret/OIDC, required-check reduction, owner-review bypass, direct-main write or merge authority."
+      "rationale": "Prior-authorize frozen Spotlight reviewer repair #2076 exact tree a5e86938be5b5f3937a3e820d03b42bdeb6d0414: trusted-main read-only measurement run 43084678830 proves two protected expansions (one authenticated issuing-admission GET and one retry-policy source identity), zero reductions, exact TCB digest ade022d28ed0fa61697ec74076dd2d9adeb6eaad984c3ba8fbe65b0ce44a861b. No mutation, permission/secret/OIDC, reduced checks, owner-review bypass, direct-main write or merge authority."
     },
     {
       "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
