@@ -20,7 +20,7 @@ import privileged_workflow_identity_v21_core as v21
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v161"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "060ad4f3c281b43309ab7e7787e3412f9f10ebc3",
+    ".github/workflows/bot-pr-user-approval.yml": "47604d11e39868bd0a21f1b0c214d50743baf705",
     ".github/workflows/profile-quality.yml": "befba2071db852792eb46f7c8444011eb3375458",
     ".github/workflows/profile-stats.yml": "eb9af8f63d4db7b35306ebf3c38f5004e7e1c0a8",
     ".github/workflows/spotlight-link-sync.yml": "03e3a9b4b39fa026d851e5cabdbdd451e8f6e8c8",
@@ -5032,12 +5032,26 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'reviewer-main/scripts/dependabot_latest_authentic_checks.py select',
         'actions/runs/${run_id}/jobs?filter=latest&per_page=100',
         'reviewer-main/scripts/dependabot_latest_authentic_checks.py verify',
-        '--checks "$RUNNER_TEMP/bot-review-authentic-checks.json"',
-        '--runs "$RUNNER_TEMP/bot-review-authentic-runs.json"',
+        '--checks "$REVIEW_PROOF_DIR/checks.json"',
+        '--runs "$REVIEW_PROOF_DIR/runs.json"',
         'if [ "$verdict" = "ready" ]; then' if False else 'ready) return 0',
         'blocked)',
     ):
         require(fragment in bot_review, f"Bot PR latest authentic prerequisite proof is missing: {fragment}")
+    # Reviewer proof files must be job-exclusive and private: fixed names in
+    # RUNNER_TEMP caused an actual production permission-denied regression.
+    for fragment in (
+        'REVIEW_PROOF_DIR="$(mktemp -d "${RUNNER_TEMP}/bot-review-proof.XXXXXXXXXXXX")"',
+        'test "$(stat -c %a "$REVIEW_PROOF_DIR")" = "700"',
+        "trap 'rm -rf -- \"$REVIEW_PROOF_DIR\"' EXIT",
+        '--profile-jobs "$REVIEW_PROOF_DIR/profile-jobs.json"',
+        '--dependency-jobs "$REVIEW_PROOF_DIR/dependency-jobs.json"',
+        '--codeql-jobs "$REVIEW_PROOF_DIR/codeql-jobs.json"',
+        '--out "$REVIEW_PROOF_DIR/verdict.json"',
+    ):
+        require(fragment in bot_review, f"Bot reviewer private proof contract missing: {fragment}")
+    require('$RUNNER_TEMP/bot-review-authentic-' not in bot_review,
+            "Bot reviewer must not reuse fixed-name proof files")
     require('all(.check_runs[] | select(.name == $name);' not in bot_review,
             "Bot reviewer regressed to old same-name history poisoning")
     require(
