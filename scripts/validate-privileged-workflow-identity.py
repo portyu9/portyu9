@@ -20,7 +20,7 @@ import privileged_workflow_identity_v21_core as v21
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v161"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "47604d11e39868bd0a21f1b0c214d50743baf705",
+    ".github/workflows/bot-pr-user-approval.yml": "037ab3308925adebda67f3c0de1037e8ba25c65a",
     ".github/workflows/profile-quality.yml": "befba2071db852792eb46f7c8444011eb3375458",
     ".github/workflows/profile-stats.yml": "eb9af8f63d4db7b35306ebf3c38f5004e7e1c0a8",
     ".github/workflows/spotlight-link-sync.yml": "03e3a9b4b39fa026d851e5cabdbdd451e8f6e8c8",
@@ -5041,8 +5041,12 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     # Reviewer proof files must be job-exclusive and private: fixed names in
     # RUNNER_TEMP caused an actual production permission-denied regression.
     for fragment in (
-        'REVIEW_PROOF_DIR="$(mktemp -d "${RUNNER_TEMP}/bot-review-proof.XXXXXXXXXXXX")"',
+        'REVIEW_PROOF_DIR="$(mktemp -d "${GITHUB_WORKSPACE}/.bot-review-proof.XXXXXXXXXXXX")"',
         'test "$(stat -c %a "$REVIEW_PROOF_DIR")" = "700"',
+        'test "$(stat -c %u "$REVIEW_PROOF_DIR")" = "$(id -u)"',
+        'test -w "$REVIEW_PROOF_DIR"',
+        ': > "$REVIEW_PROOF_DIR/.access-probe"',
+        'rm -- "$REVIEW_PROOF_DIR/.access-probe"',
         "trap 'rm -rf -- \"$REVIEW_PROOF_DIR\"' EXIT",
         '--profile-jobs "$REVIEW_PROOF_DIR/profile-jobs.json"',
         '--dependency-jobs "$REVIEW_PROOF_DIR/dependency-jobs.json"',
