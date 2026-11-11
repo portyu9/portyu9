@@ -63,7 +63,7 @@ jobs:
             (.run_attempt | type == "number" and . == 1) and
             (.status == "completed") and (.conclusion == "success")
           ' <<<"$source" >/dev/null
-          python3 - --admission-run <(printf '%s\\n' "$source") <<'PY'
+          python3 - --admission-run <(printf '%s\n' "$source") <<'PY'
           import argparse
           import json
           from pathlib import Path
