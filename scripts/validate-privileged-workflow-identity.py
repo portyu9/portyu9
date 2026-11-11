@@ -3378,11 +3378,11 @@ def validate_dependabot_readiness_run_check_evidence_schema(dependabot: str) -> 
         'for key in profile dependency codeql; do',
         "actions/runs/${run_id}/jobs?filter=latest&per_page=100",
         "python3 scripts/dependabot_latest_authentic_checks.py verify",
-        '--checks "$RUNNER_TEMP/dependabot-authentic-checks.json"',
-        '--runs "$RUNNER_TEMP/dependabot-authentic-runs.json"',
-        '--profile-jobs "$RUNNER_TEMP/dependabot-authentic-profile-jobs.json"',
-        '--dependency-jobs "$RUNNER_TEMP/dependabot-authentic-dependency-jobs.json"',
-        '--codeql-jobs "$RUNNER_TEMP/dependabot-authentic-codeql-jobs.json"',
+        '--checks "$DEPENDABOT_PROOF_DIR/checks.json"',
+        '--runs "$DEPENDABOT_PROOF_DIR/runs.json"',
+        '--profile-jobs "$DEPENDABOT_PROOF_DIR/profile-jobs.json"',
+        '--dependency-jobs "$DEPENDABOT_PROOF_DIR/dependency-jobs.json"',
+        '--codeql-jobs "$DEPENDABOT_PROOF_DIR/codeql-jobs.json"',
         '--head "$HEAD_SHA" --branch "$HEAD_REF" --repository "$TARGET_REPOSITORY"',
         'if [ "$proof_state" = "blocked" ]; then',
         'ERROR: newest authentic workflow/job failure is a hard stop',
@@ -3391,6 +3391,15 @@ def validate_dependabot_readiness_run_check_evidence_schema(dependabot: str) -> 
     for marker in markers:
         require(marker in checks,
                 f"Dependabot latest authentic run/job proof contract is missing: {marker}")
+    for fragment in (
+        'DEPENDABOT_PROOF_DIR="$(mktemp -d "${RUNNER_TEMP}/dependabot-proof.XXXXXXXXXXXX")"',
+        'test "$(stat -c %a "$DEPENDABOT_PROOF_DIR")" = "700"',
+        "trap 'rm -rf -- \"$DEPENDABOT_PROOF_DIR\"' EXIT",
+        '--out "$DEPENDABOT_PROOF_DIR/verdict.json"',
+    ):
+        require(fragment in checks, f"Dependabot private proof contract missing: {fragment}")
+    require('$RUNNER_TEMP/dependabot-authentic-' not in checks,
+            "Dependabot reviewer must not accept fixed proof names")
     order = (
         "commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100",
         "actions/runs?head_sha=${HEAD_SHA}&per_page=100",
