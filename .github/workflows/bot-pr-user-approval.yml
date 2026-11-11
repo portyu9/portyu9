@@ -612,7 +612,7 @@ jobs:
               echo "ERROR: governed reviewer source is not exact accepted main." >&2
               return 1
             }
-            test "$(git -C reviewer-main rev-parse HEAD:scripts/dependabot_latest_authentic_checks.py)" = "397daa392862cee022c45164182c2f1c4d2ce4ca" || {
+            test "$(git -C reviewer-main rev-parse HEAD:scripts/dependabot_latest_authentic_checks.py)" = "71280abf53bba961b3207a0a482e61fb70a6f1f4" || {
               echo "ERROR: required-check proof source blob changed." >&2
               return 1
             }
