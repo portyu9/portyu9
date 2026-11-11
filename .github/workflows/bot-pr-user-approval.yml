@@ -621,12 +621,12 @@ jobs:
               echo "ERROR: failed to fetch exact-head GitHub Actions check snapshot for ${head}." >&2
               return 1
             }
-            runs="$(bot_reviewer_get quiescent-runs)" || {
+            required_workflow_history="$(bot_reviewer_get quiescent-runs)" || {
               echo "ERROR: failed to fetch exact-head workflow run snapshot for ${head}." >&2
               return 1
             }
             printf '%s\n' "$checks" > "$RUNNER_TEMP/bot-review-authentic-checks.json"
-            printf '%s\n' "$runs" > "$RUNNER_TEMP/bot-review-authentic-runs.json"
+            printf '%s\n' "$required_workflow_history" > "$RUNNER_TEMP/bot-review-authentic-runs.json"
             python3 -B reviewer-main/scripts/dependabot_latest_authentic_checks.py select \
               --runs "$RUNNER_TEMP/bot-review-authentic-runs.json" \
               --head "$head" --branch "$HEAD_REF" --repository "$TARGET_REPOSITORY" \
