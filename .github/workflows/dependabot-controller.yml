@@ -619,6 +619,12 @@ jobs:
           CANDIDATE_ROOT: ${{ steps.source.outputs.candidate_root }}
         run: |
           set -euo pipefail
+          # Authenticated workflow proof is private to this controller job.
+          # Fixed RUNNER_TEMP basenames are not reliable or safe evidence files.
+          DEPENDABOT_PROOF_DIR="$(mktemp -d "${RUNNER_TEMP}/dependabot-proof.XXXXXXXXXXXX")"
+          test -d "$DEPENDABOT_PROOF_DIR" && test ! -L "$DEPENDABOT_PROOF_DIR"
+          test "$(stat -c %a "$DEPENDABOT_PROOF_DIR")" = "700"
+          trap 'rm -rf -- "$DEPENDABOT_PROOF_DIR"' EXIT
           GOVERNED_READ_BLOB="$(git rev-parse HEAD:scripts/automation_github_read.py)"
           test "$GOVERNED_READ_BLOB" = "1b779bcea0acd290826fef8f60fd01480113a31a"
           python3 scripts/dependabot_controller.py validate \
@@ -739,48 +745,48 @@ jobs:
             # attempts. Neither all-history-success nor any-green is safe.
             python3 scripts/automation_github_read.py \
               "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100" \
-              > "$RUNNER_TEMP/dependabot-authentic-checks.json" || {
+              > "$DEPENDABOT_PROOF_DIR/checks.json" || {
               echo "ERROR: authenticated exact-head check snapshot read failed." >&2
               exit 1
             }
             python3 scripts/automation_github_read.py \
               "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&per_page=100" \
-              > "$RUNNER_TEMP/dependabot-authentic-runs.json" || {
+              > "$DEPENDABOT_PROOF_DIR/runs.json" || {
               echo "ERROR: authenticated exact-head workflow history read failed." >&2
               exit 1
             }
             python3 scripts/dependabot_latest_authentic_checks.py select \
-              --runs "$RUNNER_TEMP/dependabot-authentic-runs.json" \
+              --runs "$DEPENDABOT_PROOF_DIR/runs.json" \
               --head "$HEAD_SHA" --branch "$HEAD_REF" --repository "$TARGET_REPOSITORY" \
-              --out "$RUNNER_TEMP/dependabot-authentic-selected.json"
-            selected_state="$(jq -r .state "$RUNNER_TEMP/dependabot-authentic-selected.json")"
+              --out "$DEPENDABOT_PROOF_DIR/selected.json"
+            selected_state="$(jq -r .state "$DEPENDABOT_PROOF_DIR/selected.json")"
             if [ "$selected_state" != "selected" ]; then
               echo "Canonical latest workflow run(s) not yet available for ${HEAD_SHA}."
               return 1
             fi
             for key in profile dependency codeql; do
-              run_id="$(jq -r --arg key "$key" '.runs[$key].id' "$RUNNER_TEMP/dependabot-authentic-selected.json")"
+              run_id="$(jq -r --arg key "$key" '.runs[$key].id' "$DEPENDABOT_PROOF_DIR/selected.json")"
               [[ "$run_id" =~ ^[1-9][0-9]*$ ]] || exit 1
               python3 scripts/automation_github_read.py \
                 "repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/jobs?filter=latest&per_page=100" \
-                > "$RUNNER_TEMP/dependabot-authentic-${key}-jobs.json" || {
+                > "$DEPENDABOT_PROOF_DIR/${key}-jobs.json" || {
                 echo "ERROR: authenticated ${key} workflow job read failed." >&2
                 exit 1
               }
             done
             python3 scripts/dependabot_latest_authentic_checks.py verify \
-              --checks "$RUNNER_TEMP/dependabot-authentic-checks.json" \
-              --runs "$RUNNER_TEMP/dependabot-authentic-runs.json" \
-              --selection "$RUNNER_TEMP/dependabot-authentic-selected.json" \
-              --profile-jobs "$RUNNER_TEMP/dependabot-authentic-profile-jobs.json" \
-              --dependency-jobs "$RUNNER_TEMP/dependabot-authentic-dependency-jobs.json" \
-              --codeql-jobs "$RUNNER_TEMP/dependabot-authentic-codeql-jobs.json" \
+              --checks "$DEPENDABOT_PROOF_DIR/checks.json" \
+              --runs "$DEPENDABOT_PROOF_DIR/runs.json" \
+              --selection "$DEPENDABOT_PROOF_DIR/selected.json" \
+              --profile-jobs "$DEPENDABOT_PROOF_DIR/profile-jobs.json" \
+              --dependency-jobs "$DEPENDABOT_PROOF_DIR/dependency-jobs.json" \
+              --codeql-jobs "$DEPENDABOT_PROOF_DIR/codeql-jobs.json" \
               --head "$HEAD_SHA" --branch "$HEAD_REF" --repository "$TARGET_REPOSITORY" \
-              --out "$RUNNER_TEMP/dependabot-authentic-verdict.json"
-            proof_state="$(jq -r .state "$RUNNER_TEMP/dependabot-authentic-verdict.json")"
+              --out "$DEPENDABOT_PROOF_DIR/verdict.json"
+            proof_state="$(jq -r .state "$DEPENDABOT_PROOF_DIR/verdict.json")"
             if [ "$proof_state" = "blocked" ]; then
               echo "ERROR: newest authentic workflow/job failure is a hard stop for ${HEAD_SHA}." >&2
-              cat "$RUNNER_TEMP/dependabot-authentic-verdict.json" >&2
+              cat "$DEPENDABOT_PROOF_DIR/verdict.json" >&2
               exit 1
             fi
             if [ "$proof_state" != "ready" ]; then
