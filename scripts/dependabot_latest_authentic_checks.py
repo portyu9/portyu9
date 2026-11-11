@@ -144,8 +144,12 @@ def verify_ready(
     head: str,
     branch: str,
     repo: str,
+    base_sha: str | None = None,
+    pr_number: int | None = None,
+    admission_run: Any = None,
 ) -> dict[str, Any]:
     canonical = select_runs(runs, head=head, branch=branch, repo=repo)
+    spotlight = re.fullmatch(r"automation/spotlight-links/[0-9a-f]{64}", branch) is not None
     require(canonical["state"] == "selected",
             "canonical workflow selection is not complete")
     require(selection == canonical, "selected workflows differ from authenticated source")
@@ -174,6 +178,11 @@ def verify_ready(
     blocked: list[str] = []
     accepted: list[dict[str, Any]] = []
     for key, (_path, name, _events, required) in WORKFLOWS.items():
+        # Native Dependabot has a PR-native Profile Quality admission job.
+        # Spotlight instead has a separately published, accepted-main-owned
+        # admission check: demanding the native job creates a circular wait.
+        if key == "profile" and spotlight:
+            required = tuple(n for n in required if n != "trusted-capability-admission")
         selected = canonical["runs"][key]
         if selected["status"] != "completed":
             missing.append(f"{key} workflow run is active")
@@ -268,6 +277,80 @@ def verify_ready(
             accepted.append({"name": required_name, "jobId": job["id"],
                              "runId": selected["id"], "suiteId": selected["suiteId"],
                              "attempt": job["run_attempt"]})
+    if spotlight:
+        # Never substitute a same-name check from Profile Quality for the
+        # standalone trusted admission. Bind its native GitHub Actions check
+        # to the exact PR/base/head AND the successful accepted-main admission
+        # workflow run that issued it. No check name alone grants authority.
+        base_sha = sha(base_sha, "Spotlight admission base")
+        pr_number = integer(pr_number, "Spotlight PR number")
+        proofs = [c for c in entries if c["name"] == "trusted-capability-admission"]
+        require(len(proofs) <= 1, "multiple latest Spotlight admission checks")
+        if not proofs:
+            missing.append("Spotlight independent admission check not yet published")
+        else:
+            proof = proofs[0]
+            external = proof.get("external_id")
+            match = re.fullmatch(
+                r"spotlight-admission:([1-9][0-9]*):([1-9][0-9]*):"
+                r"([1-9][0-9]*):([0-9a-f]{40}):([0-9a-f]{40})",
+                external if isinstance(external, str) else "",
+            )
+            require(match is not None, "Spotlight admission external identity invalid")
+            origin_id, attempt, subject_pr, subject_base, subject_head = match.groups()
+            run_id = integer(int(origin_id), "Spotlight admission source run")
+            run_attempt = integer(int(attempt), "Spotlight admission source attempt",
+                                  maximum=MAX_ATTEMPT)
+            require(int(subject_pr) == pr_number and subject_base == base_sha
+                    and subject_head == head,
+                    "Spotlight admission external subject differs from live PR")
+            check_id = integer(proof.get("id"), "Spotlight admission check ID")
+            require(proof.get("details_url") in (
+                f"https://github.com/{repo}/runs/{check_id}",
+                f"https://github.com/{repo}/actions/runs/{run_id}",
+            ), "Spotlight admission check has unreviewed native details URL")
+            output = proof.get("output")
+            require(isinstance(output, Mapping)
+                    and output.get("title") == "Trusted capability admission passed"
+                    and output.get("summary")
+                    == "Trusted default-branch admission accepted the exact current-main "
+                       "deterministic README-only Spotlight bot candidate.",
+                    "Spotlight admission check output does not bind trusted decision")
+            if proof["status"] != "completed":
+                missing.append("Spotlight admission check is still active")
+            elif proof["conclusion"] != "success":
+                blocked.append("Spotlight admission check is not successful")
+            if admission_run is None:
+                missing.append("Spotlight admission source workflow not yet visible")
+            else:
+                require(isinstance(admission_run, Mapping),
+                        "Spotlight admission run response is malformed")
+                require(admission_run.get("id") == run_id
+                        and admission_run.get("run_attempt") == run_attempt,
+                        "Spotlight admission run/attempt identity mismatch")
+                require(admission_run.get("name") == "Capability admission"
+                        and admission_run.get("path") == ".github/workflows/capability-admission.yml"
+                        and admission_run.get("event") in ("workflow_dispatch", "schedule"),
+                        "Spotlight admission is not the trusted workflow")
+                require(admission_run.get("head_sha") == base_sha
+                        and admission_run.get("head_branch") == "main",
+                        "Spotlight admission ran outside the exact accepted base")
+                repository_identity(admission_run, "repository", repo)
+                repository_identity(admission_run, "head_repository", repo)
+                actor = admission_run.get("actor")
+                require(isinstance(actor, Mapping)
+                        and actor.get("login") in ("github-actions[bot]", "portyu9"),
+                        "Spotlight admission workflow actor is untrusted")
+                run_status(admission_run, "Spotlight admission workflow")
+                if admission_run["status"] != "completed":
+                    missing.append("Spotlight admission source workflow is active")
+                elif admission_run["conclusion"] != "success":
+                    blocked.append("Spotlight admission source workflow failed")
+                accepted.append({"name": "trusted-capability-admission",
+                                 "runId": run_id, "attempt": run_attempt,
+                                 "jobId": check_id,
+                                 "suiteId": proof["check_suite"]["id"]})
+
     state = "blocked" if blocked else "pending" if missing else "ready"
     return {"state": state, "blocked": blocked, "pending": missing,
             "selected": accepted}
@@ -300,6 +383,9 @@ def main() -> None:
     parser.add_argument("--head")
     parser.add_argument("--branch")
     parser.add_argument("--repository", default=REPOSITORY)
+    parser.add_argument("--base-sha")
+    parser.add_argument("--pr-number", type=int)
+    parser.add_argument("--admission-run")
     parser.add_argument("--out")
     args = parser.parse_args()
     if args.command == "self-test":
@@ -319,7 +405,9 @@ def main() -> None:
                   "dependency": load(args.dependency_jobs),
                   "codeql": load(args.codeql_jobs)},
             selection=load(args.selection), head=args.head, branch=args.branch,
-            repo=args.repository,
+            repo=args.repository, base_sha=args.base_sha,
+            pr_number=args.pr_number,
+            admission_run=load(args.admission_run) if args.admission_run else None,
         )
     save(args.out, outcome)
 
@@ -371,6 +459,86 @@ def self_test() -> None:
     args = {"checks": checks, "runs": workflows, "jobs": job_sets,
             "selection": selected, "head": head, "branch": branch, "repo": repo}
     require(verify_ready(**args)["state"] == "ready", "happy path changed")
+
+    # Regression: Spotlight uses separate trusted accepted-main admission,
+    # NOT the PR-native Dependabot-only Profile Quality job.
+    spotlight_branch = "automation/spotlight-links/" + "d" * 64
+    profile = dict(runs[0], head_branch=spotlight_branch, conclusion="failure")
+    spotlight_runs = snapshot([profile, *[dict(r, head_branch=spotlight_branch)
+                                              for r in runs[1:]]], "workflow_runs")
+    profile_native = [j for j in job_sets["profile"]["jobs"]
+                      if j["name"] != "trusted-capability-admission"]
+    gate_id = 30099
+    gate = {
+        "id": gate_id, "run_id": profile["id"], "run_attempt": 2,
+        "name": "trusted-governed-bot-review", "head_sha": head,
+        "workflow_name": "Profile quality", "status": "completed",
+        "conclusion": "failure",
+        "check_run_url": f"https://api.github.com/repos/{repo}/check-runs/{gate_id}",
+    }
+    gate_check = {
+        "id": gate_id, "name": gate["name"], "head_sha": head,
+        "app": {"id": APP_ID}, "check_suite": {"id": profile["check_suite_id"]},
+        "details_url": f"https://github.com/{repo}/actions/runs/{profile['id']}/job/{gate_id}",
+        "status": "completed", "conclusion": "failure",
+    }
+    admission_id, admission_workflow_id, base, pr_number = 40099, 50099, "b" * 40, 2050
+    standalone = {
+        "id": admission_id, "name": "trusted-capability-admission",
+        "head_sha": head, "app": {"id": APP_ID},
+        "check_suite": {"id": 2005},
+        "details_url": f"https://github.com/{repo}/runs/{admission_id}",
+        "external_id": f"spotlight-admission:{admission_workflow_id}:1:{pr_number}:{base}:{head}",
+        "output": {
+            "title": "Trusted capability admission passed",
+            "summary": "Trusted default-branch admission accepted the exact current-main "
+                       "deterministic README-only Spotlight bot candidate.",
+        },
+        "status": "completed", "conclusion": "success",
+    }
+    official_run = {
+        "id": admission_workflow_id, "run_attempt": 1,
+        "name": "Capability admission", "path": ".github/workflows/capability-admission.yml",
+        "event": "workflow_dispatch", "head_sha": base, "head_branch": "main",
+        "status": "completed", "conclusion": "success",
+        "repository": {"full_name": repo}, "head_repository": {"full_name": repo},
+        "actor": {"login": "github-actions[bot]"},
+    }
+    spotlight_checks = [c for c in check_items if c["name"] != "trusted-capability-admission"]
+    spotlight_args = {
+        "checks": snapshot([*spotlight_checks, gate_check, standalone], "check_runs"),
+        "runs": spotlight_runs,
+        "jobs": {**job_sets,
+                 "profile": snapshot([*profile_native, gate], "jobs")},
+        "selection": select_runs(spotlight_runs, head=head,
+                                 branch=spotlight_branch, repo=repo),
+        "head": head, "branch": spotlight_branch, "repo": repo,
+        "base_sha": base, "pr_number": pr_number, "admission_run": official_run,
+    }
+    require(verify_ready(**spotlight_args)["state"] == "ready",
+            "authentic independent Spotlight admission failed to unblock reviewer")
+    require(verify_ready(**{**spotlight_args, "admission_run": None})["state"] == "pending",
+            "Spotlight reviewer accepted missing independent workflow provenance")
+    require(verify_ready(**{**spotlight_args,
+            "checks": snapshot([*spotlight_checks, gate_check], "check_runs")})
+            ["state"] == "pending", "Spotlight reviewer accepted missing admission")
+    for corrupt in (
+        {"admission_run": {**official_run, "head_sha": "c" * 40}},
+        {"admission_run": {**official_run, "path": ".github/workflows/other.yml"}},
+        {"pr_number": pr_number + 1},
+        {"checks": snapshot([*spotlight_checks, gate_check,
+                             {**standalone, "external_id": "spotlight-admission:bad"}],
+                            "check_runs")},
+    ):
+        try:
+            verify_ready(**{**spotlight_args, **corrupt})
+        except ValueError:
+            pass
+        else:
+            raise ValueError("Spotlight independent admission subject spoofing was accepted")
+    failed_admission = {**official_run, "conclusion": "failure"}
+    require(verify_ready(**{**spotlight_args, "admission_run": failed_admission})
+            ["state"] == "blocked", "failed independent admission was accepted")
 
     # Older failed same-name check from another suite must be irrelevant.
     historical = dict(check_items[0], id=800, check_suite={"id": 8000},

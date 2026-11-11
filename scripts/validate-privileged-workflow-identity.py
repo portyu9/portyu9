@@ -20,7 +20,7 @@ import privileged_workflow_identity_v21_core as v21
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v161"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "f92d462b88f344213f64bb872a64443cb0840f94",
+    ".github/workflows/bot-pr-user-approval.yml": "060ad4f3c281b43309ab7e7787e3412f9f10ebc3",
     ".github/workflows/profile-quality.yml": "befba2071db852792eb46f7c8444011eb3375458",
     ".github/workflows/profile-stats.yml": "eb9af8f63d4db7b35306ebf3c38f5004e7e1c0a8",
     ".github/workflows/spotlight-link-sync.yml": "03e3a9b4b39fa026d851e5cabdbdd451e8f6e8c8",
@@ -3081,7 +3081,7 @@ def validate_bot_review_run_check_evidence_schema(bot_review: str) -> None:
     for marker in (
         check_fetch,
         'git -C reviewer-main rev-parse HEAD)" = "$GITHUB_SHA"',
-        'git -C reviewer-main rev-parse HEAD:scripts/dependabot_latest_authentic_checks.py)" = "71280abf53bba961b3207a0a482e61fb70a6f1f4"',
+        'git -C reviewer-main rev-parse HEAD:scripts/dependabot_latest_authentic_checks.py)" = "0c7d261ad2602ad108dfe378017de22f11248abd"',
         'git -C reviewer-main rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
         'required_workflow_history="$(python3 -B reviewer-main/scripts/automation_github_read.py',
         'actions/runs?head_sha=${head}&per_page=100',
@@ -5027,7 +5027,7 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     )
     for fragment in (
         'git -C reviewer-main rev-parse HEAD)" = "$GITHUB_SHA"',
-        'git -C reviewer-main rev-parse HEAD:scripts/dependabot_latest_authentic_checks.py)" = "71280abf53bba961b3207a0a482e61fb70a6f1f4"',
+        'git -C reviewer-main rev-parse HEAD:scripts/dependabot_latest_authentic_checks.py)" = "0c7d261ad2602ad108dfe378017de22f11248abd"',
         'required_workflow_history="$(python3 -B reviewer-main/scripts/automation_github_read.py',
         'reviewer-main/scripts/dependabot_latest_authentic_checks.py select',
         'actions/runs/${run_id}/jobs?filter=latest&per_page=100',
