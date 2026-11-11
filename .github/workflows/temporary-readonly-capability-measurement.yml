@@ -1,0 +1,45 @@
+# Temporary read-only independent trusted compiler measurement. Delete before feature merge.
+name: Temporary exact capability measurement
+on:
+  pull_request:
+    types: [synchronize]
+permissions:
+  contents: read
+env:
+  PYTHON_VERSION: '3.13.18'
+jobs:
+  measure:
+    name: exact-trusted-main-capability-measure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout accepted trusted compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: cf69cf412098f031676a4662b8f93f8ed59feefc
+          path: trusted
+          persist-credentials: false
+      - name: Checkout frozen 7-file source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 427f3534075b03c9e84fcd4a8b7593a564fe0cc8
+          path: candidate
+          persist-credentials: false
+      - name: Set up pinned Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.13.18'
+      - name: Measure frozen candidate without authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C trusted rev-parse HEAD)" = "cf69cf412098f031676a4662b8f93f8ed59feefc"
+          test "$(git -C candidate rev-parse HEAD)" = "427f3534075b03c9e84fcd4a8b7593a564fe0cc8"
+          TREE_SHA="$(git -C candidate rev-parse 'HEAD^{tree}')"
+          test "$TREE_SHA" = "3f4de365463b0a0aee3d86f8ba137c71e3004c25"
+          cd trusted
+          python3 scripts/verify-python-runtime.py
+          python3 scripts/workflow_capability_admission.py ../candidate --candidate-tree-sha "$TREE_SHA" --self-test --measure > "$RUNNER_TEMP/capability-measurement.json"
+          jq -e '.measurement | type == "object"' "$RUNNER_TEMP/capability-measurement.json" >/dev/null
+          cat "$RUNNER_TEMP/capability-measurement.json"
+          cat "$RUNNER_TEMP/capability-measurement.json" >> "$GITHUB_STEP_SUMMARY"
