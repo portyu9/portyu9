@@ -979,19 +979,8 @@ jobs:
               exit "$READY_STATUS"
             fi
 
-            # Stale base/head during a bounded wait never gains an approval.
-            CURRENT_MAIN_RECHECK="$(bot_reviewer_get main-ref)"
-            validate_git_ref_object "$CURRENT_MAIN_RECHECK" "main" || exit 1
-            if [ "$(jq -r .object.sha <<<"$CURRENT_MAIN_RECHECK")" != "$MAIN_SHA" ]; then
-              echo "Current main advanced during read-only Spotlight convergence."
-              exit 0
-            fi
-            CURRENT_HEAD_RECHECK="$(bot_reviewer_get head-ref)"
-            validate_git_ref_object "$CURRENT_HEAD_RECHECK" "$HEAD_REF" || exit 1
-            if [ "$(jq -r .object.sha <<<"$CURRENT_HEAD_RECHECK")" != "$HEAD_SHA" ]; then
-              echo "Spotlight PR head advanced during read-only convergence."
-              continue
-            fi
+            # Existing mandatory final exact main/head reproof below still
+            # governs every eventual owner-review mutation.
             if check_quiescent_runs "$HEAD_SHA" "$HEAD_REF"; then
               :
             else
