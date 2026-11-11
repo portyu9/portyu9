@@ -1629,7 +1629,7 @@
       "candidateBomSha256": "7a0de500fff37886d5455274a7f72fb637ee707fc77c4fafd25f91ca057c95af",
       "expansionSha256": "b4825821e4887e1417bcaa8cbb14746c9b58ab619073f19a4be6f33525aa7e85",
       "id": "cap-profile-quality-same-run-artifact-transport-v1",
-      "rationale": "Prior exact authorization for frozen PR #2061 tree 1b6e4ca5f3c17587db5df94e74788a21c625c6ff, independently measured in first-attempt trusted run 43041688713: switch one Profile Quality Signal Field artifact round-trip from cross-run REST listing to native same-run immutable-ID transport. Preserve exact artifact ID, digest-mismatch error, authenticated separate visibility and downstream SVG validators. Two measured expansion records represent the revised artifact source contract and pinned trusted-control-source bytes; one reduction removes redundant cross-run REST selection. No new token permission, API mutation, workflow trigger, secret/OIDC, direct-main write, owner approval or terminal merge bypass. Exact accepted main 2bf01c0962dbea8458e586be63422e1be2b83ff1 and frozen subject remain bound by measurement hashes."
+      "rationale": "Prior exact authorization for frozen #2061 tree 1b6e4ca5f3c17587db5df94e74788a21c625c6ff, measured by successful trusted #43041688713. Move one Profile Quality Signal Field review download from cross-run REST to native same-run immutable artifact ID; preserve digest-fail verification and downstream validation. Exactly two capability expansion records and one reduction. No new token permissions, mutations, secret/OIDC, triggers, direct-main writes, approval or merge bypass."
     },
     {
       "baseBomSha256": "064955edce467b646ff1f3404fb11d42a87d6f856dafb5d1dfa54e447f74eb31",
