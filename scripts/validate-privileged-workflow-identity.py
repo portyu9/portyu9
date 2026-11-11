@@ -5054,6 +5054,10 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         '--out "$REVIEW_PROOF_DIR/verdict.json"',
     ):
         require(fragment in bot_review, f"Bot reviewer private proof contract missing: {fragment}")
+    require(bot_review.count(': > "$REVIEW_PROOF_DIR/.access-probe"') == 2,
+            "Bot reviewer must probe private directory creation and post-network writability")
+    require(bot_review.count('rm -- "$REVIEW_PROOF_DIR/.access-probe"') == 2,
+            "Bot reviewer must remove both transient canary files without exposing evidence")
     require('$RUNNER_TEMP/bot-review-authentic-' not in bot_review,
             "Bot reviewer must not reuse fixed-name proof files")
     require('all(.check_runs[] | select(.name == $name);' not in bot_review,
