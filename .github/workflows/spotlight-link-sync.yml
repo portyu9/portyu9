@@ -39,6 +39,7 @@ jobs:
     permissions:
       contents: read
     outputs:
+      superseded: ${{ steps.shared_epoch.outputs.superseded }}
       changed: ${{ steps.render.outputs.changed }}
       base_sha: ${{ steps.render.outputs.base_sha }}
       generated_sha: ${{ steps.render.outputs.generated_sha }}
@@ -51,6 +52,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: source
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Checkout published evidence snapshot
@@ -93,24 +95,25 @@ jobs:
           echo "publication_tree_sha=$PUBLICATION_TREE_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Verify optional shared publication epoch
+        id: shared_epoch
         env:
           UPSTREAM_MAIN_SOURCE_SHA: ${{ inputs.main_source_sha }}
           UPSTREAM_GENERATED_PUBLICATION_SHA: ${{ inputs.generated_publication_sha }}
         run: |
           set -euo pipefail
-          if [ -z "$UPSTREAM_MAIN_SOURCE_SHA" ] && [ -z "$UPSTREAM_GENERATED_PUBLICATION_SHA" ]; then
-            exit 0
-          fi
-          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
-          test -n "$UPSTREAM_MAIN_SOURCE_SHA"
-          test -n "$UPSTREAM_GENERATED_PUBLICATION_SHA"
-          [[ "$UPSTREAM_MAIN_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$UPSTREAM_GENERATED_PUBLICATION_SHA" =~ ^[0-9a-f]{40}$ ]]
-          test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$UPSTREAM_MAIN_SOURCE_SHA" = "$GITHUB_SHA"
-          test "$(git -C published rev-parse HEAD)" = "$UPSTREAM_GENERATED_PUBLICATION_SHA"
+          python3 source/scripts/spotlight_shared_epoch.py \
+            --source-repo source \
+            --published-repo published \
+            --main "$GITHUB_SHA" \
+            --upstream-main "$UPSTREAM_MAIN_SOURCE_SHA" \
+            --upstream-generated "$UPSTREAM_GENERATED_PUBLICATION_SHA" \
+            --event "$GITHUB_EVENT_NAME" \
+            --actor "$GITHUB_ACTOR" \
+            --ref "$GITHUB_REF" \
+            --output "$GITHUB_OUTPUT"
 
       - name: Reconstruct exact published Spotlight projection
+        if: steps.shared_epoch.outputs.superseded != 'true'
         run: |
           set -euo pipefail
           python3 source/scripts/validate-portfolio-evidence-ledger.py published/portfolio-evidence --require-live
@@ -128,6 +131,7 @@ jobs:
 
       - name: Render atomic direct-link README proposal
         id: render
+        if: steps.shared_epoch.outputs.superseded != 'true'
         env:
           PUBLICATION_SEQUENCE: ${{ steps.epoch.outputs.publication_sequence }}
           GENERATED_TREE_SHA: ${{ steps.epoch.outputs.publication_tree_sha }}
@@ -166,6 +170,7 @@ jobs:
   lease:
     name: mint-mutation-lease-read-only
     needs: plan
+    if: needs.plan.outputs.superseded != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     concurrency:
@@ -273,6 +278,7 @@ jobs:
   reconcile:
     name: reconcile-stale-candidates-write
     needs: [plan, lease]
+    if: needs.plan.outputs.superseded != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     concurrency:

@@ -673,6 +673,20 @@
       "mutationMode": "none"
     },
     {
+      "id": "spotlight-owner-review-exact-context-convergence",
+      "workflow": ".github/workflows/bot-pr-user-approval.yml",
+      "job": "approve",
+      "step": "Approve only exact green governed bot PRs as portyu9",
+      "ordinal": 2,
+      "variable": "REVIEW_READ_ATTEMPT",
+      "maxIterations": 16,
+      "sleepSeconds": 10,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Read-only, at-most-16 exact-head authenticated job/check/capability reproofs while the independently dispatched Spotlight admission becomes visible; no review POST or workflow dispatch is repeated.",
+      "mutationMode": "none"
+    },
+    {
       "id": "profile-quality-review-artifact-visibility",
       "workflow": ".github/workflows/profile-quality.yml",
       "job": "integration",
