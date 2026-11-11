@@ -1926,6 +1926,13 @@
       "rationale": "Authorize only the trusted parser extension that preserves every existing static concurrency group rule and recognizes one exact additional group string solely for spotlight-link-sync planning: push events share main-lineage while non-push recovery events are run-scoped. This prerequisite changes no workflow, Automation Policy value, permission, trigger, mutation, lease, required check, or merge/review authority."
     },
     {
+      "baseBomSha256": "8e47fe617bfbeb79662eee27d5e68a25fa3b524dbed22071a7c6508a9f21160b",
+      "candidateBomSha256": "8e47fe617bfbeb79662eee27d5e68a25fa3b524dbed22071a7c6508a9f21160b",
+      "expansionSha256": "05b845e3076a001b752129c5552f29524679c09fcac6757122ebb8afeaadb9b3",
+      "id": "cap-spotlight-independent-admission-20261111",
+      "rationale": "Prior-authorize frozen #2051 Spotlight review proof candidate tree 7e6e7566a414406d7d465b468a990c0f62ce0a39 (independent no-secret trusted-main measurement 43023227195, 1 trusted-source expansion, 0 reductions, exact TCB digest 93392c476cb6307a3d15b9ef4ec9e8fbbc2481550ee5643c61c48bcdb9613244). Bind separate accepted-main capability check to exact PR/base/head, official successful issuing workflow run and GitHub Actions identity. Retain Dependabot native job, veto and protected merge authority."
+    },
+    {
       "baseBomSha256": "178cbd63c0f391e8bb583e5021cc89e5c59f71f45f838a73639e72efd916b87a",
       "candidateBomSha256": "178cbd63c0f391e8bb583e5021cc89e5c59f71f45f838a73639e72efd916b87a",
       "expansionSha256": "cf3e1ddd9d3542919b91843614c7ecedc86a0d02c1e971439f8677b65f6e5505",
