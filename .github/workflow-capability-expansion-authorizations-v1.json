@@ -1149,6 +1149,13 @@
       "rationale": "Authorize frozen #1917 head 38ac84c3198eff3a8881811e724613aaef42ad92, tree b52c5d6b4993ee13434ee66ce16ffa805249250c; independent #1918 run 40779584428 measured 1 protected source expansion, 0 reductions, unchanged semantic BOM, TCB SHA256 562bd5a7945136e5c2e110f33f0f19cbbb7e803987ab88346e2513c5d03601f6. Permit only the exact signed setup-python ref inside Capability Admission and associated byte locks; no new permission, check, owner veto, direct-main or merge bypass."
     },
     {
+      "baseBomSha256": "bd477388f595ff74ced0f19a96e87e1de5d2ec2c2745f7d364f5b9a2e430e03b",
+      "candidateBomSha256": "bd477388f595ff74ced0f19a96e87e1de5d2ec2c2745f7d364f5b9a2e430e03b",
+      "expansionSha256": "9a3286c3380cda0a6b46b8b12c4e0224f5d7d1a02a767a04c402cbd6dbe18eb9",
+      "id": "cap-dependabot-superseded-rebase-readonly-tcb-v1",
+      "rationale": "Pre-authorize only the exact independently measured protected-source bytes of portfolio PR #2043 tree 300ee6181275e651979cd9f52a56874b06ae6157: read-only stale-main ancestry and exhaustive PR-list evidence before any existing scoped App token, fail closed on ambiguity/actionable native PR, regression guards. No new privileged API mutation, approval, bypass, secret, OIDC, check waiver, workflow permission or semantic BOM capability."
+    },
+    {
       "baseBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
       "candidateBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
       "expansionSha256": "842e3ef45027f32131d6cc0b8c07bb638b45acb24c44241df26ef7cf3cfa288f",
