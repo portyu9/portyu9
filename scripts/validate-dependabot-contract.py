@@ -1153,6 +1153,23 @@ def validate_reviewer_latest_check_proof() -> None:
             and [block.index(x) for x in in_order]
             == sorted(block.index(x) for x in in_order),
             "reviewer must prove source and runs before owner review")
+    require("REVIEW_PROOF_DIR" not in block and "bot-review-authentic-" not in block,
+            "reviewer must not persist latest authentic snapshots in disk files")
+    require(block.count("<(printf '%s\\n'") == 8,
+            "reviewer must pass exactly eight authenticated JSON payloads via anonymous descriptors")
+    require(block.count("--out /dev/stdout") == 2,
+            "reviewer must collect both selection and verification via stdout")
+    for required_stream in (
+        "--checks <(printf '%s\\n' \"$checks\")",
+        "--runs <(printf '%s\\n' \"$required_workflow_history\")",
+        "--selection <(printf '%s\\n' \"$selection\")",
+        "--profile-jobs <(printf '%s\\n' \"$profile_jobs\")",
+        "--dependency-jobs <(printf '%s\\n' \"$dependency_jobs\")",
+        "--codeql-jobs <(printf '%s\\n' \"$codeql_jobs\")",
+        "--admission-run <(printf '%s\\n' \"$admission_run\")",
+    ):
+        require(required_stream in block, f"reviewer is missing exact authenticated stream: {required_stream}")
+
     require("all(.check_runs[] | select(.name == $name);" not in block,
             "reviewer historical all-checks poisoning was reintroduced")
 
