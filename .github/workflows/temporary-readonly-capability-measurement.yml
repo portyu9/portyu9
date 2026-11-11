@@ -5,6 +5,8 @@ on:
     types: [synchronize]
 permissions:
   contents: read
+env:
+  PYTHON_VERSION: '3.13.18'
 jobs:
   measure:
     name: exact-trusted-main-capability-measure
