@@ -3081,7 +3081,7 @@ def validate_bot_review_run_check_evidence_schema(bot_review: str) -> None:
     for marker in (
         check_fetch,
         'git -C reviewer-main rev-parse HEAD)" = "$GITHUB_SHA"',
-        'git -C reviewer-main rev-parse HEAD:scripts/dependabot_latest_authentic_checks.py)" = "397daa392862cee022c45164182c2f1c4d2ce4ca"',
+        'git -C reviewer-main rev-parse HEAD:scripts/dependabot_latest_authentic_checks.py)" = "71280abf53bba961b3207a0a482e61fb70a6f1f4"',
         'git -C reviewer-main rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
         'required_workflow_history="$(python3 -B reviewer-main/scripts/automation_github_read.py',
         'actions/runs?head_sha=${head}&per_page=100',
@@ -5027,7 +5027,7 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     )
     for fragment in (
         'git -C reviewer-main rev-parse HEAD)" = "$GITHUB_SHA"',
-        'git -C reviewer-main rev-parse HEAD:scripts/dependabot_latest_authentic_checks.py)" = "397daa392862cee022c45164182c2f1c4d2ce4ca"',
+        'git -C reviewer-main rev-parse HEAD:scripts/dependabot_latest_authentic_checks.py)" = "71280abf53bba961b3207a0a482e61fb70a6f1f4"',
         'required_workflow_history="$(python3 -B reviewer-main/scripts/automation_github_read.py',
         'reviewer-main/scripts/dependabot_latest_authentic_checks.py select',
         'actions/runs/${run_id}/jobs?filter=latest&per_page=100',
