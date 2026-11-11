@@ -20,7 +20,7 @@ import privileged_workflow_identity_v21_core as v21
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v161"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "037ab3308925adebda67f3c0de1037e8ba25c65a",
+    ".github/workflows/bot-pr-user-approval.yml": "43a1d6e3cf43768deaa7bc084e7ec0afebc915bb",
     ".github/workflows/profile-quality.yml": "0c94756c3da81f709bea05a3dd266f06d9054c60",
     ".github/workflows/profile-stats.yml": "eb9af8f63d4db7b35306ebf3c38f5004e7e1c0a8",
     ".github/workflows/spotlight-link-sync.yml": "03e3a9b4b39fa026d851e5cabdbdd451e8f6e8c8",
@@ -5032,34 +5032,39 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'reviewer-main/scripts/dependabot_latest_authentic_checks.py select',
         'actions/runs/${run_id}/jobs?filter=latest&per_page=100',
         'reviewer-main/scripts/dependabot_latest_authentic_checks.py verify',
-        '--checks "$REVIEW_PROOF_DIR/checks.json"',
-        '--runs "$REVIEW_PROOF_DIR/runs.json"',
+        "--checks <(printf '%s\\n' \"$checks\")",
+        "--runs <(printf '%s\\n' \"$required_workflow_history\")",
         'if [ "$verdict" = "ready" ]; then' if False else 'ready) return 0',
         'blocked)',
     ):
         require(fragment in bot_review, f"Bot PR latest authentic prerequisite proof is missing: {fragment}")
-    # Reviewer proof files must be job-exclusive and private: fixed names in
-    # RUNNER_TEMP caused an actual production permission-denied regression.
+    # The accepted #2041 reviewer was filesystem-independent. The later file-backed
+    # snapshot transport caused repeated live Permission denied failures, even with
+    # private 0700 directories. Transport exact immutable evidence through anonymous
+    # Linux file descriptors without bypassing the real run/job verifier.
     for fragment in (
-        'REVIEW_PROOF_DIR="$(mktemp -d "${GITHUB_WORKSPACE}/.bot-review-proof.XXXXXXXXXXXX")"',
-        'test "$(stat -c %a "$REVIEW_PROOF_DIR")" = "700"',
-        'test "$(stat -c %u "$REVIEW_PROOF_DIR")" = "$(id -u)"',
-        'test -w "$REVIEW_PROOF_DIR"',
-        ': > "$REVIEW_PROOF_DIR/.access-probe"',
-        'rm -- "$REVIEW_PROOF_DIR/.access-probe"',
-        "trap 'rm -rf -- \"$REVIEW_PROOF_DIR\"' EXIT",
-        '--profile-jobs "$REVIEW_PROOF_DIR/profile-jobs.json"',
-        '--dependency-jobs "$REVIEW_PROOF_DIR/dependency-jobs.json"',
-        '--codeql-jobs "$REVIEW_PROOF_DIR/codeql-jobs.json"',
-        '--out "$REVIEW_PROOF_DIR/verdict.json"',
+        'selection="$(python3 -B reviewer-main/scripts/dependabot_latest_authentic_checks.py select',
+        "--runs <(printf '%s\n' \"$required_workflow_history\")",
+        'verdict_json="$(python3 -B reviewer-main/scripts/dependabot_latest_authentic_checks.py verify',
+        "--checks <(printf '%s\n' \"$checks\")",
+        "--selection <(printf '%s\n' \"$selection\")",
+        "--profile-jobs <(printf '%s\n' \"$profile_jobs\")",
+        "--dependency-jobs <(printf '%s\n' \"$dependency_jobs\")",
+        "--codeql-jobs <(printf '%s\n' \"$codeql_jobs\")",
+        "--admission-run <(printf '%s\n' \"$admission_run\")",
+        'verdict="$(jq -er .state <<<"$verdict_json")"',
+        'printf \'%s\\n\' "$verdict_json" >&2',
+        "case \"$key\" in",
     ):
-        require(fragment in bot_review, f"Bot reviewer private proof contract missing: {fragment}")
-    require(bot_review.count(': > "$REVIEW_PROOF_DIR/.access-probe"') == 2,
-            "Bot reviewer must probe private directory creation and post-network writability")
-    require(bot_review.count('rm -- "$REVIEW_PROOF_DIR/.access-probe"') == 2,
-            "Bot reviewer must remove both transient canary files without exposing evidence")
-    require('$RUNNER_TEMP/bot-review-authentic-' not in bot_review,
-            "Bot reviewer must not reuse fixed-name proof files")
+        require(fragment in bot_review, f"Bot reviewer anonymous proof contract missing: {fragment}")
+    require(bot_review.count("--out /dev/stdout") == 2,
+            "Both authentic reviewer verifier stages must write only to captured stdout")
+    require(bot_review.count("<(printf '%s\\n'") == 8,
+            "All eight authenticated proof sources must be read via anonymous streams")
+    for forbidden in ("REVIEW_PROOF_DIR", "bot-review-authentic-", ".access-probe",
+                      '> "$REVIEW_PROOF_DIR/', 'cat "$REVIEW_PROOF_DIR/'):
+        require(forbidden not in bot_review,
+                f"Bot reviewer may not use disk-backed authentication proof: {forbidden}")
     require('all(.check_runs[] | select(.name == $name);' not in bot_review,
             "Bot reviewer regressed to old same-name history poisoning")
     require(
