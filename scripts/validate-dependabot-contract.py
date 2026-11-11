@@ -1050,6 +1050,10 @@ def validate_controller_required_check_snapshot_contract(text: str) -> None:
     for marker in required:
         require(block.count(marker) >= 1,
                 f"trusted latest-run readiness proof is missing: {marker}")
+    require(
+        block.count('--head "$HEAD_SHA" --branch "$HEAD_REF" --repository "$TARGET_REPOSITORY"') == 2,
+        "both the selector and the verifier must be bound to the exact same head/branch/repository",
+    )
     in_order = (
         'commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100',
         'actions/runs?head_sha=${HEAD_SHA}&per_page=100',
@@ -1133,6 +1137,8 @@ def validate_reviewer_latest_check_proof() -> None:
     )
     for marker in required:
         require(marker in block, f"reviewer latest check proof lost: {marker}")
+    require(block.count('--head "$head" --branch "$HEAD_REF" --repository "$TARGET_REPOSITORY"') == 2,
+            "reviewer selection and verification must both bind the exact PR identity")
     in_order = (
         'git -C reviewer-main rev-parse HEAD)" = "$GITHUB_SHA"',
         'checks="$(bot_reviewer_get required-checks)"',
