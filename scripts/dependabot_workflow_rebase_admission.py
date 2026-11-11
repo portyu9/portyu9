@@ -66,6 +66,46 @@ def select_stale_native_pr(items: Any, repo: str, main_sha: str) -> dict[str, An
     return sorted(selected, key=lambda x: x["number"])[0] if selected else None
 
 
+
+def verify_superseded_main_noop(
+    *, repository: str, event_main_sha: str, checkout_sha: str,
+    live_main: Any, comparison: Any, open_prs: Any,
+) -> None:
+    """Allow a read-only stale-event exit only for proved accepted-main ancestry.
+
+    A current stale native candidate is *never* silently cleared: a fresh
+    main-owned controller must reconcile it instead. No credential is minted.
+    """
+    require(type(repository) is str and repository.count("/") == 1
+            and type(event_main_sha) is str and SHA.fullmatch(event_main_sha) is not None
+            and type(checkout_sha) is str and SHA.fullmatch(checkout_sha) is not None
+            and event_main_sha != checkout_sha,
+            "superseded event/main identities are not distinct canonical SHAs")
+    require(isinstance(live_main, Mapping)
+            and live_main.get("ref") == "refs/heads/main"
+            and isinstance(live_main.get("object"), Mapping)
+            and live_main["object"].get("type") == "commit"
+            and live_main["object"].get("sha") == checkout_sha,
+            "superseded event checkout is not exact live accepted main")
+    require(isinstance(comparison, Mapping)
+            and comparison.get("status") == "ahead"
+            and type(comparison.get("ahead_by")) is int
+            and 1 <= comparison["ahead_by"] <= 200
+            and type(comparison.get("behind_by")) is int
+            and comparison["behind_by"] == 0
+            and isinstance(comparison.get("base_commit"), Mapping)
+            and comparison["base_commit"].get("sha") == event_main_sha
+            and isinstance(comparison.get("merge_base_commit"), Mapping)
+            and comparison["merge_base_commit"].get("sha") == event_main_sha,
+            "superseded event main ancestry is unproved, divergent, or over limit")
+    # The canonical listing must be complete; any malformed native PR is an
+    # error, and any remaining *stale* native PR is an actionable blocker.
+    candidate = select_stale_native_pr(open_prs, repository, checkout_sha)
+    require(candidate is None,
+            "superseded event has an actionable stale Dependabot PR; require fresh main wake")
+
+
+
 def verify_app(install: Any, *, app_id: int, installation_id: int, owner: str) -> None:
     require(type(app_id) is int and app_id > 0
             and type(installation_id) is int and installation_id > 0
@@ -124,6 +164,44 @@ def self_test() -> None:
             pass
         else:
             raise ValueError("bad PR accepted")
+    # An old successful main-push event may run after a separate protected
+    # merge. Treat it as a clean pre-token no-op only if the live SHA, ancestry
+    # and *entire* current open PR inventory are independently authenticated.
+    old_sha, new_sha = "a" * 40, "d" * 40
+    live = {"ref": "refs/heads/main", "object": {"type": "commit", "sha": new_sha}}
+    compare = {"status": "ahead", "ahead_by": 2, "behind_by": 0,
+               "base_commit": {"sha": old_sha},
+               "merge_base_commit": {"sha": old_sha}}
+    props = {"repository": "x/y", "event_main_sha": old_sha,
+             "checkout_sha": new_sha, "live_main": live,
+             "comparison": compare, "open_prs": []}
+    verify_superseded_main_noop(**props)
+    fresh = {**pr, "base": {"ref": "main", "sha": new_sha}}
+    verify_superseded_main_noop(**{**props, "open_prs": [fresh]})
+    negatives = (
+        {"event_main_sha": new_sha},
+        {"checkout_sha": "invalid"},
+        {"live_main": {**live, "ref": "refs/heads/other"}},
+        {"live_main": {**live, "object": {"type": "commit", "sha": old_sha}}},
+        {"comparison": {**compare, "status": "diverged"}},
+        {"comparison": {**compare, "behind_by": 1}},
+        {"comparison": {**compare, "ahead_by": 201}},
+        {"comparison": {**compare, "ahead_by": True}},
+        {"comparison": {**compare, "merge_base_commit": {"sha": new_sha}}},
+        {"comparison": {**compare, "base_commit": {"sha": new_sha}}},
+        {"open_prs": [pr]},
+        {"open_prs": [fresh, fresh]},
+        {"open_prs": [pr] * 100},
+        {"open_prs": [{**pr, "node_id": "invalid"}]},
+    )
+    for mutation in negatives:
+        try:
+            verify_superseded_main_noop(**{**props, **mutation})
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"superseded main accepted unproved event: {mutation}")
+
     app = {"id": 2, "app_id": 1, "repository_selection": "selected",
            "account": {"login": "x"}, "permissions": dict(APP_PERMISSIONS)}
     verify_app(app, app_id=1, installation_id=2, owner="x")
