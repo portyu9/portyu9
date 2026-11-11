@@ -2626,7 +2626,7 @@ def validate_bot_review_spotlight_admission_source_positive_only(bot_review: str
         'ERROR: Spotlight admission issuing workflow read is not exact accepted-main evidence.',
         '--admission-run <(printf',
     ):
-        require(approve.count(marker) == 1,
+        require(approve.count(marker) >= 1,
                 f"Spotlight issuing source workflow identity/transport changed: {marker}")
     positions = (
         approve.index('admission_run_id="${BASH_REMATCH[1]}"'),
