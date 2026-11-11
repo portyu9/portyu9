@@ -1,0 +1,34 @@
+# Temporary read-only trusted-main capability measurement.
+# Remove before final review; this workflow grants no source authorization.
+name: Temporary trusted capability measurement
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/temporary-capability-measurement.yml'
+permissions:
+  contents: read
+jobs:
+  measure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Read immutable accepted-main measurement implementation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 289fda4bfccf32e394496f75f7f4cc5e31595f04
+          path: trusted-main
+          persist-credentials: false
+      - name: Read immutable candidate tree as data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: e3dc1db420c3cc7b0e371adeed1f5793e939a916
+          path: candidate
+          persist-credentials: false
+      - name: Verify exact measured identities and emit read-only tuple
+        run: |
+          set -euo pipefail
+          test "$(git -C trusted-main rev-parse HEAD)" = "289fda4bfccf32e394496f75f7f4cc5e31595f04"
+          test "$(git -C candidate rev-parse HEAD)" = "e3dc1db420c3cc7b0e371adeed1f5793e939a916"
+          test "$(git -C candidate rev-parse HEAD^{tree})" = "740a0b7861954c5471f9c729db70af0a8481bac8"
+          python3 trusted-main/scripts/workflow_capability_admission.py \
+            candidate --candidate-tree-sha 740a0b7861954c5471f9c729db70af0a8481bac8 --measure
