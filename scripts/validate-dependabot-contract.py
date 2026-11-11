@@ -1114,7 +1114,7 @@ def validate_reviewer_latest_check_proof() -> None:
     block = reviewer.split(start, 1)[1].split(end, 1)[0]
     required = (
         'git -C reviewer-main rev-parse HEAD)" = "$GITHUB_SHA"',
-        'git -C reviewer-main rev-parse HEAD:scripts/dependabot_latest_authentic_checks.py)" = "397daa392862cee022c45164182c2f1c4d2ce4ca"',
+        'git -C reviewer-main rev-parse HEAD:scripts/dependabot_latest_authentic_checks.py)" = "71280abf53bba961b3207a0a482e61fb70a6f1f4"',
         'git -C reviewer-main rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
         'bot_reviewer_get required-checks',
         'reviewer-main/scripts/automation_github_read.py',
