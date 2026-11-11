@@ -5038,7 +5038,21 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'blocked)',
     ):
         require(fragment in bot_review, f"Bot PR latest authentic prerequisite proof is missing: {fragment}")
-    # Reviewer proof files must be job-exclusive and private: fixed names in\n    # RUNNER_TEMP caused an actual production permission-denied regression.\n    for fragment in (\n        'REVIEW_PROOF_DIR="$(mktemp -d "${RUNNER_TEMP}/bot-review-proof.XXXXXXXXXXXX")"',\n        'test "$(stat -c %a "$REVIEW_PROOF_DIR")" = "700"',\n        "trap 'rm -rf -- \"$REVIEW_PROOF_DIR\"' EXIT",\n        '--profile-jobs "$REVIEW_PROOF_DIR/profile-jobs.json"',\n        '--dependency-jobs "$REVIEW_PROOF_DIR/dependency-jobs.json"',\n        '--codeql-jobs "$REVIEW_PROOF_DIR/codeql-jobs.json"',\n        '--out "$REVIEW_PROOF_DIR/verdict.json"',\n    ):\n        require(fragment in bot_review, f"Bot reviewer private proof contract missing: {fragment}")\n    require('$RUNNER_TEMP/bot-review-authentic-' not in bot_review,\n            "Bot reviewer must not reuse fixed-name proof files")\n    require('all(.check_runs[] | select(.name == $name);' not in bot_review,
+    # Reviewer proof files must be job-exclusive and private: fixed names in
+    # RUNNER_TEMP caused an actual production permission-denied regression.
+    for fragment in (
+        'REVIEW_PROOF_DIR="$(mktemp -d "${RUNNER_TEMP}/bot-review-proof.XXXXXXXXXXXX")"',
+        'test "$(stat -c %a "$REVIEW_PROOF_DIR")" = "700"',
+        "trap 'rm -rf -- \"$REVIEW_PROOF_DIR\"' EXIT",
+        '--profile-jobs "$REVIEW_PROOF_DIR/profile-jobs.json"',
+        '--dependency-jobs "$REVIEW_PROOF_DIR/dependency-jobs.json"',
+        '--codeql-jobs "$REVIEW_PROOF_DIR/codeql-jobs.json"',
+        '--out "$REVIEW_PROOF_DIR/verdict.json"',
+    ):
+        require(fragment in bot_review, f"Bot reviewer private proof contract missing: {fragment}")
+    require('$RUNNER_TEMP/bot-review-authentic-' not in bot_review,
+            "Bot reviewer must not reuse fixed-name proof files")
+    require('all(.check_runs[] | select(.name == $name);' not in bot_review,
             "Bot reviewer regressed to old same-name history poisoning")
     require(
         'check_name=${name}' not in bot_review,
