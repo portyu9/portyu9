@@ -617,11 +617,12 @@ jobs:
               return 1
             }
 
+            test "$(git -C reviewer-main rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a" || return 1
             checks="$(bot_reviewer_get required-checks)" || {
               echo "ERROR: failed to fetch exact-head GitHub Actions check snapshot for ${head}." >&2
               return 1
             }
-            required_workflow_history="$(bot_reviewer_get quiescent-runs)" || {
+            required_workflow_history="$(python3 -B reviewer-main/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${head}&per_page=100")" || {
               echo "ERROR: failed to fetch exact-head workflow run snapshot for ${head}." >&2
               return 1
             }
