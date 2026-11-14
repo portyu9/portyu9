@@ -4,12 +4,13 @@
     "CURRENT_SUBJECT": 27
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:669dc9f37296a1e732e5664f16082f7f5639a26c922ca464ceba68a487eb9942",
-  "evidence_id": "PL2-669DC9F37296A1E7",
+  "evidence_digest": "sha256:a953daff6d3fe19ee1b4946f0494346f8e86ab60506e83009a82cf48b046bb95",
+  "evidence_id": "PL2-A953DAFF6D3FE19E",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
-    "AGED": 27
+    "AGED": 25,
+    "SAME_DAY": 2
   },
   "kind": "portfolio-evidence-ledger",
   "owner": "portyu9",
@@ -37,38 +38,38 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 1,
+      "evidence_max_age_days": 0,
       "repository": "portyu9/ai-qa-automation",
       "signals": [
         {
-          "age_days": 1,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-11-13T07:03:57Z",
-          "freshness": "AGED",
+          "completed_at_utc": "2026-11-14T08:08:49Z",
+          "freshness": "SAME_DAY",
           "head_sha": "159fdd9ac328aed5f30537e7c9cd8d77e536d9b2",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 43382393687,
-          "run_number": 975,
-          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/43382393687",
+          "run_id": 43573962735,
+          "run_number": 997,
+          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/43573962735",
           "scope": "workflow",
           "workflow": "ci.yml"
         },
         {
-          "age_days": 1,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-11-13T07:03:57Z",
-          "freshness": "AGED",
+          "completed_at_utc": "2026-11-14T08:08:49Z",
+          "freshness": "SAME_DAY",
           "head_sha": "159fdd9ac328aed5f30537e7c9cd8d77e536d9b2",
           "label": "SECURITY",
           "offline": false,
           "ordinal": 2,
           "result": "PASSING",
-          "run_id": 43382393687,
-          "run_number": 975,
-          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/43382393687",
+          "run_id": 43573962735,
+          "run_number": 997,
+          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/43573962735",
           "scope": "workflow",
           "workflow": "security.yml"
         }
