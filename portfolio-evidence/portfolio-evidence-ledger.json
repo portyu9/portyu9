@@ -4,12 +4,13 @@
     "CURRENT_SUBJECT": 27
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:44c8c0f2cf6123fb121ce093496f4b86c686339ae833a39309937b9fd66930da",
-  "evidence_id": "PL2-44C8C0F2CF6123FB",
+  "evidence_digest": "sha256:04a65675d9cbf2e3a620fff109f0631ab8df242f922c73442e026c81b8beeb76",
+  "evidence_id": "PL2-04A65675D9CBF2E3",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
-    "AGED": 27
+    "AGED": 23,
+    "SAME_DAY": 4
   },
   "kind": "portfolio-evidence-ledger",
   "owner": "portyu9",
@@ -37,38 +38,38 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 1,
+      "evidence_max_age_days": 0,
       "repository": "portyu9/ai-qa-automation",
       "signals": [
         {
-          "age_days": 1,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-11-19T20:54:56Z",
-          "freshness": "AGED",
+          "completed_at_utc": "2026-11-20T21:05:59Z",
+          "freshness": "SAME_DAY",
           "head_sha": "97182153556df0ca9918e5797403b0a82c6a04e5",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 44612692019,
-          "run_number": 1107,
-          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/44612692019",
+          "run_id": 44816571614,
+          "run_number": 1126,
+          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/44816571614",
           "scope": "workflow",
           "workflow": "ci.yml"
         },
         {
-          "age_days": 1,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-11-19T20:54:56Z",
-          "freshness": "AGED",
+          "completed_at_utc": "2026-11-20T21:05:59Z",
+          "freshness": "SAME_DAY",
           "head_sha": "97182153556df0ca9918e5797403b0a82c6a04e5",
           "label": "SECURITY",
           "offline": false,
           "ordinal": 2,
           "result": "PASSING",
-          "run_id": 44612692019,
-          "run_number": 1107,
-          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/44612692019",
+          "run_id": 44816571614,
+          "run_number": 1126,
+          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/44816571614",
           "scope": "workflow",
           "workflow": "security.yml"
         }
@@ -588,43 +589,43 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 3,
+      "evidence_max_age_days": 0,
       "repository": "portyu9/qa-automation-java-restassured",
       "signals": [
         {
-          "age_days": 3,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-11-17T00:52:07Z",
-          "freshness": "AGED",
-          "head_sha": "2c415b4e2d81b6c616a2d707aaa83b285f4595c2",
+          "completed_at_utc": "2026-11-20T13:51:15Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "e8c6b001505c6355408fac4b7af31860cd301a98",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 43990918115,
-          "run_number": 261,
-          "run_url": "https://github.com/portyu9/qa-automation-java-restassured/actions/runs/43990918115",
+          "run_id": 44747819606,
+          "run_number": 263,
+          "run_url": "https://github.com/portyu9/qa-automation-java-restassured/actions/runs/44747819606",
           "scope": "workflow",
           "workflow": "ci.yml"
         },
         {
-          "age_days": 3,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-11-17T00:52:15Z",
-          "freshness": "AGED",
-          "head_sha": "2c415b4e2d81b6c616a2d707aaa83b285f4595c2",
+          "completed_at_utc": "2026-11-20T13:51:48Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "e8c6b001505c6355408fac4b7af31860cd301a98",
           "label": "SECURITY",
           "offline": false,
           "ordinal": 2,
           "result": "PASSING",
-          "run_id": 43990918049,
-          "run_number": 248,
-          "run_url": "https://github.com/portyu9/qa-automation-java-restassured/actions/runs/43990918049",
+          "run_id": 44747819462,
+          "run_number": 250,
+          "run_url": "https://github.com/portyu9/qa-automation-java-restassured/actions/runs/44747819462",
           "scope": "workflow",
           "workflow": "security.yml"
         }
       ],
-      "subject_revision": "2c415b4e2d81b6c616a2d707aaa83b285f4595c2",
+      "subject_revision": "e8c6b001505c6355408fac4b7af31860cd301a98",
       "title": "REST ASSURED QE"
     },
     {
