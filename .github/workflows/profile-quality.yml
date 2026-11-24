@@ -568,10 +568,6 @@ jobs:
                 echo "ERROR: Exact Signal Field review artifact metadata is invalid." >&2
                 exit 1
               }
-              # The Actions run-local artifact index can lag its REST inventory.
-              # Bound the consistency grace period; retain exact ID and SHA-256
-              # verification at the subsequent download step (no cross-run token).
-              sleep 30
               ARTIFACT_VISIBLE=true
               break
             fi
@@ -586,6 +582,10 @@ jobs:
             sleep 2
           done
           test "$ARTIFACT_VISIBLE" = "true"
+          # A completed REST inventory can precede the runner-local artifact
+          # cache. Grace begins only after exact-ID admission succeeds and is
+          # outside the bounded polling loop (no cross-run token escalation).
+          sleep 30
 
       - name: Download Signal Field review artifacts
         if: github.event_name == 'pull_request'
