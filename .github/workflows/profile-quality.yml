@@ -533,7 +533,10 @@ jobs:
             python3 scripts/automation_github_read.py \
               "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" \
               > "$RUNNER_TEMP/signal-field-review-artifacts.json"
-            jq -e '
+            # GitHub can expose a transient, incomplete run inventory immediately
+            # after upload finalization. Retry only within the same bounded
+            # visibility lease; never admit malformed metadata as evidence.
+            if ! jq -e '
               (type == "object") and
               (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
               (.artifacts | type == "array" and length == $total) and
@@ -545,10 +548,14 @@ jobs:
                 (.expired | type == "boolean")
               )
             ' --argjson total "$(jq -r '.total_count // -1' "$RUNNER_TEMP/signal-field-review-artifacts.json")" \
-              "$RUNNER_TEMP/signal-field-review-artifacts.json" >/dev/null || {
-                echo "ERROR: Signal Field review artifact inventory schema is invalid." >&2
+              "$RUNNER_TEMP/signal-field-review-artifacts.json" >/dev/null; then
+              if [ "$ARTIFACT_VISIBILITY_ATTEMPT" -eq 12 ]; then
+                echo "ERROR: Signal Field review artifact inventory remained invalid after bounded convergence." >&2
                 exit 1
-              }
+              fi
+              sleep 2
+              continue
+            fi
             ARTIFACT_MATCH_COUNT="$(jq --argjson id "$ARTIFACT_ID" '[.artifacts[] | select(.id == $id)] | length' "$RUNNER_TEMP/signal-field-review-artifacts.json")"
             if [ "$ARTIFACT_MATCH_COUNT" = "1" ]; then
               jq -e --argjson id "$ARTIFACT_ID" '
