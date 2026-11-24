@@ -493,7 +493,7 @@ def validate_quality_binding(text: str) -> None:
                 "Signal Field exact artifact identity or bounded retry proof drifted: " + fragment)
     require(
         '              if [ "$ARTIFACT_VISIBILITY_ATTEMPT" -eq 12 ]; then' in section
-        and '                sleep 2\n                continue\n            fi' in section,
+        and '              sleep 2\n              continue\n            fi' in section,
         "Transient artifact inventory parsing must retry within the finite lease",
     )
 
@@ -621,8 +621,8 @@ jobs:
     validate_quality_binding(quality)
     for original, replacement in (
         ("            if ! jq -e '", "            jq -e '"),
-        ("                sleep 2\n                continue\n            fi",
-         "                sleep 2\n                exit 0\n            fi"),
+        ("              sleep 2\n              continue\n            fi",
+         "              sleep 2\n              exit 0\n            fi"),
         ("for ARTIFACT_VISIBILITY_ATTEMPT in $(seq 1 12); do",
          "for ARTIFACT_VISIBILITY_ATTEMPT in $(seq 1 999); do"),
         ('            if [ "$ARTIFACT_MATCH_COUNT" = "1" ]; then',
