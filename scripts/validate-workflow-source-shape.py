@@ -468,6 +468,35 @@ def validate_quality_binding(text: str) -> None:
         "Profile Quality push paths must cover every workflow source-shape change",
     )
 
+    # Uploaded artifacts can briefly have an incomplete read-after-write
+    # inventory. That is not an authorization failure, but an untrusted
+    # inventory must NEVER be used to approve or download a guessed artifact.
+    start = "      - name: Wait for exact Signal Field review artifact visibility"
+    end = "      - name: Download Signal Field review artifacts"
+    require(text.count(start) == 1 and text.count(end) == 1,
+            "Signal Field artifact upload visibility steps must be unique")
+    section = text.split(start, 1)[1].split(end, 1)[0]
+    for fragment in (
+        '          for ARTIFACT_VISIBILITY_ATTEMPT in $(seq 1 12); do',
+        '            if ! jq -e \'',
+        '              (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and',
+        '              (.artifacts | type == "array" and length == $total) and',
+        '            ARTIFACT_MATCH_COUNT="$(jq --argjson id "$ARTIFACT_ID"',
+        '            if [ "$ARTIFACT_MATCH_COUNT" = "1" ]; then',
+        '              .name == "signal-field-publishable-review" and',
+        '              .expired == false and',
+        '              .size_in_bytes > 0',
+        '            if [ "$ARTIFACT_MATCH_COUNT" != "0" ]; then',
+        '          test "$ARTIFACT_VISIBLE" = "true"',
+    ):
+        require(fragment in section,
+                "Signal Field exact artifact identity or bounded retry proof drifted: " + fragment)
+    require(
+        '              if [ "$ARTIFACT_VISIBILITY_ATTEMPT" -eq 12 ]; then' in section
+        and '                sleep 2\n                continue\n            fi' in section,
+        "Transient artifact inventory parsing must retry within the finite lease",
+    )
+
 
 def expect_failure(text: str, fragment: str) -> None:
     try:
@@ -560,6 +589,28 @@ jobs:
         1,
     )
     validate_text(repeated_step_keys, "self-test-distinct-sequence-items.yml")
+
+    # The consumer may retry a temporarily incomplete inventory, but it must
+    # retain the exact artifact ID, finite bound and fail-closed final result.
+    quality = QUALITY.read_text(encoding="utf-8")
+    validate_quality_binding(quality)
+    for original, replacement in (
+        ("            if ! jq -e '", "            jq -e '"),
+        ("                sleep 2\n                continue\n            fi",
+         "                sleep 2\n                exit 0\n            fi"),
+        ("for ARTIFACT_VISIBILITY_ATTEMPT in $(seq 1 12); do",
+         "for ARTIFACT_VISIBILITY_ATTEMPT in $(seq 1 999); do"),
+        ('            if [ "$ARTIFACT_MATCH_COUNT" = "1" ]; then',
+         '            if [ "$ARTIFACT_MATCH_COUNT" != "1" ]; then'),
+    ):
+        require(quality.count(original) == 1,
+                "Signal Field artifact contract mutation fixture drifted")
+        try:
+            validate_quality_binding(quality.replace(original, replacement, 1))
+        except ValueError:
+            pass
+        else:
+            raise ValueError("Signal Field artifact lease accepted a hostile mutation")
 
 
 def main() -> int:
