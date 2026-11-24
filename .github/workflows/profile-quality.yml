@@ -588,6 +588,12 @@ jobs:
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ steps.signal_field_review_upload.outputs.artifact-id }}
+          # Read via the reviewed exact repository/run REST identity. The
+          # run-local artifact service can lag the already-visible GitHub
+          # Actions inventory immediately after successful finalization.
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
           path: roundtrip-signal-field
           digest-mismatch: error
 
