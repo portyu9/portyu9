@@ -497,6 +497,24 @@ def validate_quality_binding(text: str) -> None:
         "Transient artifact inventory parsing must retry within the finite lease",
     )
 
+    # An exact ID must be downloaded through the same authenticated run's
+    # GitHub REST inventory, not a potentially lagging runner-local cache.
+    download_end = "      - name: Revalidate Signal Field artifact round-trip"
+    require(text.count(download_end) == 1,
+            "Signal Field artifact roundtrip validator must be unique")
+    download = text.split(end, 1)[1].split(download_end, 1)[0]
+    for fragment in (
+        "uses: actions/download-artifact@",
+        '          artifact-ids: ${{ steps.signal_field_review_upload.outputs.artifact-id }}',
+        '          github-token: ${{ github.token }}',
+        '          repository: ${{ github.repository }}',
+        '          run-id: ${{ github.run_id }}',
+        '          path: roundtrip-signal-field',
+        '          digest-mismatch: error',
+    ):
+        require(fragment in download,
+                "Signal Field same-run exact-ID authenticated download authority drifted: " + fragment)
+
 
 def expect_failure(text: str, fragment: str) -> None:
     try:
@@ -602,6 +620,14 @@ jobs:
          "for ARTIFACT_VISIBILITY_ATTEMPT in $(seq 1 999); do"),
         ('            if [ "$ARTIFACT_MATCH_COUNT" = "1" ]; then',
          '            if [ "$ARTIFACT_MATCH_COUNT" != "1" ]; then'),
+        ('          github-token: ${{ github.token }}',
+         '          github-token: ${{ secrets.UNREVIEWED_TOKEN }}'),
+        ('          repository: ${{ github.repository }}',
+         '          repository: untrusted/repo'),
+        ('          run-id: ${{ github.run_id }}',
+         '          run-id: 123'),
+        ('          digest-mismatch: error',
+         '          digest-mismatch: warn'),
     ):
         require(quality.count(original) == 1,
                 "Signal Field artifact contract mutation fixture drifted")
