@@ -468,6 +468,60 @@ def validate_quality_binding(text: str) -> None:
         "Profile Quality push paths must cover every workflow source-shape change",
     )
 
+    # Uploaded artifacts can briefly have an incomplete read-after-write
+    # inventory. That is not an authorization failure, but an untrusted
+    # inventory must NEVER be used to approve or download a guessed artifact.
+    start = "      - name: Wait for exact Signal Field review artifact visibility"
+    end = "      - name: Download Signal Field review artifacts"
+    require(text.count(start) == 1 and text.count(end) == 1,
+            "Signal Field artifact upload visibility steps must be unique")
+    section = text.split(start, 1)[1].split(end, 1)[0]
+    for fragment in (
+        '          for ARTIFACT_VISIBILITY_ATTEMPT in $(seq 1 12); do',
+        '            if ! jq -e \'',
+        '              (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and',
+        '              (.artifacts | type == "array" and length == $total) and',
+        '            ARTIFACT_MATCH_COUNT="$(jq --argjson id "$ARTIFACT_ID"',
+        '            if [ "$ARTIFACT_MATCH_COUNT" = "1" ]; then',
+        '              .name == "signal-field-publishable-review" and',
+        '              .expired == false and',
+        '              .size_in_bytes > 0',
+        '            if [ "$ARTIFACT_MATCH_COUNT" != "0" ]; then',
+        '          test "$ARTIFACT_VISIBLE" = "true"',
+    ):
+        require(fragment in section,
+                "Signal Field exact artifact identity or bounded retry proof drifted: " + fragment)
+    require(
+        '              if [ "$ARTIFACT_VISIBILITY_ATTEMPT" -eq 12 ]; then' in section
+        and '              sleep 2\n              continue\n            fi' in section,
+        "Transient artifact inventory parsing must retry within the finite lease",
+    )
+
+    # The REST inventory and runner-local Actions artifact index can briefly
+    # disagree after finalization. Preserve same-run isolation, and allow one
+    # bounded grace interval only AFTER proving a unique valid exact artifact.
+    require(
+        '          test "$ARTIFACT_VISIBLE" = "true"\n          # A completed REST inventory' in section
+        and '          sleep 30\n' in section
+        and section.rfind('          sleep 30\n') > section.rfind('          test "$ARTIFACT_VISIBLE" = "true"'),
+        "Signal Field bounded same-run backend grace must follow successful exact-ID loop",
+    )
+    download_end = "      - name: Revalidate Signal Field artifact round-trip"
+    require(text.count(download_end) == 1,
+            "Signal Field artifact roundtrip validator must be unique")
+    download = text.split(end, 1)[1].split(download_end, 1)[0]
+    for fragment in (
+        "uses: actions/download-artifact@",
+        '          artifact-ids: ${{ steps.signal_field_review_upload.outputs.artifact-id }}',
+        '          path: roundtrip-signal-field',
+        '          digest-mismatch: error',
+    ):
+        require(fragment in download,
+                "Signal Field same-run exact-ID download integrity drifted: " + fragment)
+    for forbidden in ("github-token:", "repository:", "run-id:"):
+        require(forbidden not in download,
+                "Same-run artifact downloader must not acquire cross-run REST authority")
+
 
 def expect_failure(text: str, fragment: str) -> None:
     try:
@@ -560,6 +614,36 @@ jobs:
         1,
     )
     validate_text(repeated_step_keys, "self-test-distinct-sequence-items.yml")
+
+    # The consumer may retry a temporarily incomplete inventory, but it must
+    # retain the exact artifact ID, finite bound and fail-closed final result.
+    quality = QUALITY.read_text(encoding="utf-8")
+    validate_quality_binding(quality)
+    for original, replacement in (
+        ("            if ! jq -e '", "            jq -e '"),
+        ("              sleep 2\n              continue\n            fi",
+         "              sleep 2\n              exit 0\n            fi"),
+        ("for ARTIFACT_VISIBILITY_ATTEMPT in $(seq 1 12); do",
+         "for ARTIFACT_VISIBILITY_ATTEMPT in $(seq 1 999); do"),
+        ('            if [ "$ARTIFACT_MATCH_COUNT" = "1" ]; then',
+         '            if [ "$ARTIFACT_MATCH_COUNT" != "1" ]; then'),
+        ('          sleep 30\n\n      - name: Download Signal Field review artifacts',
+         '          sleep 0\n\n      - name: Download Signal Field review artifacts'),
+        ('          artifact-ids: ${{ steps.signal_field_review_upload.outputs.artifact-id }}\n'
+         '          path: roundtrip-signal-field\n'
+         '          digest-mismatch: error',
+         '          artifact-ids: ${{ steps.signal_field_review_upload.outputs.artifact-id }}\n'
+         '          path: roundtrip-signal-field\n'
+         '          digest-mismatch: warn'),
+    ):
+        require(quality.count(original) == 1,
+                "Signal Field artifact contract mutation fixture drifted")
+        try:
+            validate_quality_binding(quality.replace(original, replacement, 1))
+        except ValueError:
+            pass
+        else:
+            raise ValueError("Signal Field artifact lease accepted a hostile mutation")
 
 
 def main() -> int:
