@@ -497,8 +497,13 @@ def validate_quality_binding(text: str) -> None:
         "Transient artifact inventory parsing must retry within the finite lease",
     )
 
-    # An exact ID must be downloaded through the same authenticated run's
-    # GitHub REST inventory, not a potentially lagging runner-local cache.
+    # The REST inventory and runner-local Actions artifact index can briefly
+    # disagree after finalization. Preserve same-run isolation, and allow one
+    # bounded grace interval only AFTER proving a unique valid exact artifact.
+    require(
+        '              sleep 30\n              ARTIFACT_VISIBLE=true\n              break' in section,
+        "Signal Field same-run artifact backend grace must follow exact-ID verification",
+    )
     download_end = "      - name: Revalidate Signal Field artifact round-trip"
     require(text.count(download_end) == 1,
             "Signal Field artifact roundtrip validator must be unique")
@@ -506,14 +511,14 @@ def validate_quality_binding(text: str) -> None:
     for fragment in (
         "uses: actions/download-artifact@",
         '          artifact-ids: ${{ steps.signal_field_review_upload.outputs.artifact-id }}',
-        '          github-token: ${{ github.token }}',
-        '          repository: ${{ github.repository }}',
-        '          run-id: ${{ github.run_id }}',
         '          path: roundtrip-signal-field',
         '          digest-mismatch: error',
     ):
         require(fragment in download,
-                "Signal Field same-run exact-ID authenticated download authority drifted: " + fragment)
+                "Signal Field same-run exact-ID download integrity drifted: " + fragment)
+    for forbidden in ("github-token:", "repository:", "run-id:"):
+        require(forbidden not in download,
+                "Same-run artifact downloader must not acquire cross-run REST authority")
 
 
 def expect_failure(text: str, fragment: str) -> None:
@@ -620,12 +625,8 @@ jobs:
          "for ARTIFACT_VISIBILITY_ATTEMPT in $(seq 1 999); do"),
         ('            if [ "$ARTIFACT_MATCH_COUNT" = "1" ]; then',
          '            if [ "$ARTIFACT_MATCH_COUNT" != "1" ]; then'),
-        ('          github-token: ${{ github.token }}',
-         '          github-token: ${{ secrets.UNREVIEWED_TOKEN }}'),
-        ('          repository: ${{ github.repository }}',
-         '          repository: untrusted/repo'),
-        ('          run-id: ${{ github.run_id }}',
-         '          run-id: 123'),
+        ('              sleep 30\n              ARTIFACT_VISIBLE=true\n              break',
+         '              sleep 0\n              ARTIFACT_VISIBLE=true\n              break'),
         ('          digest-mismatch: error',
          '          digest-mismatch: warn'),
     ):
