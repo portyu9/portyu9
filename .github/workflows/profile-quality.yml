@@ -568,6 +568,10 @@ jobs:
                 echo "ERROR: Exact Signal Field review artifact metadata is invalid." >&2
                 exit 1
               }
+              # The Actions run-local artifact index can lag its REST inventory.
+              # Bound the consistency grace period; retain exact ID and SHA-256
+              # verification at the subsequent download step (no cross-run token).
+              sleep 30
               ARTIFACT_VISIBLE=true
               break
             fi
@@ -588,9 +592,6 @@ jobs:
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ steps.signal_field_review_upload.outputs.artifact-id }}
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ github.run_id }}
           path: roundtrip-signal-field
           digest-mismatch: error
 
