@@ -276,11 +276,8 @@
             {
               "artifactIds": "${{ steps.signal_field_review_upload.outputs.artifact-id }}",
               "digest-mismatch": "error",
-              "githubToken": "${{ github.token }}",
               "operation": "download",
               "path": "roundtrip-signal-field",
-              "repository": "${{ github.repository }}",
-              "runId": "${{ github.run_id }}",
               "step": "Download Signal Field review artifacts"
             },
             {
