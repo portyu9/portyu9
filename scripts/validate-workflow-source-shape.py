@@ -629,7 +629,11 @@ jobs:
          '            if [ "$ARTIFACT_MATCH_COUNT" != "1" ]; then'),
         ('          sleep 30\n\n      - name: Download Signal Field review artifacts',
          '          sleep 0\n\n      - name: Download Signal Field review artifacts'),
-        ('          digest-mismatch: error',
+        ('          artifact-ids: ${{ steps.signal_field_review_upload.outputs.artifact-id }}\n'
+         '          path: roundtrip-signal-field\n'
+         '          digest-mismatch: error',
+         '          artifact-ids: ${{ steps.signal_field_review_upload.outputs.artifact-id }}\n'
+         '          path: roundtrip-signal-field\n'
          '          digest-mismatch: warn'),
     ):
         require(quality.count(original) == 1,
