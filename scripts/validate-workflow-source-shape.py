@@ -501,8 +501,10 @@ def validate_quality_binding(text: str) -> None:
     # disagree after finalization. Preserve same-run isolation, and allow one
     # bounded grace interval only AFTER proving a unique valid exact artifact.
     require(
-        '              sleep 30\n              ARTIFACT_VISIBLE=true\n              break' in section,
-        "Signal Field same-run artifact backend grace must follow exact-ID verification",
+        '          test "$ARTIFACT_VISIBLE" = "true"\n          # A completed REST inventory' in section
+        and '          sleep 30\n' in section
+        and section.rfind('          sleep 30\n') > section.rfind('          test "$ARTIFACT_VISIBLE" = "true"'),
+        "Signal Field bounded same-run backend grace must follow successful exact-ID loop",
     )
     download_end = "      - name: Revalidate Signal Field artifact round-trip"
     require(text.count(download_end) == 1,
@@ -625,8 +627,8 @@ jobs:
          "for ARTIFACT_VISIBILITY_ATTEMPT in $(seq 1 999); do"),
         ('            if [ "$ARTIFACT_MATCH_COUNT" = "1" ]; then',
          '            if [ "$ARTIFACT_MATCH_COUNT" != "1" ]; then'),
-        ('              sleep 30\n              ARTIFACT_VISIBLE=true\n              break',
-         '              sleep 0\n              ARTIFACT_VISIBLE=true\n              break'),
+        ('          sleep 30\n\n      - name: Download Signal Field review artifacts',
+         '          sleep 0\n\n      - name: Download Signal Field review artifacts'),
         ('          digest-mismatch: error',
          '          digest-mismatch: warn'),
     ):
