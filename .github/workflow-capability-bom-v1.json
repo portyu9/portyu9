@@ -19,14 +19,14 @@
             {
               "kind": "remote",
               "path": "analyze",
-              "ref": "33d7b85da1a04171e211befe2c739303b9a4c066",
+              "ref": "1bd86f2fdb4b86187fa4059f16f31a3202acc9ea",
               "repository": "github/codeql-action",
               "step": "Analyze"
             },
             {
               "kind": "remote",
               "path": "init",
-              "ref": "33d7b85da1a04171e211befe2c739303b9a4c066",
+              "ref": "1bd86f2fdb4b86187fa4059f16f31a3202acc9ea",
               "repository": "github/codeql-action",
               "step": "Initialize CodeQL"
             }
